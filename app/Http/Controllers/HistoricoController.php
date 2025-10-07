@@ -121,7 +121,7 @@ class HistoricoController extends Controller
             $historico->nombreasignatura =      $request->nombreasignatura;
             $historico->idasignatura=           $request->idasignatura;
             $historico->recurso =               $request->recurso;
-            $historico->id_curso =              $request->id_curso;
+            $historico->id_curso =              $request->id_curso == null || $request->id_curso == 'null' ? null : $request->id_curso;
             $historico->datos =                 $request->datos == null || $request->datos == 'null' ? null : $request->datos;
             $historico->save();
             if($historico){

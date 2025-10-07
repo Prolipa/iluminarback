@@ -89,10 +89,12 @@ class f_formularioProformaController extends Controller
             $formularioProforma->ffp_credito = $request->ffp_credito;
             $formularioProforma->ffp_cupo = $request->ffp_cupo;
             $formularioProforma->ffp_descuento = $request->ffp_descuento;
+            $formularioProforma->if_distribuidor = $request->if_distribuidor;
             // Verificar si es un nuevo registro o una actualización
             if ($formularioProforma->exists){
                 // Si ya existe, omitir el campo user_created para evitar que se establezca en null
                 $formularioProforma->updated_at = now();
+                $formularioProforma->user_update = $request->user_update;
                 // Guardar el formularioProforma sin modificar user_created
                 $formularioProforma->save();
             } else {

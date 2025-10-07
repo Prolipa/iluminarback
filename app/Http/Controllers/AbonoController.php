@@ -1276,7 +1276,6 @@ class AbonoController extends Controller
             ->leftJoin('usuario as u', 'u.idusuario', '=', 'fv.ven_cliente')
             ->where('fv.est_ven_codigo', '<>', 3)
             ->where('fv.periodo_id', '=', $request->periodo)
-            ->where('fv.ven_desc_por', '<', 100)
             ->whereIn('fv.idtipodoc', [1, 3, 4])
             ->select(
                 'fv.idtipodoc',
@@ -3549,5 +3548,50 @@ class AbonoController extends Controller
     }
 
 
+
+    public function obtenerPorInstitucionPeriodo(Request $request)
+    {
+        // validar entrada
+        $request->validate([
+            'idInstitucion' => 'required|integer',
+            'idperiodoescolar' => 'required|integer',
+        ]);
+
+        $idInstitucion = $request->idInstitucion;
+        $idPeriodo = $request->idperiodoescolar;
+
+        // buscar el registro
+        $formulario = DB::table('f_formulario_proforma as f')
+            ->leftJoin('institucion as i', 'f.idInstitucion', '=', 'i.idInstitucion')
+            ->leftJoin('ciudad as c', 'i.ciudad_id', '=', 'c.idciudad')
+            ->where('f.idInstitucion', $idInstitucion)
+            ->where('f.idperiodoescolar', $idPeriodo)
+            ->select('f.*', 'i.nombreInstitucion', 'c.nombre as ciudad')
+            ->first();
+
+        if (!$formulario) {
+            $institucion = DB::table('institucion')
+            ->leftJoin('ciudad as c', 'institucion.ciudad_id', '=', 'c.idciudad')
+            ->where('idInstitucion', $idInstitucion)
+            ->select('institucion.idInstitucion','institucion.nombreInstitucion', 'c.nombre as ciudad')
+            ->first();
+            if(!$institucion){
+                return response()->json([
+                    'success' => false,
+                    'data' => null,
+                ]);
+            }
+
+            return response()->json([
+                'success' => false,
+                'data' => $institucion,
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $formulario,
+        ]);
+    }
 
 }

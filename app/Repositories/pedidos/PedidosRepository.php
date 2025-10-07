@@ -532,4 +532,230 @@ class  PedidosRepository extends BaseRepository
         return $precio;
     }
     //FIN METODO JEYSON
+    public function ReportePedidoGeneral($periodo, $agrupado = 0){
+         $query = DB::SELECT("SELECT
+            p.id_asesor,
+            p.id_institucion,
+            p.tipo_venta_descr,
+            p.id_pedido,
+            CONCAT(u.nombres,' ', u.apellidos) AS asesor,
+            i.nombreInstitucion,
+            CASE
+                WHEN i.punto_venta = 1 THEN 'SI'
+                ELSE 'NO'
+            END AS punto_venta,
+            p.contrato_generado,
+            p.TotalVentaReal AS ventaBrutaLiquidado,
+            ROUND(p.TotalVentaReal - ((p.TotalVentaReal * p.descuento)/100), 2) AS ven_neta_liquidado,
+            p.total_venta AS ventaPedido,
+            IFNULL((
+                SELECT SUM(a.venta_bruta)
+                FROM pedidos_alcance a
+                WHERE a.estado_alcance = 1
+                AND a.id_pedido = p.id_pedido
+            ), 0) AS ventaAlcance,
+            (p.total_venta + IFNULL((
+                SELECT SUM(a.venta_bruta)
+                FROM pedidos_alcance a
+                WHERE a.estado_alcance = 1
+                AND a.id_pedido = p.id_pedido
+            ), 0)) AS ventaBrutaPedido,
+            p.descuento AS comision,
+            ROUND(
+                IFNULL((
+                    SELECT SUM(l.doc_valor)
+                    FROM `1_4_documento_liq` l
+                    WHERE l.periodo_id = '$periodo'
+                    AND l.estado = '1'
+                    AND l.tipo_pago_id IN (1,2,7)
+                    AND l.id_pedido = p.id_pedido
+                ),0), 2
+            ) AS totalPagos,
+            (
+                SELECT IFNULL(SUM(pcd.valor), 0)
+                FROM pedidos_pagos_detalles pcd
+                LEFT JOIN 1_4_documento_liq l ON l.doc_codigo = pcd.id_pago
+                LEFT JOIN pedidos_formas_pago fp ON fp.tip_pag_codigo = l.forma_pago_id
+                LEFT JOIN pedidos p2 ON p2.id_pedido = l.id_pedido
+                LEFT JOIN pedidos_convenios pc ON pc.id_pedido = p2.id_pedido
+                WHERE l.tipo_pago_id = 4
+                AND l.periodo_id = '$periodo'
+                AND l.estado = '1'
+                AND l.id_pedido = p.id_pedido
+                AND p2.estado = '1'
+                AND p2.tipo = '0'
+                AND p2.id_periodo = '$periodo'
+                AND pc.periodo_id = '$periodo'
+                AND pc.estado <> '2'
+            ) AS totalConvenioAprobado
+            FROM pedidos p
+            LEFT JOIN institucion i ON i.idInstitucion = p.id_institucion
+            LEFT JOIN usuario u ON u.idusuario = p.id_asesor
+            WHERE p.id_periodo = '$periodo'
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.contrato_generado IS NOT NULL
+            ORDER BY i.nombreInstitucion ASC
+        ");
+
+        foreach ($query as $q) {
+            // Calcular porcentaje de comisión
+            $q->valorComisionPedido = round(($q->ventaBrutaPedido * $q->comision) / 100, 2);
+            // Calcular venta neta (ventaBruta - porcentaje descuento)
+            $q->ven_netaPedido = round($q->ventaBrutaPedido - (($q->ventaBrutaPedido * $q->comision) / 100), 2);
+
+            // Crear propiedad totalPagosConvenio
+            $q->totalPagosConvenio = $q->totalPagos + $q->totalConvenioAprobado;
+
+            // Agregamos la propiedad calculada sin modificar la consulta SQL
+            $q->xPagarPedido = $q->valorComisionPedido - $q->totalPagosConvenio;
+
+            // validar si es distruidor  // 0no es distribuidor 1 si es distribuidor
+            $if_distribuidor = 0;
+            $getDistribuidor = DB::SELECT("SELECT * FROM f_formulario_proforma fcp
+            WHERE fcp.idInstitucion = '$q->id_institucion'
+            AND fcp.idperiodoescolar = '$periodo'
+            AND fcp.ffp_estado = '1'
+            ");
+            if($getDistribuidor){
+                $if_distribuidor = $getDistribuidor[0]->if_distribuidor;
+            }
+            $q->if_distribuidor = $if_distribuidor; // Asignar el valor a la propiedad
+            $q->EsDistribuidor = $if_distribuidor == 1 ? 'SI' : 'NO';
+        }
+        if($agrupado == 1){
+             $grouped = collect($query)
+            ->groupBy('asesor')
+            ->map(function ($rows) {
+                return [
+                    'id_asesor'           => $rows->first()->id_asesor,
+                    'asesor'              => $rows->first()->asesor,
+                    'ventaBrutaLiquidado' => $rows->sum('ventaBrutaLiquidado'),
+                    'ven_neta_liquidado'  => $rows->sum('ven_neta_liquidado'),
+                    'ventaPedido'         => $rows->sum('ventaPedido'),
+                    'ventaAlcance'        => $rows->sum('ventaAlcance'),
+                    'totalPagos'          => $rows->sum('totalPagos'),
+                    'totalConvenioAprobado' => $rows->sum('totalConvenioAprobado'),
+                    'valorComisionPedido' => $rows->sum('valorComisionPedido'),
+                    'ventaBrutaPedido'    => $rows->sum('ventaBrutaPedido'),
+                    'ven_netaPedido'      => $rows->sum('ven_netaPedido'),
+                    'totalPagosConvenio'  => $rows->sum('totalPagosConvenio'),
+                    'xPagarPedido'        => $rows->sum('xPagarPedido'),
+                    'if_distribuidor'     => $rows->max('if_distribuidor'),
+                    'EsDistribuidor'      => $rows->max('if_distribuidor') == 1 ? 'SI' : 'NO',
+                ];
+            })
+            ->values();
+            return $grouped;
+        }
+        return $query;
+    }
+
+
+    public function pedidosNuevoXLibroSinAlcances($periodo){
+         // --- pedidos ---
+        $getPedidos = DB::SELECT("SELECT
+                ls.codigo_liquidacion,
+                l.nombrelibro,
+                s.nombre_serie,
+                SUM(pp.pvn_cantidad) AS total_cantidad,
+                fp.pfn_pvp AS precio,
+                (SUM(pp.pvn_cantidad) * fp.pfn_pvp) AS pedido
+            FROM pedidos_val_area_new pp
+            LEFT JOIN pedidos p ON p.id_pedido = pp.id_pedido
+            LEFT JOIN pedidos_formato_new fp ON fp.idlibro = pp.idlibro AND fp.idperiodoescolar = '$periodo'
+            LEFT JOIN libro l ON l.idlibro = pp.id_libro
+            LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+            LEFT JOIN series s ON s.id_serie = ls.id_serie
+            WHERE p.contrato_generado IS NOT NULL
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.id_periodo = '$periodo'
+            AND pp.pvn_tipo = '0'
+            GROUP BY ls.codigo_liquidacion, l.nombrelibro, s.nombre_serie, fp.pfn_pvp
+            ORDER BY ls.codigo_liquidacion, l.nombrelibro, s.nombre_serie
+        ");
+        return $getPedidos;
+    }
+
+    public function pedidosAnteriorXLibroSinAlcances($periodo){
+         // --- pedidos ---
+        $getPedidos = DB::SELECT("SELECT
+                ls.idLibro,
+                ls.codigo_liquidacion,
+                l.nombrelibro,
+                s.nombre_serie,
+                SUM(pp.valor) AS total_cantidad,
+                fp.pfn_pvp AS precio,
+                (SUM(pp.valor) * fp.pfn_pvp) AS pedido
+            FROM pedidos_val_area pp
+            LEFT JOIN pedidos p ON p.id_pedido = pp.id_pedido
+            LEFT JOIN pedidos_formato_new fp ON fp.idlibro = pp.id_libro AND fp.idperiodoescolar = '$periodo'
+            LEFT JOIN libro l ON l.idlibro = pp.id_libro
+            LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+            LEFT JOIN series s ON s.id_serie = ls.id_serie
+            WHERE p.contrato_generado IS NOT NULL
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.id_periodo = '$periodo'
+            AND pp.alcance = '0'
+            GROUP BY ls.codigo_liquidacion, l.nombrelibro, s.nombre_serie, fp.pfn_pvp, ls.idLibro
+            ORDER BY ls.codigo_liquidacion, l.nombrelibro, s.nombre_serie
+        ");
+        return $getPedidos;
+    }
+
+    public function alcancesNuevoXlibros($periodo){
+        $getAlcances = DB::SELECT("SELECT
+                ls.codigo_liquidacion,
+                l.nombrelibro,
+                s.nombre_serie,
+                SUM(pp.pvn_cantidad) AS total_cantidad,
+                fp.pfn_pvp AS precio,
+                SUM(pp.pvn_cantidad * fp.pfn_pvp) AS pedido
+            FROM pedidos_val_area_new pp
+            INNER JOIN pedidos_alcance a ON a.id = pp.pvn_tipo
+            LEFT JOIN pedidos p ON p.id_pedido = pp.id_pedido
+            LEFT JOIN pedidos_formato_new fp ON fp.idlibro = pp.idlibro AND fp.idperiodoescolar = '$periodo'
+            LEFT JOIN libro l ON l.idlibro = pp.id_libro
+            LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+            LEFT JOIN series s ON s.id_serie = ls.id_serie
+            WHERE p.contrato_generado IS NOT NULL
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.id_periodo = '$periodo'
+            AND pp.pvn_tipo <> '0'
+            AND a.estado_alcance = '1'
+            GROUP BY ls.codigo_liquidacion, l.nombrelibro, s.nombre_serie, fp.pfn_pvp
+            ORDER BY ls.codigo_liquidacion, l.nombrelibro, s.nombre_serie
+        ");
+        return $getAlcances;
+    }
+
+    public function alcancesAnteriorXlibros($periodo){
+        $getAlcances = DB::SELECT("SELECT
+                ls.codigo_liquidacion,
+                l.nombrelibro,
+                s.nombre_serie,
+                SUM(pp.valor) AS total_cantidad,
+                fp.pfn_pvp AS precio,
+                SUM(pp.valor * fp.pfn_pvp) AS pedido
+            FROM pedidos_val_area pp
+            INNER JOIN pedidos_alcance a ON a.id = pp.alcance
+            LEFT JOIN pedidos p ON p.id_pedido = pp.id_pedido
+            LEFT JOIN pedidos_formato_new fp ON fp.idlibro = pp.id_libro AND fp.idperiodoescolar = '$periodo'
+            LEFT JOIN libro l ON l.idlibro = pp.id_libro
+            LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+            LEFT JOIN series s ON s.id_serie = ls.id_serie
+            WHERE p.contrato_generado IS NOT NULL
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.id_periodo = '$periodo'
+            AND pp.alcance <> '0'
+            AND a.estado_alcance = '1'
+            GROUP BY ls.codigo_liquidacion, l.nombrelibro, s.nombre_serie, fp.pfn_pvp
+            ORDER BY ls.codigo_liquidacion, l.nombrelibro, s.nombre_serie
+        ");
+        return $getAlcances;
+    }
 }

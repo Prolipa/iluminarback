@@ -3821,7 +3821,7 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
         if($request->reporteBodega_new)                         { return $this->reporteBodega_new($request); }
         if($request->reporteBodega_newGuias_FormatoAnterior)    { return $this->reporteBodega_newGuias_FormatoAnterior($request); }
         if($request->reporteBodega_newGuias_FormatoNuevo)       { return $this->reporteBodega_newGuias_FormatoNuevo($request); }
-        if($request->reporteVentaCodigos)                      { return $this->reporteVentaCodigos($request); }
+        if($request->reporteVentaCodigos)                       { return $this->reporteVentaCodigos($request); }
         if($request->reporteBodegaCombos)                       { return $this->reporteBodegaCombos($request); }
         if($request->reporteBodegaCombos_new)                   { return $this->reporteBodegaCombos_new($request); }
         if($request->getCombos)                                 { return $this->codigosRepository->getCombos(); }
@@ -3832,6 +3832,10 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
         if($request->getReporteXTipoVenta)                      { return $this->getReporteXTipoVenta($request); }
         if($request->getReporteCombosDespachados)               { return $this->getReporteCombosDespachados($request); }
         if($request->getReporteCombosDespachadosXCombo)         { return $this->getReporteCombosDespachadosXCombo($request); }
+        if($request->getReporteCodigosRegaladosXSerie)          { return $this->getReporteCodigosRegaladosXSerie($request); }
+        if($request->getReporteCodigosRegaladosXSerieCodigos)   { return $this->getReporteCodigosRegaladosXSerieCodigos($request); }
+        if($request->getReporteCodigosTodosXSerie)              { return $this->getReporteCodigosTodosXSerie($request); }
+        if($request->getReporteCodigosTodosXSerieCodigos)       { return $this->getReporteCodigosTodosXSerieCodigos($request); }
     }
     //api:get/metodosGetCodigos?reporteBodega=1&periodo=25
     public function reporteBodega($request){
@@ -4566,129 +4570,134 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
     //     return $result;
     // }
 
-   public function getReporteCombosDespachados($request)
-{
-    $periodo = $request->periodo;
-    $setTipoVenta = [1, 2]; // VENTA DIRECTA Y LISTA
-    $tipoInstitucionIncluir = $request->tipoInstitucionIncluir;
+    public function getReporteCombosDespachados($request)
+    {
+        $periodo = $request->periodo;
+        $setTipoVenta = [1, 2]; // VENTA DIRECTA Y LISTA
+        $tipoInstitucionIncluir = $request->tipoInstitucionIncluir;
 
-    // Si el periodo es menor o igual al configurado -> usa pedidos viejos
-    $nuevo = ($periodo <= $this->tr_periodoPedido) ? 0 : 1;
+        // Si el periodo es menor o igual al configurado -> usa pedidos viejos
+        $nuevo = ($periodo <= $this->tr_periodoPedido) ? 0 : 1;
 
-    // Obtener combos base
-    $combos = $this->codigosRepository->reporteCombosDinamica($periodo, $tipoInstitucionIncluir);
-
-    // Condición dinámica para instituciones
-    $condicion = "";
-    if (!empty($tipoInstitucionIncluir)) {
-        $condicion = "AND (
-            (c.venta_estado = 2 AND il.tipo_institucion IN ($tipoInstitucionIncluir))
-            OR (c.venta_estado = 1 AND iv.tipo_institucion IN ($tipoInstitucionIncluir))
-        )";
-    }
-
-    // Despachos desde codigoslibros
-    $codigosDespachos = DB::select("
-        SELECT c.codigo, c.codigo_combo, c.combo
-        FROM codigoslibros c
-        LEFT JOIN institucion il ON il.idInstitucion = c.venta_lista_institucion
-        LEFT JOIN institucion iv ON iv.idInstitucion = c.bc_institucion
-        WHERE c.bc_periodo = ?
-        AND c.prueba_diagnostica = '0'
-        AND c.estado_liquidacion IN ('0','1','2')
-        AND c.codigo_combo IS NOT NULL
-        AND c.combo IS NOT NULL
-        $condicion
-    ", [$periodo]);
-
-    // Pedidos (viejo o nuevo según $nuevo)
-    if ($nuevo == 0) {
-        $arrayPedidos = $this->ventasRepository->getProductosPedidos($periodo, $setTipoVenta);
-    } else {
-        $arrayPedidos = $this->ventasRepository->getProdutosPedidosNuevo($periodo, $setTipoVenta);
-    }
-
-    // Documentos de venta
-    $arrayDocumentosVenta = $this->ventasRepository->getVentasTipoVenta($periodo, $setTipoVenta);
-
-    // =========================
-    // 🔹 Función para asignar pedidos/docVenta a cada combo
-    // =========================
-    $addToBooks = function ($source, $field) use (&$combos) {
-        foreach ($combos as &$combo) { // referencia para modificar el objeto
-            $sum = collect($source)
-                ->where('codigo_liquidacion', $combo->codigo_liquidacion)
-                ->sum('valor'); // 👈 aseguramos sumar la columna "valor"
-            $combo->{$field} = $sum;
+        // Obtener combos base
+        $combos = $this->codigosRepository->reporteCombosDinamica($periodo, $tipoInstitucionIncluir);
+        // Condición dinámica para instituciones
+        $condicion = "";
+        if (!empty($tipoInstitucionIncluir)) {
+            $condicion = "AND (
+                (c.venta_estado = 2 AND il.tipo_institucion IN ($tipoInstitucionIncluir))
+                OR (c.venta_estado = 1 AND iv.tipo_institucion IN ($tipoInstitucionIncluir))
+            )";
         }
-    };
 
-    // Agregar pedidos y documentos de venta a combos
-    $addToBooks($arrayPedidos, 'pedido');
-    $addToBooks($arrayDocumentosVenta, 'documentoVenta');
+        // Despachos desde codigoslibros
+        $codigosDespachos = DB::select("
+            SELECT c.codigo, c.codigo_combo, c.combo
+            FROM codigoslibros c
+            LEFT JOIN institucion il ON il.idInstitucion = c.venta_lista_institucion
+            LEFT JOIN institucion iv ON iv.idInstitucion = c.bc_institucion
+            WHERE c.bc_periodo = ?
+            AND c.prueba_diagnostica = '0'
+            AND c.estado_liquidacion IN ('0','1','2')
+            AND c.codigo_combo IS NOT NULL
+            AND c.combo IS NOT NULL
+            $condicion
+        ", [$periodo]);
 
-    $result = [];
+        // Pedidos (viejo o nuevo según $nuevo)
+        if ($nuevo == 0) {
+            $arrayPedidos = $this->ventasRepository->getProductosPedidos($periodo, $setTipoVenta);
+        } else {
+            $arrayPedidos = $this->ventasRepository->getProdutosPedidosNuevo($periodo, $setTipoVenta);
+        }
 
-    // =========================
-    // 🔹 Armar resultado final
-    // =========================
-    foreach ($combos as $combo) {
-        $agrupado = collect($codigosDespachos)
-            ->where('combo', $combo->codigo_liquidacion)
-            ->groupBy('combo')
-            ->map(function ($items) {
-                $etiquetas = collect($items)
-                    ->groupBy('codigo_combo')
-                    ->map(function ($etqs, $codigo_combo) {
-                        return [
-                            'codigo_combo' => $codigo_combo,
-                            'cantidad' => count($etqs), // despacho bodega por código_combo
-                        ];
-                    })->values();
-                return ['etiquetas' => $etiquetas];
-            })->first();
+        // Documentos de venta
+        $arrayDocumentosVenta = $this->ventasRepository->getVentasTipoVenta($periodo, $setTipoVenta);
 
-        // Agregar datos calculados
-        $combo->despachoBodega = $agrupado
-            ? collect($agrupado['etiquetas'])->sum('cantidad')
-            : 0;
-
-        $combo->agrupado = $agrupado ? $agrupado['etiquetas'] : [];
-
-        // Si no existen pedidos/docVenta en este combo, poner 0
-        $combo->pedido = $combo->pedido ?? 0;
-        $combo->documentoVenta = $combo->documentoVenta ?? 0;
-
-        // Pasamos a array para el resultado
-        $result[] = (array) $combo;
-    }
-
-    // =========================
-    // 🔹 Verificación de errores en combos
-    // =========================
-    $result = collect($result)
-        ->map(function ($item) {
-            $error = false;
-            foreach ($item['agrupado'] as $combo) {
-                if ($combo['cantidad'] != $item['codigosPorCombo']) {
-                    $error = true;
-                    break;
-                }
+        // =========================
+        // 🔹 Función para asignar pedidos/docVenta a cada combo
+        // =========================
+        $addToBooks = function ($source, $field) use (&$combos) {
+            foreach ($combos as &$combo) { // referencia para modificar el objeto
+                $sum = collect($source)
+                    ->where('codigo_liquidacion', $combo->codigo_liquidacion)
+                    ->sum('valor'); // 👈 aseguramos sumar la columna "valor"
+                $combo->{$field} = $sum;
             }
-            $item['ifErrorCombo'] = $error ? 1 : 0;
-            return $item;
-        })
-        ->groupBy('nombrelibro')
-        ->sortKeys()
-        ->flatten(1)
-        ->values()
-        ->toArray();
+        };
 
-    return $result;
-}
+        // Agregar pedidos y documentos de venta a combos y precio
+        $addToBooks($arrayPedidos, 'pedido');
+        $addToBooks($arrayDocumentosVenta, 'documentoVenta');
+        // $addToBooks($arrayPedidos, 'precio');
+        $result = [];
 
+        // =========================
+        // 🔹 Armar resultado final
+        // =========================
+        foreach ($combos as $combo) {
+            $agrupado = collect($codigosDespachos)
+                ->where('combo', $combo->codigo_liquidacion)
+                ->groupBy('combo')
+                ->map(function ($items) {
+                    $etiquetas = collect($items)
+                        ->groupBy('codigo_combo')
+                        ->map(function ($etqs, $codigo_combo) {
+                            return [
+                                'codigo_combo' => $codigo_combo,
+                                'cantidad' => count($etqs), // despacho bodega por código_combo
+                            ];
+                        })->values();
+                    return ['etiquetas' => $etiquetas];
+                })->first();
 
+            // Agregar datos calculados
+            $combo->despachoBodega = $agrupado
+                ? collect($agrupado['etiquetas'])->sum('cantidad')
+                : 0;
 
+            $combo->agrupado = $agrupado ? $agrupado['etiquetas'] : [];
+
+            // Si no existen pedidos/docVenta en este combo, poner 0
+            $combo->pedido = $combo->pedido ?? 0;
+            $combo->documentoVenta = $combo->documentoVenta ?? 0;
+            // $combo->precio = $combo->precio ?? 0;
+
+            // Pasamos a array para el resultado
+            $result[] = (array) $combo;
+        }
+
+        // =========================
+        // 🔹 Verificación de errores en combos
+        // =========================
+        $result = collect($result)
+            ->map(function ($item) {
+                $error = false;
+                foreach ($item['agrupado'] as $combo) {
+                    if ($combo['cantidad'] != $item['codigosPorCombo']) {
+                        $error = true;
+                        break;
+                    }
+                }
+                $item['ifErrorCombo'] = $error ? 1 : 0;
+                return $item;
+            })
+            ->groupBy('nombrelibro')
+            ->sortKeys()
+            ->flatten(1)
+            ->values()
+            ->toArray();
+        // multiplicar precio * cantidad y colocar propiedad totalDespachadoBodegaCombo y 2 decimales
+        foreach ($result as &$item) {
+            // Mantener como float con 2 decimales
+            $item['totalDespachadoBodegaCombo'] = round($item['precio'] * $item['cantidad'], 2);
+
+            // cantidad como float
+            $item['cantidad_despachadaCombo'] = (float) $item['cantidad'];
+        }
+
+        return $result;
+    }
 
 
     //api:get/metodosGetCodigos?getReporteCombosDespachadosXCombo=1&periodo=27&combo=CCMDH1
@@ -4728,6 +4737,302 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
             })->values();
         return $agrupado;
     }
+
+    //api:get/metodosGetCodigos?getReporteCodigosRegaladosXSerie=1&periodo_id=27&id_serie=6&soloRegalados=1
+    public function getReporteCodigosRegaladosXSerie($request)
+    {
+        $periodo_id = $request->periodo_id;
+        if (!$periodo_id) {
+            return ["status" => "0", "message" => "No se ha enviado el periodo"];
+        }
+
+        $id_serie = $request->id_serie;
+        if (!$id_serie) {
+            return ["status" => "0", "message" => "No se ha enviado la serie"];
+        }
+
+        $detalles = $this->codigosRepository->getCodigosIndividuales($request);
+
+        if($id_serie == 'todos'){
+            // convertir a collection sin filtrar
+            $detalles = collect($detalles);
+        }else{
+            // convertir a collection y filtrar por serie
+            $detalles = collect($detalles)->where('id_serie', $id_serie)->values();
+        }
+        // agrupar por libro
+        $reporte = $detalles->groupBy('nombrelibro')->map(function ($grupo) {
+        $first = $grupo->first();
+
+            return [
+                'codigo_liquidacion' => $first->codigo,
+                'nombrelibro'        => $first->nombrelibro,
+                'serie'              => $first->serie,
+                'id_serie'           => $first->id_serie,
+                'libro_idReal'       => $first->libro_idReal,
+                'cantidad_normales'  => $grupo->where('quitar_de_reporte', '!=', 1)->count(),
+                'cantidad_quitados'  => $grupo->where('quitar_de_reporte', 1)->count(),
+            ];
+        })
+        ->sortBy('nombrelibro')
+        ->values();
+
+        return $reporte;
+    }
+
+    // api:get/metodosGetCodigos?getReporteCodigosRegaladosXSerieCodigos=1&periodo_id=27&id_serie=6&soloRegalados=1&libro_idReal=484
+    public function getReporteCodigosRegaladosXSerieCodigos($request)
+    {
+        $periodo_id = $request->periodo_id;
+        if (!$periodo_id) {
+            return ["status" => "0", "message" => "No se ha enviado el periodo"];
+        }
+
+        $id_serie = $request->id_serie;
+        if (!$id_serie) {
+            return ["status" => "0", "message" => "No se ha enviado la serie"];
+        }
+        $libro_idReal = $request->libro_idReal;
+
+        if (!$libro_idReal) {
+            return ["status" => "0", "message" => "No se ha enviado el libro_idReal"];
+        }
+        $detalles = $this->codigosRepository->getCodigosIndividuales($request);
+        $arrayLibros = [];
+        if($id_serie == 'todos'){
+            $arrayLibros = collect($detalles);
+        }else{
+            // convertir a collection y filtrar por serie
+            $arrayLibros = collect($detalles)->where('id_serie', $id_serie)->values();
+        }
+        // filtrar por libro_idReal
+        $arrayLibros = collect($arrayLibros)->where('libro_idReal', $libro_idReal)->values();
+        $arrayLibros = $arrayLibros->map(function($item) {
+            // buscar institucion de cada codigo
+            $busquedaInstituciones = DB::SELECT("SELECT c.codigo, i.nombreInstitucion AS institucionBcInstitucion,
+            i2.nombreInstitucion AS institucionVentaListaInstitucion,
+            c.factura
+            FROM codigoslibros c
+            LEFT JOIN institucion i ON i.idInstitucion = c.bc_institucion
+            LEFT JOIN institucion i2 ON i2.idInstitucion = c.venta_lista_institucion
+            WHERE c.codigo = '$item->codigo_libro'
+            ");
+            $institucionBcInstitucion = '';
+            $institucionVentaListaInstitucion = '';
+            $factura = '';
+            $empresaDescripcion = '';
+            if(count($busquedaInstituciones) > 0){
+                $institucionBcInstitucion = $busquedaInstituciones[0]->institucionBcInstitucion;
+                $institucionVentaListaInstitucion = $busquedaInstituciones[0]->institucionVentaListaInstitucion;
+                $factura = $busquedaInstituciones[0]->factura;
+            }
+            $item->institucionBcInstitucion = $institucionBcInstitucion;
+            $item->institucionVentaListaInstitucion = $institucionVentaListaInstitucion;
+            $item->factura = $factura;
+            if($item->proforma_empresa == 1) { $empresaDescripcion = 'Prolipa';}
+            else if($item->proforma_empresa == 3) { $empresaDescripcion = 'Prolipa';}
+            else { $empresaDescripcion = 'Sin empresa'; }
+            return [
+                'codigo_libro'          => $item->codigo_libro,
+                'codigo_liquidacion'    => $item->codigo,
+                'nombrelibro'           => $item->nombrelibro,
+                'serie'                 => $item->serie,
+                'id_serie'              => $item->id_serie,
+                'libro_idReal'          => $item->libro_idReal,
+                'quitar_de_reporte'     => $item->quitar_de_reporte == '1' ? 'Quitado' : 'No quitado',
+                'contrato'              => $item->contrato,
+                'estado'                => $item->estado == 2 ? 'Bloqueado' : 'Activo',
+                'venta_estado'          => $item->venta_estado == 2 ? 'Venta Lista' : 'Venta Directa',
+                'codigo_proforma'       => $item->codigo_proforma,
+                'proforma_empresa'      => $empresaDescripcion,
+                'factura'               => $item->factura,
+                'bc_institucion'        => $item->bc_institucion,
+                'venta_lista_institucion'=> $item->venta_lista_institucion,
+                'liquidado_regalado'    => $item->liquidado_regalado,
+                'combo'                 => $item->combo,
+                'codigo_combo'          => $item->codigo_combo,
+                'institucionBcInstitucion' => $item->institucionBcInstitucion,
+                'institucionVentaListaInstitucion' => $item->institucionVentaListaInstitucion,
+            ];
+        })->values();
+        return $arrayLibros;
+    }
+
+    //api:get/metodosGetCodigos?getReporteCodigosTodosXSerie=1&periodo_id=25&id_serie=6&todosCodigos=1
+    public function getReporteCodigosTodosXSerie($request)
+    {
+        $periodo_id = $request->periodo_id;
+        if (!$periodo_id) {
+            return ["status" => "0", "message" => "No se ha enviado el periodo"];
+        }
+
+        $id_serie = $request->id_serie ?? 'todos'; // puede ser 'todos'
+        $tipoInstitucionIncluir = $request->tipoInstitucionIncluir; // ejemplo: '6,5,4,3,2,1'
+
+        $detalles = CodigosLibros::from('codigoslibros as c')
+            ->select([
+                DB::raw("CASE WHEN c.plus = 1 THEN ls.id_libro_plus ELSE c.libro_idlibro END AS libro_idReal"),
+                DB::raw("CASE WHEN c.plus = 1 THEN lib_plus.nombrelibro ELSE l.nombrelibro END AS nombrelibro"),
+                DB::raw("CASE WHEN c.plus = 1 THEN l_plus.codigo_liquidacion ELSE ls.codigo_liquidacion END AS codigo_liquidacion"),
+                DB::raw("CASE WHEN c.plus = 1 THEN l_plus.id_serie ELSE ls.id_serie END AS id_serie"),
+                DB::raw("CASE WHEN c.plus = 1 THEN a_plus.area_idarea ELSE a.area_idarea END AS area_idarea"),
+                DB::raw("CASE WHEN c.plus = 1 THEN fp_plus.pfn_pvp ELSE fp.pfn_pvp END AS precio"),
+                DB::raw("CASE WHEN c.plus = 1 THEN splus.nombre_serie ELSE s.nombre_serie END AS serie"),
+                DB::raw("COUNT(*) as cantidad_despachada"),
+                DB::raw("ROUND(COUNT(*) * (CASE WHEN c.plus = 1 THEN fp_plus.pfn_pvp ELSE fp.pfn_pvp END), 2) as despachoBodega")
+            ])
+            ->leftJoin('libros_series as ls', 'ls.idLibro', '=', 'c.libro_idlibro')
+            ->leftJoin('libro as l', 'ls.idLibro', '=', 'l.idlibro')
+            ->leftJoin('asignatura as a', 'l.asignatura_idasignatura', '=', 'a.idasignatura')
+            ->leftJoin('series as s', 'ls.id_serie', '=', 's.id_serie')
+
+            // joins para plus
+            ->leftJoin('libros_series as l_plus', 'ls.id_libro_plus', '=', 'l_plus.idLibro')
+            ->leftJoin('libro as lib_plus', 'ls.id_libro_plus', '=', 'lib_plus.idlibro')
+            ->leftJoin('asignatura as a_plus', 'lib_plus.asignatura_idasignatura', '=', 'a_plus.idasignatura')
+            ->leftJoin('series as splus', 'l_plus.id_serie', '=', 'splus.id_serie')
+
+            // joins a instituciones para filtrado por tipo
+            ->leftJoin('institucion as il', 'il.idInstitucion', '=', 'c.venta_lista_institucion')
+            ->leftJoin('institucion as iv', 'iv.idInstitucion', '=', 'c.bc_institucion')
+
+            // joins para precios con filtro por periodo
+            ->leftJoin('pedidos_formato_new as fp', function ($join) use ($periodo_id) {
+                $join->on('fp.idlibro', '=', 'l.idlibro')
+                    ->where('fp.idperiodoescolar', '=', $periodo_id);
+            })
+            ->leftJoin('pedidos_formato_new as fp_plus', function ($join) use ($periodo_id) {
+                $join->on('fp_plus.idlibro', '=', 'lib_plus.idlibro')
+                    ->where('fp_plus.idperiodoescolar', '=', $periodo_id);
+            })
+
+            ->where('c.bc_periodo', $periodo_id)
+            ->where('c.prueba_diagnostica', '0')
+            ->whereIn('c.estado_liquidacion', ['0','1','2']);
+
+        // 🔹 filtro por tipo de institución (exactamente como tu SQL manual)
+        if (!empty($tipoInstitucionIncluir)) {
+            $arrayTipos = explode(',', $tipoInstitucionIncluir);
+
+            $detalles->where(function($query) use ($arrayTipos) {
+                $query->where(function($sub) use ($arrayTipos) {
+                    $sub->where('c.venta_estado', 2)
+                        ->whereIn('il.tipo_institucion', $arrayTipos);
+                })
+                ->orWhere(function($sub) use ($arrayTipos) {
+                    $sub->whereIn('c.venta_estado', [0,1])
+                        ->whereIn('iv.tipo_institucion', $arrayTipos);
+                });
+            });
+        }
+
+        // 🔹 filtro opcional por serie
+        if ($id_serie !== 'todos') {
+            $detalles->whereRaw("CASE WHEN c.plus = 1 THEN l_plus.id_serie ELSE ls.id_serie END = ?", [$id_serie]);
+        }
+
+        $detalles = $detalles
+            ->groupBy([
+                DB::raw("CASE WHEN c.plus = 1 THEN ls.id_libro_plus ELSE c.libro_idlibro END"),
+                DB::raw("CASE WHEN c.plus = 1 THEN lib_plus.nombrelibro ELSE l.nombrelibro END"),
+                DB::raw("CASE WHEN c.plus = 1 THEN l_plus.codigo_liquidacion ELSE ls.codigo_liquidacion END"),
+                DB::raw("CASE WHEN c.plus = 1 THEN l_plus.id_serie ELSE ls.id_serie END"),
+                DB::raw("CASE WHEN c.plus = 1 THEN a_plus.area_idarea ELSE a.area_idarea END"),
+                DB::raw("CASE WHEN c.plus = 1 THEN fp_plus.pfn_pvp ELSE fp.pfn_pvp END"),
+                DB::raw("CASE WHEN c.plus = 1 THEN splus.nombre_serie ELSE s.nombre_serie END")
+            ])
+            ->orderBy('codigo_liquidacion')
+            ->get();
+
+        return $detalles;
+    }
+
+
+
+    // api:get/metodosGetCodigos?getReporteCodigosTodosXSerieCodigos=1&periodo_id=25&libro_idReal=534&condicionTipoInstitucion=6,5,4,3,2,1
+    public function getReporteCodigosTodosXSerieCodigos($request)
+    {
+
+        $periodo_id = $request->periodo_id;
+        if (!$periodo_id) {
+            return ["status" => "0", "message" => "No se ha enviado el periodo"];
+        }
+
+        $libro_idReal = $request->libro_idReal;
+        $libroOrigen  = $libro_idReal;
+        if (!$libro_idReal) {
+            return ["status" => "0", "message" => "No se ha enviado el libro_idReal"];
+        }
+        $tipoInstitucionIncluir = $request->tipoInstitucionIncluir; // ejemplo: '6,5,4,3,2,1'
+        $condicionTipoInstitucion = "";
+        if (!empty($tipoInstitucionIncluir)) {
+            // si trae valores a incluir
+            $condicionTipoInstitucion = "AND (
+                (c.venta_estado = 2 AND i2.tipo_institucion IN ($tipoInstitucionIncluir))
+                OR (c.venta_estado = 1 AND iv.tipo_institucion IN ($tipoInstitucionIncluir))
+            )";
+        }
+
+        // validar si es plus y tiene codigos asociados no validar el plus
+        $validatePlusHaveCodes = DB::SELECT("SELECT COUNT(c.codigo) AS ifExisteCodigo
+        FROM codigoslibros c
+        WHERE c.libro_idlibro = '$libro_idReal'
+        ");
+        $condicionPlus = "";
+        if($validatePlusHaveCodes[0]->ifExisteCodigo > 0){
+            // no validar
+        }else{
+            // validar si el libro es un plus
+            $validatePlus = DB::SELECT("SELECT * FROM libros_series ls
+            WHERE ls.id_libro_plus ='$libro_idReal' LIMIT 1");
+            if(count($validatePlus) > 0){
+                $libro_idReal = $validatePlus[0]->idLibro; // obtener el idLibro origen
+                $condicionPlus = "AND c.plus = 1 "; // condición para plus
+            }else{
+                $condicionPlus = "AND c.plus = 0"; // condición para no plus
+            }
+        }
+        $query = DB::SELECT("SELECT
+            c.codigo AS codigo_libro,
+            ls.codigo_liquidacion,
+            l.nombrelibro,
+            s.nombre_serie AS serie,
+            fp.pfn_pvp AS precio,
+            CASE WHEN c.plus = 1 THEN ls.id_libro_plus ELSE c.libro_idlibro END AS libro_idReal,
+            c.plus,
+            CASE WHEN c.quitar_de_reporte = 2 THEN 'Quitado del reporte' ELSE 'No quitado' END AS quitar_de_reporte,
+            c.contrato,
+            CASE WHEN c.estado = 2 THEN 'Bloqueado' ELSE 'Activo' END AS estado,
+            CASE WHEN c.venta_estado = 2 THEN 'Lista' ELSE 'Directa' END AS venta_estado,
+            c.codigo_proforma,
+            CASE WHEN c.proforma_empresa = 3 THEN 'Calmed' WHEN c.proforma_empresa = 2 THEN 'Prolipa' ELSE 'Sin empresa' END AS proforma_empresa,
+            c.factura,
+            c.liquidado_regalado,
+            c.combo,
+            c.codigo_combo,
+                i.nombreInstitucion AS institucionBcInstitucion,
+            i2.nombreInstitucion AS institucionVentaListaInstitucion
+        FROM codigoslibros c
+        LEFT JOIN libros_series ls ON ls.idLibro = c.libro_idlibro
+        LEFT JOIN libro l ON l.idlibro = ls.idLibro
+        LEFT JOIN series s ON s.id_serie = ls.id_serie
+        LEFT JOIN pedidos_formato_new fp ON fp.idlibro = l.idlibro
+        LEFT JOIN institucion i ON i.idInstitucion = c.bc_institucion
+        LEFT JOIN institucion i2 ON i2.idInstitucion = c.venta_lista_institucion
+        LEFT JOIN institucion iv ON iv.idInstitucion = c.bc_institucion
+        WHERE
+            c.prueba_diagnostica = '0'
+            AND c.estado_liquidacion IN ('0', '1', '2')
+            AND c.bc_periodo = '$periodo_id'
+            AND fp.idperiodoescolar = '$periodo_id'
+            AND (c.libro_idlibro = '$libro_idReal' OR c.libro_idlibro = '$libroOrigen')
+            $condicionPlus
+            $condicionTipoInstitucion
+        ORDER BY l.nombrelibro;
+        ");
+        return $query;
+    }
+
     //api:post/metodosPostCodigos=1
     public function metodosPostCodigos(Request $request){
         if($request->getPrevisualizarCodigos)                   { return $this->getPrevisualizarCodigos($request); }

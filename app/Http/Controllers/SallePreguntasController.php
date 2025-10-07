@@ -292,12 +292,7 @@ class SallePreguntasController extends Controller
         WHERE c.institucion_id = '$institucion'
         AND c.n_evaluacion  = '$n_evaluacion'
         ");
-        // $configuracion = DB::SELECT("SELECT i.nombreInstitucion, i.direccionInstitucion, c.fecha_inicio,
-        // c.fecha_fin, c.cant_evaluaciones, c.ver_respuestas, c.observaciones
-        // FROM institucion i, salle_configuracion c
-        // WHERE i.id_configuracion = c.id_configuracion
-        // AND i.idInstitucion = $institucion
-        // ");
+
         $fecha_actual = date("Y-m-d G:i:s");
         $horario_permitido = 0;
         // return $fecha_actual .'<'. $configuracion[0]->fecha_fin .'&&'. $fecha_actual .'>'. $configuracion[0]->fecha_inicio;
@@ -969,13 +964,6 @@ class SallePreguntasController extends Controller
         DB::UPDATE("UPDATE `salle_preguntas` SET `id_tipo_preSallePreguntasControllergunta`= ? WHERE `id_pregunta` = ?",[$nuevo_tipo, $request->id_pregunta]);
     }
     public function salle_intento_eval(Request $request){
-        $periodo = date('Y');
-        // Se cambia a estado eliminado las evaluaciones que ya haya culminado el estudiante en el periodo actual.
-        // Esto permite que se genere una nueva evaluacion.
-        // DB::UPDATE("UPDATE `salle_evaluaciones` SET `estado` = 3
-        // WHERE `id_usuario` = $request->idusuario
-        // AND `estado` = 2
-        // AND `created_at` LIKE '$periodo%'");
         DB::UPDATE("UPDATE `salle_evaluaciones` SET `estado` = 3
         WHERE `id_usuario` = '$request->idusuario'
         AND `estado` = 2
@@ -1107,7 +1095,7 @@ class SallePreguntasController extends Controller
                         if($preguntafromProlipa){
                             $this->crearOpcionesPreguntaProlipa($request, $item, $preg_sync);
                         }else{
-                            $this->crearOpcionesPregunta($request, $item, $preg_sync);  
+                            $this->crearOpcionesPregunta($request, $item, $preg_sync);
                         }
                         $contador++;
                     }
@@ -1373,6 +1361,13 @@ class SallePreguntasController extends Controller
             ];
         }catch(\Exception $e){
             return ["status" => "0", "message" => "Error al obtener la calificación", "error" => $e->getMessage()];
+        }
+    }
+    //api:get/metodosGetPreguntasSalle
+    public function metodosGetPreguntasSalle(Request $request){
+        if($request->getIntentosXEvaluacion){
+            // api:get>>metodosGetPreguntasSalle?getIntentosXEvaluacion=1&evaluacion_periodo=1&id_usuario=1
+            return $this->salleRepository->getIntentosXEvaluacion($request->evaluacion_periodo, $request->id_usuario);
         }
     }
 }

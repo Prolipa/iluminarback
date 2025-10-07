@@ -477,28 +477,15 @@ class  PedidosPagosRepository extends BaseRepository
     return $query;
 
     }
-    //api:get/pedigo_Pagos?getTotalDocumentosLiq=1&idPeriodo=27
+
     public function getTotalDocumentosLiq($request){
         $periodo = $request->idPeriodo;
-         // $query = DB::SELECT("
-        //     SELECT
-        //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 1 AND l.ifAntAprobado = '0' THEN l.doc_valor ELSE 0 END), 2) AS totalAnticipos,
-        //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 2 THEN l.doc_valor ELSE 0 END), 2) AS totalLiquidaciones,
-        //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 7 THEN l.doc_valor ELSE 0 END), 2) AS totalOtrosValores,
-        //         (SELECT SUM(p.anticipo_global) FROM pedidos_convenios p
-        //          WHERE p.periodo_id = l.periodo_id
-        //          AND p.estado <> '2') AS totalConvenio,
-        //         (SELECT SUM(p.anticipo_aprobado) FROM pedidos p
-        //          WHERE p.id_periodo = l.periodo_id
-        //          AND p.estado = '1') AS totalAnticipoAprobado
-        //     FROM `1_4_documento_liq` l
-        //     WHERE l.periodo_id = ?
-        //     AND l.estado = '1'
-        // ", [$periodo]);
+        $ifDistribuidor = $request->ifDistribuidor; // ifDistribuidor todos => traer todos incluido distribuidor, 0 => solo distribuidores; 1 => sin distribuidores
         $query = DB::SELECT("  SELECT
             ROUND(SUM(CASE WHEN l.tipo_pago_id = 1 AND l.ifAntAprobado = '0' AND l.estado = '1' THEN l.doc_valor ELSE 0 END), 2) AS totalAnticipos,
             ROUND(SUM(CASE WHEN l.tipo_pago_id = 1 AND l.ifAntAprobado = '1' AND l.estado = '1' THEN l.doc_valor ELSE 0 END), 2) AS totalAnticipoAprobado,
             ROUND(SUM(CASE WHEN l.tipo_pago_id = 2 AND l.estado = '1' THEN l.doc_valor  ELSE 0 END), 2) AS totalLiquidaciones,
+            ROUND(SUM(CASE WHEN l.tipo_pago_id = 7 AND l.estado = '1' THEN l.doc_valor ELSE 0 END), 2) AS totalOtrosValores,
 
             (SELECT SUM(pcd.valor)
             FROM pedidos_pagos_detalles pcd
@@ -509,6 +496,7 @@ class  PedidosPagosRepository extends BaseRepository
             LEFT JOIN usuario u ON u.idusuario = p.id_asesor
             LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
             LEFT JOIN pedidos_convenios pc ON pc.id_pedido = p.id_pedido
+
             where l.tipo_pago_id = 4
             AND l.periodo_id = '$periodo'
             AND p.id_periodo = '$periodo'
@@ -516,6 +504,8 @@ class  PedidosPagosRepository extends BaseRepository
             AND pc.estado <> '2'
             AND p.estado = '1'
             AND l.estado = '1'
+            AND p.tipo = '0'
+            AND p.contrato_generado IS NOT NULL
             ) AS totalConvenio,
             -- sin cerrar
 
@@ -554,6 +544,76 @@ class  PedidosPagosRepository extends BaseRepository
         ", [$periodo]);
         return $query;
     }
+
+    //api:get/pedigo_Pagos?getTotalDocumentosLiq=1&idPeriodo=27&ifDistribuidor=2
+    //  public function getTotalDocumentosLiq($request){
+    //     $periodo = $request->idPeriodo;
+    //     $ifDistribuidor = $request->ifDistribuidor; // ifDistribuidor todos => traer todos incluido distribuidor, 0 => solo distribuidores; 1 => sin distribuidores
+    //     $query = DB::SELECT("  SELECT
+    //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 1 AND l.ifAntAprobado = '0' AND l.estado = '1' THEN l.doc_valor ELSE 0 END), 2) AS totalAnticipos,
+    //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 1 AND l.ifAntAprobado = '1' AND l.estado = '1' THEN l.doc_valor ELSE 0 END), 2) AS totalAnticipoAprobado,
+    //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 2 AND l.estado = '1' THEN l.doc_valor  ELSE 0 END), 2) AS totalLiquidaciones,
+    //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 7 AND l.estado = '1' THEN l.doc_valor ELSE 0 END), 2) AS totalOtrosValores,
+
+    //         (SELECT SUM(pcd.valor)
+    //         FROM pedidos_pagos_detalles pcd
+    //         LEFT JOIN 1_4_documento_liq l ON l.doc_codigo = pcd.id_pago
+    //         LEFT JOIN pedidos_formas_pago fp ON fp.tip_pag_codigo = l.forma_pago_id
+    //         LEFT JOIN pedidos p ON p.id_pedido = l.id_pedido
+    //         LEFT JOIN institucion i ON i.idInstitucion = p.id_institucion
+    //         LEFT JOIN usuario u ON u.idusuario = p.id_asesor
+    //         LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
+    //         LEFT JOIN pedidos_convenios pc ON pc.id_pedido = p.id_pedido
+
+    //         where l.tipo_pago_id = 4
+    //         AND l.periodo_id = '$periodo'
+    //         AND p.id_periodo = '$periodo'
+    //         AND pc.periodo_id = '$periodo'
+    //         AND pc.estado <> '2'
+    //         AND p.estado = '1'
+    //         AND l.estado = '1'
+    //         AND p.tipo = '0'
+    //         AND p.contrato_generado IS NOT NULL
+    //         ) AS totalConvenio,
+    //         -- sin cerrar
+
+    //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 1 AND l.ifAntAprobado = '0' AND l.estado = '0' THEN l.doc_valor ELSE 0 END), 2) AS totalAnticiposSinCerrar,
+    //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 1 AND l.ifAntAprobado = '1' AND l.estado = '0' THEN l.doc_valor ELSE 0 END), 2) AS totalAnticipoAprobadoSinCerrar,
+    //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 2 AND l.estado = '0' THEN l.doc_valor  ELSE 0 END), 2) AS totalLiquidacionesSinCerrar,
+    //         ROUND(SUM(CASE WHEN l.tipo_pago_id = 7  AND l.estado = '0' THEN l.doc_valor ELSE 0 END), 2) AS totalOtrosValoresSinCerrar,
+
+
+    //         (SELECT SUM(pcd.valor)
+    //             FROM pedidos_pagos_detalles pcd
+    //             LEFT JOIN 1_4_documento_liq l ON l.doc_codigo = pcd.id_pago
+    //             LEFT JOIN pedidos_formas_pago fp ON fp.tip_pag_codigo = l.forma_pago_id
+    //             LEFT JOIN pedidos p ON p.id_pedido = l.id_pedido
+    //             LEFT JOIN institucion i ON i.idInstitucion = p.id_institucion
+    //             LEFT JOIN usuario u ON u.idusuario = p.id_asesor
+    //             LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
+    //             LEFT JOIN pedidos_convenios pc ON pc.id_pedido = p.id_pedido
+    //             where l.tipo_pago_id = 4
+    //             AND l.periodo_id = '$periodo'
+    //             AND p.id_periodo = '$periodo'
+    //             AND pc.periodo_id = '$periodo'
+    //             AND pc.estado <> '2'
+    //             AND p.estado = '1'
+    //             AND l.estado = '0'
+    //         ) AS totalConvenioSinCerrar
+
+    //         FROM `1_4_documento_liq` l
+    //         LEFT JOIN pedidos p ON p.id_pedido = l.id_pedido
+    //         WHERE l.periodo_id = ?
+    //         AND p.estado = '1'
+    //         AND p.tipo = '0'
+    //         AND p.contrato_generado IS NOT NULL
+    //         ;
+
+    //     ", [$periodo]);
+    //     return $query;
+    // }
+
+
 
     //api/get/pedigo_Pagos?getPagosCerradosNoCerrados=1&idPeriodo=27
     public function getPagosCerradosNoCerrados($request){

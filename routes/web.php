@@ -282,7 +282,7 @@ Route::get('editar_codigos_masivos','SeminarioController@editar_codigos_masivos'
 
 Route::get('guardarData','AdminController@guardarData');
 Route::get('pruebaData','AdminController@pruebaData');
-
+Route::get('llenarIdsPedidosVal', 'AdminController@llenarIdsPedidosVal');
 //========================FIN APIS PARA MATRICULAS=============================
 //========================APIS PARA SEGUIMIENTO=================================
 Route::get('asesor/seguimiento','SeguimientoInstitucionController@visitas');
@@ -1286,6 +1286,7 @@ Route::post('Regresar_A_Pendiente_Documento','VentasController@Regresar_A_Pendie
 Route::post('asignar_asignatura_docentes_xarea_disponible','AsignaturaDocenteController@asignar_asignatura_docentes_xarea_disponible');
 //FIN APIS JEYSON LARA
 
+
 //GUARDAR ANTICIPOS APROBADOS DESPUES DE GENERAR EL CONTRATO
 Route::post('guardarAnticipoAprobadoContrato', 'PedidosController@guardarAnticipoAprobadoContrato');
 Route::post('updateThePedido','PedidosController@updateThePedido');
@@ -2182,3 +2183,6 @@ Route::get('verificarProductosPerseo/{codigo}/{empresa}','AdminController@llenar
 Route::get('Post_ActualizarPorcentaje_VentaActa', 'AdminController@Post_ActualizarPorcentaje_VentaActa');
 
 Route::get('codigosXcontrato', 'VentasController@codigosXcontrato');
+Route::get('obtenerPorInstitucionPeriodo', 'AbonoController@obtenerPorInstitucionPeriodo');
+Route::get('getRespRapida', 'TicketController@get_resp_quickly');
+Route::post('updateRevisionPedido', 'PedidosController@updateRevisionPedido');

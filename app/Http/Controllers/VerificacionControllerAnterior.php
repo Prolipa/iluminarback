@@ -2840,8 +2840,6 @@ class VerificacionControllerAnterior extends Controller
         // ];
     }
 
-    //api:get/metodosGetVerificaciones?getReporteSueltosContratosLiquidadoYNoLiquidados=1&id_periodo=23
-
 
     public function getReporteSueltosContratosLiquidadoYNoLiquidados($request){
         $id_periodo = $request->input("id_periodo", 0);
@@ -2851,13 +2849,17 @@ class VerificacionControllerAnterior extends Controller
         $contratos = DB::SELECT("
             SELECT
                 p.id_asesor,
+                p.tipo_venta_descr,
+                p.id_institucion,
                 CONCAT(u.nombres,' ',u.apellidos) AS nombre_asesor,
                 p.contrato_generado AS contrato,
                 COALESCE(SUM(c.cantidad_libro), 0) AS cantidad,
                 COALESCE(SUM(f.pfn_pvp * c.cantidad_libro), 0) AS total,
-                p.estadoPedido_Pagos as estadoPedido
+                p.estadoPedido_Pagos as estadoPedido,
+                ins.nombreInstitucion
             FROM pedidos p
             LEFT JOIN usuario u ON u.idusuario = p.id_asesor
+            LEFT JOIN institucion ins ON ins.idInstitucion = p.id_institucion
             LEFT JOIN (
                 SELECT
                     contrato,
@@ -2873,6 +2875,7 @@ class VerificacionControllerAnterior extends Controller
             ) c ON c.contrato = p.contrato_generado
             LEFT JOIN pedidos_formato_new f
                 ON f.idlibro = c.libro_idlibro
+
             AND f.idperiodoescolar = ?
             WHERE p.estado = '1'
             AND p.id_periodo = ?
@@ -2885,24 +2888,7 @@ class VerificacionControllerAnterior extends Controller
             $id_periodo      // para pedidos
         ]);
 
-        // 🔹 Traer SIN CONTRATO una sola vez
-        $sinContrato = DB::SELECTOne("
-            SELECT
-                'SIN CONTRATO' AS contrato,
-                COUNT(*) AS cantidad,
-                SUM(f.pfn_pvp) AS total
-            FROM codigoslibros c
-            LEFT JOIN pedidos_formato_new f
-                ON f.idlibro = c.libro_idlibro
-            AND f.idperiodoescolar = ?
-            WHERE (c.contrato IS NULL OR c.contrato = '' OR c.contrato = '0')
-            AND c.bc_periodo = ?
-            AND c.prueba_diagnostica = '0'
-            AND c.estado_liquidacion <> '3'
-        ", [
-            $periodoPrecio,
-            $id_periodo
-        ]);
+
 
         // 🔹 Agrupar contratos por asesor en un array de objetos
         $asesores = [];
@@ -2923,6 +2909,9 @@ class VerificacionControllerAnterior extends Controller
                     'nombre' => $row->nombre_asesor,
                     'contratos' => [
                         [
+                            'tipo_venta_descr' => $row->tipo_venta_descr,
+                            'nombreInstitucion' => $row->nombreInstitucion,
+                            'id_institucion' => $row->id_institucion,
                             'contrato' => $row->contrato,
                             'estadoPedido' => $row->estadoPedido,
                             'cantidad' => $row->cantidad,
@@ -2933,6 +2922,9 @@ class VerificacionControllerAnterior extends Controller
             } else {
                 // Ya existe, agregamos contrato al array
                 $asesores[$foundIndex]['contratos'][] = [
+                    'tipo_venta_descr' => $row->tipo_venta_descr,
+                    'nombreInstitucion' => $row->nombreInstitucion,
+                    'id_institucion' => $row->id_institucion,
                     'contrato' => $row->contrato,
                     'estadoPedido' => $row->estadoPedido,
                     'cantidad' => $row->cantidad,
@@ -2943,9 +2935,51 @@ class VerificacionControllerAnterior extends Controller
 
         return [
             'asesores' => $asesores,
-            'sin_contrato' => $sinContrato
         ];
     }
+
+
+    //api:get/metodosGetVerificaciones?getReporteSueltosContratosLiquidadoYNoLiquidados=1&id_periodo=24
+    // public function getReporteSueltosContratosLiquidadoYNoLiquidados($request){
+    //     $id_periodo = $request->input("id_periodo", 0);
+    //     if(!$id_periodo){
+    //         return ["status" => "0","message" => "Falta el id_periodo"];
+    //     }
+    //     $asesores   = DB::SELECT("SELECT DISTINCT
+    //             p.id_asesor,
+    //         CONCAT(u.nombres, ' ', u.apellidos) AS asesor
+    //         FROM pedidos p
+    //         LEFT JOIN usuario u ON u.idusuario = p.id_asesor
+    //         WHERE p.id_periodo = ?
+    //         AND p.estado = '1'
+    //         AND p.contrato_generado IS NOT NULL
+    //         ORDER BY asesor;
+    //     ", [$id_periodo]);
+    //     // traer contratos del asesor
+    //     foreach($asesores as $key => $item){
+    //         $id_asesor = $item->id_asesor;
+    //         $getContratos = DB::SELECT("SELECT
+    //             p.estadoPedido_Pagos,
+    //             p.id_asesor,
+    //             CONCAT(u.nombres, ' ', u.apellidos) AS asesor,
+    //             p.contrato_generado,
+    //             p.TotalVentaReal AS ventaBruta,
+    //             p.descuento AS comision,
+    //             ROUND(p.TotalVentaReal - ((p.TotalVentaReal * p.descuento)/100), 2) AS ven_neta
+    //         FROM pedidos p
+    //         LEFT JOIN usuario u ON u.idusuario = p.id_asesor
+    //         WHERE p.id_periodo = ?
+    //         AND p.estado = '1'
+    //         AND p.contrato_generado IS NOT NULL
+    //         AND p.id_asesor = ?
+    //         ORDER BY asesor;
+    //         ", [$id_periodo, $id_asesor]);
+
+    //         $item->contratos = $getContratos;
+    //         }
+    //     return $asesores;
+    //     }
+
     //api:get/metodosGetVerificaciones?getReporteCodigosGeneral=1&id_periodo=25&normales=0
     public function getReporteCodigosGeneral($request)
     {

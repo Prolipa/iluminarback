@@ -73,16 +73,16 @@ class DocenteController extends Controller
     public function docentesInstitucion($id)
     {
         $usuarios = User::select(
-            'usuario.idusuario', 
-            'usuario.cedula', 
-            'usuario.nombres', 
-            'usuario.apellidos', 
-            'usuario.name_usuario', 
-            'usuario.email', 
-            'usuario.telefono', 
-            'usuario.estado_idEstado', 
-            'usuario.id_group', 
-            'usuario.institucion_idInstitucion', 
+            'usuario.idusuario',
+            'usuario.cedula',
+            'usuario.nombres',
+            'usuario.apellidos',
+            'usuario.name_usuario',
+            'usuario.email',
+            'usuario.telefono',
+            'usuario.estado_idEstado',
+            'usuario.id_group',
+            'usuario.institucion_idInstitucion',
             'usuario.foto_user',
             'i.idInstitucion',
             DB::RAW('MAX(se.id_evaluacion) AS id_evaluacion')
@@ -92,21 +92,66 @@ class DocenteController extends Controller
         ->where('institucion_idInstitucion', $id)
         ->whereIn('id_group', [6, 13])
         ->groupBy(
-            'usuario.idusuario', 
-            'usuario.cedula', 
-            'usuario.nombres', 
-            'usuario.apellidos', 
-            'usuario.name_usuario', 
-            'usuario.email', 
-            'usuario.telefono', 
-            'usuario.estado_idEstado', 
-            'usuario.id_group', 
-            'usuario.institucion_idInstitucion', 
+            'usuario.idusuario',
+            'usuario.cedula',
+            'usuario.nombres',
+            'usuario.apellidos',
+            'usuario.name_usuario',
+            'usuario.email',
+            'usuario.telefono',
+            'usuario.estado_idEstado',
+            'usuario.id_group',
+            'usuario.institucion_idInstitucion',
             'usuario.foto_user',
             'i.idInstitucion'
         )
         ->get();
-        
+
+        return $usuarios;
+    }
+    public function docentesInstitucionSalle($id,$evaluacion){
+        $usuarios = User::select(
+            'usuario.idusuario',
+            'usuario.cedula',
+            'usuario.nombres',
+            'usuario.apellidos',
+            'usuario.name_usuario',
+            'usuario.email',
+            'usuario.telefono',
+            'usuario.estado_idEstado',
+            'usuario.id_group',
+            'usuario.institucion_idInstitucion',
+            'usuario.foto_user',
+            'i.idInstitucion',
+            DB::RAW('MAX(se.id_evaluacion) AS id_evaluacion')
+        )
+        ->leftJoin('salle_evaluaciones as se', 'se.id_usuario', '=', 'usuario.idusuario')
+        ->leftjoin('institucion as i', 'i.idInstitucion', '=', 'usuario.institucion_idInstitucion')
+        ->where('institucion_idInstitucion', $id)
+        ->whereIn('id_group', [6, 13])
+        ->groupBy(
+            'usuario.idusuario',
+            'usuario.cedula',
+            'usuario.nombres',
+            'usuario.apellidos',
+            'usuario.name_usuario',
+            'usuario.email',
+            'usuario.telefono',
+            'usuario.estado_idEstado',
+            'usuario.id_group',
+            'usuario.institucion_idInstitucion',
+            'usuario.foto_user',
+            'i.idInstitucion'
+        )
+        ->get();
+        // traer las evaluaciones resueltas
+        foreach($usuarios as $key => $item){
+            $evaluacionResuelta = DB::SELECT("SELECT * FROM salle_evaluaciones e
+            WHERE e.id_usuario ='$item->idusuario'
+            AND e.estado = '2'
+            AND e.n_evaluacion = '$evaluacion'");
+            $usuarios[$key]->intentosEvaluaciones = $evaluacionResuelta;
+        }
         return $usuarios;
     }
 

@@ -150,11 +150,12 @@ class AreaController extends Controller
             // WHERE asignatura.area_idarea = ?
             // AND asignatura.estado = '1'
             // ",[$post->idarea]);
-            $respuesta = DB::SELECT("SELECT DISTINCT a.idasignatura as id, a.nombreasignatura as name
+            $respuesta = DB::SELECT("SELECT DISTINCT a.idasignatura as id, a.nombreasignatura as name, se.nombre_serie
             FROM asignatura  a
             join area on area.idarea = a.area_idarea
             LEFT JOIN libro l ON l.asignatura_idasignatura = a.idasignatura
             LEFT JOIN libros_series ls ON l.idlibro = ls.idLibro
+            left join series as se ON ls.id_serie = se.id_serie
             WHERE a.area_idarea = ?
             AND a.estado = '1'
             AND (ls.version <> 'PLUS' OR ls.version IS NULL)

@@ -310,7 +310,8 @@ class TicketController extends Controller
                 AND group_id <> '1'
             )as cantidad,
             u.email,u.name_usuario,u.cedula,u.idusuario,
-            i.nombreInstitucion, g.deskripsi as rol, t.ticket_asesor,
+            i.nombreInstitucion, g.deskripsi as rol,
+            COALESCE(t.ticket_asesor,'0') AS ticket_asesor,
             i.vendedorInstitucion, t.datos_ticket
             FROM tickets t
             LEFT JOIN institucion i ON t.institucion_id = i.idInstitucion
@@ -455,5 +456,22 @@ class TicketController extends Controller
     public function destroy($id)
     {
         //
+    }
+
+    public function get_resp_quickly(Request $request)
+    {
+        switch ($request->action) {
+            case 'todo':
+                $dato = DB::table('tickets_resp_rapidas')
+                ->orderby('updated_at','desc')
+                ->get();
+                return $dato;
+            case 'activos':
+                $dato = DB::table('tickets_resp_rapidas')->where('estado',1)
+                ->get();
+                return $dato;
+            default:
+                return response()->json(['status' => 0, 'message' => 'Acción no válida']);
+        }
     }
 }

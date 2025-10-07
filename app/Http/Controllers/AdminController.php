@@ -34,6 +34,7 @@ use App\Models\Verificacion;
 use App\Models\Video;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\Facturacion\DevolucionRepository;
+use App\Repositories\pedidos\PedidosRepository;
 use DB;
 use GraphQL\Server\RequestError;
 use Mail;
@@ -53,11 +54,13 @@ class AdminController extends Controller
     use TraitVerificacionGeneral;
     protected $devolucionRepository;
     private $codigosRepository;
-    public function __construct( DevolucionRepository  $devolucionRepository,CodigosRepository $codigosRepository)
+    protected $pedidoRepository;
+    public function __construct( DevolucionRepository  $devolucionRepository,CodigosRepository $codigosRepository, PedidosRepository $pedidoRepository)
     {
 
         $this->devolucionRepository  = $devolucionRepository;
         $this->codigosRepository     = $codigosRepository;
+        $this->pedidoRepository      = $pedidoRepository;
     }
     public function getFilesTest(){
       $query = DB::SELECT("SELECT pd.*,c.convenio_anios
@@ -279,10 +282,12 @@ class AdminController extends Controller
     //     }
     // }
 
+    //api:get pruebatest?periodo_idUno=25&periodo_idDos=25&codigoC=S24&codigoC2=S24&ifRegalados=0
     public function pruebaApi(Request $request){
         try {
             set_time_limit(6000000);
             ini_set('max_execution_time', 6000000);
+
 
             $datos = [];
 
@@ -291,6 +296,7 @@ class AdminController extends Controller
             $periodo2 = $request->periodo_idDos;
             $codigosContrato = $request->codigoC;
             $codigoContratoComparar = $request->codigoC2;
+            $ifRegalados = $request->input('ifRegalados','1'); //0 = No traer regalados, 1 = traer regalados
 
             // Validación de parámetros
             if ($codigosContrato == null || $codigoContratoComparar == null) {
@@ -360,6 +366,54 @@ class AdminController extends Controller
                     "ContratosDespues" => $contratosDespues,
                     "ContratosAnterior" => $JsonAntes,
                 ];
+            } // fin foreach
+            if($ifRegalados == '0'){
+                // return $datos; // Retornar datos sin regalados
+                // if ($periodo != $periodo2) {
+                // // periodo anterior
+                // $getAsesoresPedidos = $this->pedidoRepository->ReportePedidoGeneral($periodo,1);
+                // // periodo despues
+                // $getAsesoresPedidos2 = $this->pedidoRepository->ReportePedidoGeneral($periodo2,1);
+                // } else {
+                // $getAsesoresPedidos = $this->pedidoRepository->ReportePedidoGeneral($periodo2,1);
+                // $getAsesoresPedidos2 = $getAsesoresPedidos;
+                // }
+              if ($periodo != $periodo2) {
+                    // periodo anterior
+                    $getAsesoresPedidos = $this->pedidoRepository->ReportePedidoGeneral($periodo, 1);
+                    // periodo después
+                    $getAsesoresPedidos2 = $this->pedidoRepository->ReportePedidoGeneral($periodo2, 1);
+                } else {
+                    $getAsesoresPedidos = $this->pedidoRepository->ReportePedidoGeneral($periodo2, 1);
+                    $getAsesoresPedidos2 = $getAsesoresPedidos;
+                }
+                // agregar datosVentaAnterior y datosVentaDespues filtrados por id_asesor
+                $datos = collect($datos)->map(function ($item) use ($getAsesoresPedidos, $getAsesoresPedidos2) {
+                    $idAsesor = is_array($item) ? $item['id_asesor'] : $item->id_asesor;
+
+                    // filtramos por id_asesor en cada periodo
+                    $datosVentaAnterior = collect($getAsesoresPedidos)->where('id_asesor', $idAsesor)->values();
+                    $datosVentaDespues  = collect($getAsesoresPedidos2)->where('id_asesor', $idAsesor)->values();
+
+                    // añadimos las nuevas propiedades al item original
+                    if (is_array($item)) {
+                        $item['datosVentaAnterior'] = $datosVentaAnterior;
+                        $item['datosVentaDespues']  = $datosVentaDespues;
+                    } else {
+                        $item->datosVentaAnterior = $datosVentaAnterior;
+                        $item->datosVentaDespues  = $datosVentaDespues;
+                    }
+
+                    return $item;
+                })->toArray();
+
+                return $datos;
+
+
+                // foreach($datos as $key => $item){
+
+                // }
+                return $datos; // Retornar datos sin regalados
             }
 
             // Definir los regalados
@@ -552,11 +606,12 @@ class AdminController extends Controller
     }
 
 
-     public function getContratos($id_asesor,$iniciales,$periodo,$codigoContrato=null){
+    public function getContratos($id_asesor,$iniciales,$periodo,$codigoContrato=null){
         return $this->getContratosAsesorProlipa($id_asesor,$periodo);
         // if($periodo > 21){  return $this->getContratosAsesorProlipa($id_asesor,$periodo); }
         // else             {  return $this->getContratosFueraProlipa($iniciales,$codigoContrato); }
     }
+
     public function getContratosAsesorProlipa($id_asesor,$periodo){
         $query = DB::SELECT("SELECT p.TotalVentaReal as VEN_VALOR, pe.codigo_contrato as PERIODO,
             (p.TotalVentaReal - ((p.TotalVentaReal * p.descuento)/100)) AS ven_neta,
@@ -1348,12 +1403,13 @@ class AdminController extends Controller
         return $cantidad;
     }
     public function cant_codigos(){
-        $cantidad = DB::SELECT("SELECT COUNT(*) as cantidad FROM codigoslibros WHERE idusuario > 0");
-        return $cantidad;
+        return DB::table('codigoslibros')
+             ->where('idusuario', '>', 0)
+             ->count();
     }
     public function cant_codigostotal(){
-        $cantidad = DB::SELECT("SELECT COUNT(*) as cantidad FROM codigoslibros");
-        return $cantidad;
+        // $cantidad = DB::SELECT("SELECT COUNT(*) as cantidad FROM codigoslibros");
+        return DB::table('codigoslibros')->count();
     }
     public function cant_evaluaciones(){
         $cantidad = DB::SELECT("SELECT estado, COUNT(estado) as cantidad FROM evaluaciones  GROUP BY estado");
@@ -1920,6 +1976,91 @@ class AdminController extends Controller
             "nivel" => $query2
         ];
     }
+
+    //api:get>llenarIdsPedidosVal?id_periodo=26
+   public function llenarIdsPedidosVal(Request $request)
+    {
+        $id_periodo = $request->id_periodo;
+
+        $query = DB::SELECT("SELECT pv.*
+            FROM pedidos_val_area pv
+            LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
+            WHERE p.id_periodo = ?
+            AND pv.id_libro IS NULL
+            AND p.estado <> '2'
+            LIMIT 1000
+        ", [$id_periodo]); // ✅ Usa binding en vez de interpolar variables (más seguro)
+        // return $query;
+
+        $problemasLibros = [];
+        $contador = 0;
+
+        foreach ($query as $item) {
+            $id_serie = $item->id_serie;
+
+            // ✅ Caso especial: plan lector
+            if ($id_serie == 6) {
+                DB::table("pedidos_val_area")
+                    ->where("id", $item->id)
+                    ->update(["id_libro" => $item->plan_lector]);
+
+                $contador++;
+                continue;
+            }
+            // plus
+            if($id_serie == 22){
+                $buscarLibro = DB::SELECT("
+                SELECT l.*
+                FROM libros_series ls
+                LEFT JOIN libro l ON l.idlibro = ls.idLibro
+                LEFT JOIN asignatura a ON a.idasignatura = l.asignatura_idasignatura
+                WHERE ls.id_serie = ?
+                AND a.area_idarea = ?
+                AND ls.year = ?
+                AND l.Estado_idEstado = '1'
+            ", [$item->id_serie, $item->id_area, $item->year]);
+            }else{
+                 // ✅ Buscar libro correspondiente
+                $buscarLibro = DB::SELECT("
+                    SELECT l.*
+                    FROM libros_series ls
+                    LEFT JOIN libro l ON l.idlibro = ls.idLibro
+                    LEFT JOIN asignatura a ON a.idasignatura = l.asignatura_idasignatura
+                    WHERE ls.id_serie = ?
+                    AND a.area_idarea = ?
+                    AND ls.year = ?
+                    AND l.Estado_idEstado = '1'
+                    AND l.id_folleto IS NULL
+                ", [$item->id_serie, $item->id_area, $item->year]);
+            }
+
+
+            // ✅ Validar resultados
+            if (count($buscarLibro) > 0) {
+                if (count($buscarLibro) > 1) {
+                    $item->mensaje = 'Existe más de un libro';
+                    $problemasLibros[] = $item;
+                    continue;
+                }
+
+                $id_libro = $buscarLibro[0]->idlibro;
+                DB::table("pedidos_val_area")
+                    ->where("id", $item->id)
+                    ->update(["id_libro" => $id_libro]);
+                $contador++;
+            } else {
+                $item->mensaje = 'No se encontró libro';
+                $problemasLibros[] = $item;
+            }
+        }
+
+        // ✅ Mueve el return aquí
+        return [
+            "contador" => "Se actualizaron $contador registros",
+            "problemasLibros" => $problemasLibros
+        ];
+    }
+
 }
 
 

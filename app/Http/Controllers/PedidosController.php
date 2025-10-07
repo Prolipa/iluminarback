@@ -2075,7 +2075,9 @@ class PedidosController extends Controller
                 'contadorConvenioAprobadoFacturador' => $item->contadorConvenioAprobadoFacturador,
                 'convenioAnulado'                => $item->convenioAnulado,
                 'convenioFinalizados'             => $item->convenioFinalizados,
-                'estadoPedido_Pagos'            => $item->estadoPedido_Pagos,
+                'estadoPedido_Pagos'              => $item->estadoPedido_Pagos,
+                'revision_pedido'                 => $item->revision_pedido,
+                'revision_observacion'            => $item->revision_observacion
             ];
         }
         return $response;
@@ -8587,4 +8589,67 @@ class PedidosController extends Controller
             $pedido->save();
             return $pedido;
     }
+
+    public function updateRevisionPedido(Request $request)
+    {
+        try {
+            // 1. Validar datos de entrada
+            $validated = $request->validate([
+                'id_pedido'            => 'required|integer|exists:pedidos,id_pedido',
+                'revision_pedido'      => 'required|string|max:255',
+                'revision_observacion' => 'nullable|string|max:500',
+                'quitar_revisado'      => 'nullable|boolean'
+            ]);
+
+            // 2. Preparar valores para actualizar
+            $revision_pedido = $validated['revision_pedido'];
+            $revision_observacion = $validated['revision_observacion'] ?? null;
+
+            // Si viene la bandera de quitar revisado, limpiamos observación
+            if (!empty($validated['quitar_revisado']) && $validated['quitar_revisado'] == 1) {
+                $revision_observacion = null; // o '' si prefieres
+            }
+
+            // 3. Ejecutar actualización
+            $updated = DB::table('pedidos')
+                ->where('id_pedido', $validated['id_pedido'])
+                ->update([
+                    'revision_pedido'      => $revision_pedido,
+                    'revision_observacion' => $revision_observacion
+                ]);
+
+            // 4. Respuesta
+            if ($updated) {
+                return response()->json([
+                    'status'  => 1,
+                    'message' => 'Se actualizó correctamente el pedido',
+                    'pedido'  => [
+                        'id_pedido'            => $validated['id_pedido'],
+                        'revision_pedido'      => $revision_pedido,
+                        'revision_observacion' => $revision_observacion
+                    ]
+                ]);
+            }
+
+            return response()->json([
+                'status'  => 0,
+                'message' => 'No se realizaron cambios en el pedido'
+            ]);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'status'  => 0,
+                'message' => 'Error de validación',
+                'errors'  => $e->errors()
+            ], 422);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status'  => 0,
+                'message' => 'Ocurrió un error al actualizar el pedido',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+
 }

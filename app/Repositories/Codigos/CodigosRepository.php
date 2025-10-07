@@ -755,11 +755,11 @@ class  CodigosRepository extends BaseRepository
             $verif          = "verif" . $request->verificacion_id;
             $liquidados     = $request->liquidados;
             $porInstitucion = $request->porInstitucion;
+            $soloRegalados  = $request->soloRegalados;
             // Si $verif tiene un valor, validamos que la columna exista
             if ($IdVerificacion && !Schema::hasColumn('codigoslibros', $verif)) {
                 throw new \Exception("La columna {$verif} no existe en la tabla codigoslibros.");
             }
-
             // Consulta con Eloquent
             $detalles = CodigosLibros::from('codigoslibros as c') // Alias aplicado aquí
                 ->select([
@@ -836,6 +836,9 @@ class  CodigosRepository extends BaseRepository
                         $query->where('c.bc_institucion', $institucion)
                             ->orWhere('c.venta_lista_institucion', $institucion);
                     });
+                })
+                ->when($soloRegalados, function ($query) {
+                    $query->where('c.estado_liquidacion', '2');
                 })
                 ->get();
 
@@ -1356,50 +1359,50 @@ class  CodigosRepository extends BaseRepository
             throw new \Exception("Error al guardar el historico stock new producto $pro_codigo");
         }
     }
-    // public function reporteCombos($periodo){
-    //      $query = DB::select("SELECT
-    //         sub.combo AS codigo,
-    //         COUNT(DISTINCT sub.codigo_combo) AS cantidad,
-    //         SUM(sub.cantidad) AS total_codigos,
-    //         pr.codigos_combos,
-    //         pr.pro_nombre AS nombrelibro,
-    //         ls.idLibro,
-    //         v.det_ven_valor_u AS precio
-    //     FROM (
-    //         SELECT c.codigo_combo, c.combo, COUNT(*) AS cantidad
-    //         FROM codigoslibros c
-    //         WHERE c.prueba_diagnostica = '0'
-    //         AND c.codigo_combo IS NOT NULL
-    //         AND c.bc_periodo = '$periodo'
-    //         AND c.estado_liquidacion IN ('0', '1', '2')
-    //         GROUP BY c.codigo_combo, c.combo
-    //     ) AS sub
-    //     LEFT JOIN `1_4_cal_producto` pr ON pr.pro_codigo = sub.combo
-    //     LEFT JOIN libros_series ls ON ls.codigo_liquidacion = pr.pro_codigo
-    //     LEFT JOIN f_detalle_venta v ON v.pro_codigo = pr.pro_codigo
-    //     LEFT JOIN f_venta v2 ON v2.ven_codigo = v.ven_codigo
-    //         AND v.id_empresa = v2.id_empresa
-    //         AND v2.periodo_id = '$periodo'  -- Aseguramos que solo se tomen los precios del periodo específico
-    //     WHERE v2.periodo_id = '$periodo'  -- Filtro adicional para asegurar que se obtienen solo los datos del periodo correcto
-    //     GROUP BY sub.combo, pr.codigos_combos, pr.pro_nombre, ls.idLibro, v.det_ven_valor_u;
+    public function reporteCombos($periodo){
+         $query = DB::select("SELECT
+            sub.combo AS codigo,
+            COUNT(DISTINCT sub.codigo_combo) AS cantidad,
+            SUM(sub.cantidad) AS total_codigos,
+            pr.codigos_combos,
+            pr.pro_nombre AS nombrelibro,
+            ls.idLibro,
+            v.det_ven_valor_u AS precio
+        FROM (
+            SELECT c.codigo_combo, c.combo, COUNT(*) AS cantidad
+            FROM codigoslibros c
+            WHERE c.prueba_diagnostica = '0'
+            AND c.codigo_combo IS NOT NULL
+            AND c.bc_periodo = '$periodo'
+            AND c.estado_liquidacion IN ('0', '1', '2')
+            GROUP BY c.codigo_combo, c.combo
+        ) AS sub
+        LEFT JOIN `1_4_cal_producto` pr ON pr.pro_codigo = sub.combo
+        LEFT JOIN libros_series ls ON ls.codigo_liquidacion = pr.pro_codigo
+        LEFT JOIN f_detalle_venta v ON v.pro_codigo = pr.pro_codigo
+        LEFT JOIN f_venta v2 ON v2.ven_codigo = v.ven_codigo
+            AND v.id_empresa = v2.id_empresa
+            AND v2.periodo_id = '$periodo'  -- Aseguramos que solo se tomen los precios del periodo específico
+        WHERE v2.periodo_id = '$periodo'  -- Filtro adicional para asegurar que se obtienen solo los datos del periodo correcto
+        GROUP BY sub.combo, pr.codigos_combos, pr.pro_nombre, ls.idLibro, v.det_ven_valor_u;
 
-    //     ");
+        ");
 
-    //     foreach ($query as $key => $item) {
-    //         // Calcular precio total
-    //         $item->precio_total = round(($item->cantidad ?? 0) * ($item->precio ?? 0), 2);
+        foreach ($query as $key => $item) {
+            // Calcular precio total
+            $item->precio_total = round(($item->cantidad ?? 0) * ($item->precio ?? 0), 2);
 
-    //         // Calcular cantidad de códigos por combo
-    //         if (!empty($item->codigos_combos)) {
-    //             $codigosArray = explode(',', $item->codigos_combos);
-    //             $item->codigosPorCombo = count($codigosArray);
-    //         } else {
-    //             $item->codigosPorCombo = 0;
-    //         }
-    //     }
+            // Calcular cantidad de códigos por combo
+            if (!empty($item->codigos_combos)) {
+                $codigosArray = explode(',', $item->codigos_combos);
+                $item->codigosPorCombo = count($codigosArray);
+            } else {
+                $item->codigosPorCombo = 0;
+            }
+        }
 
-    //     return $query;
-    // }
+        return $query;
+    }
 
 
     // public function reporteCombosDinamica($periodo,$tipoInstitucionIncluir){
@@ -1462,7 +1465,8 @@ class  CodigosRepository extends BaseRepository
                 COUNT(DISTINCT sub.codigo_combo) AS cantidad,
                 SUM(sub.cantidad) AS total_codigos,
                 pr.codigos_combos,
-                pr.pro_nombre AS nombrelibro,
+                l.nombrelibro,
+                s.nombre_serie,
                 ls.idLibro,ls.year, ls.version,
                 v.det_ven_valor_u AS precio
             FROM (
@@ -1479,6 +1483,8 @@ class  CodigosRepository extends BaseRepository
             ) AS sub
             LEFT JOIN `1_4_cal_producto` pr ON pr.pro_codigo = sub.combo
             LEFT JOIN libros_series ls ON ls.codigo_liquidacion = pr.pro_codigo
+            LEFT JOIN libro l ON l.idlibro = ls.idLibro
+            LEFT JOIN series s ON s.id_serie = ls.id_serie
             LEFT JOIN f_detalle_venta v ON v.pro_codigo = pr.pro_codigo
             LEFT JOIN f_venta v2 ON v2.ven_codigo = v.ven_codigo
                 AND v.id_empresa = v2.id_empresa

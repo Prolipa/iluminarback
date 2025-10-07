@@ -99,13 +99,6 @@ class  SalleRepository extends BaseRepository
         return $query;
     }
     public function puntajePorArea($id_evaluacion,$id_area){
-        // $query2 = DB::SELECT("SELECT SUM(pp.puntaje_pregunta) AS puntaje
-        // FROM salle_preguntas_evaluacion p
-        // LEFT JOIN salle_preguntas pp ON pp.id_pregunta = p.id_pregunta
-        // LEFT JOIN salle_asignaturas a ON pp.id_asignatura = a.id_asignatura
-        // WHERE p.id_evaluacion = ?
-        // AND a.id_area = ?
-        // ",[$id_evaluacion,$id_area]);
         $query2 = DB::SELECT("SELECT  sum(pp.puntaje_pregunta) as puntaje
                 FROM salle_preguntas_evaluacion p
                 LEFT JOIN salle_preguntas pp ON pp.id_pregunta = p.id_pregunta
@@ -114,6 +107,15 @@ class  SalleRepository extends BaseRepository
                 AND a.id_area = '$id_area';
             ");
         return $query2;
+    }
+    public function getIntentosXEvaluacion($id_evaluacion, $id_usuario){
+        $query = DB::SELECT("SELECT COUNT(*) AS intentos
+        FROM salle_evaluaciones
+        WHERE id_evaluacion = ?
+        AND id_usuario = ?
+        AND estado IN (2)
+        ",[$id_evaluacion, $id_usuario]);
+        return $query;
     }
 }
 ?>
