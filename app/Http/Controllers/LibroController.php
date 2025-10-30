@@ -41,6 +41,41 @@ class LibroController extends Controller
         }
         return $libro;
     }
+    //api:get/getxLibrosdemo
+    public function getxNombredemo($nombrelike){
+        $query = DB::SELECT("SELECT l.nombrelibro, l.weblibro, l.demo,  l.idlibro,l.asignatura_idasignatura , l.conteodemo,
+        a.area_idarea ,l.portada, s.nombre_serie, ar.nombrearea
+         FROM libros_series ls
+         LEFT JOIN series s ON ls.id_serie = s.id_serie
+         LEFT JOIN libro l ON ls.idLibro = l.idlibro
+         LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+         LEFT JOIN area ar ON a.area_idarea = ar.idarea
+         WHERE l.Estado_idEstado = '1'
+         AND a.estado = '1'
+         AND l.demo IS NOT NULL
+         AND TRIM(l.demo) <> ''
+         AND l.nombrelibro like '%$nombrelike%'
+        ");
+        return $query;
+    }
+
+    //api:get/getxAreasdemo
+    public function getxAreasdemo($nombrearea){
+        $query = DB::SELECT("SELECT l.nombrelibro, l.weblibro, l.demo,  l.idlibro,l.asignatura_idasignatura , l.conteodemo,
+        a.area_idarea ,l.portada, s.nombre_serie, ar.nombrearea
+         FROM libros_series ls
+         LEFT JOIN series s ON ls.id_serie = s.id_serie
+         LEFT JOIN libro l ON ls.idLibro = l.idlibro
+         LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+         LEFT JOIN area ar ON a.area_idarea = ar.idarea
+         WHERE l.Estado_idEstado = '1'
+         AND a.estado = '1'
+         AND l.demo IS NOT NULL
+         AND TRIM(l.demo) <> ''
+         AND ar.nombrearea = '$nombrearea'
+        ");
+        return $query;
+    }
     //api:get/getAllBooks
     public function getAllBooks(Request $request){
         $query = DB::SELECT("SELECT l.nombrelibro, l.demo,  l.idlibro,l.asignatura_idasignatura ,
@@ -677,6 +712,40 @@ class LibroController extends Controller
         return ["status"=>"1", "message" => "Se guardo correctamente"];
         }else{
         return ["error"=>"0", "message" => "No se pudo actualizar/guardar"];
+        }
+    }
+    //actualizar campo conteodemo
+    public function editarconteodemo(Request $request)
+    {
+        try {
+            if ($request->idlibro) {
+                $libro = Libro::find($request->idlibro);
+                if ($libro) {
+                    // Aumentar el conteo en 1 (maneja null como 0)
+                    $libro->conteodemo = ($libro->conteodemo ?? 0) + 1;
+                    $libro->save();
+                    return response()->json([
+                        "status" => 1,
+                        "message" => "Se añadió el contador al libro con ID {$libro->idlibro}",
+                        "conteodemo" => $libro->conteodemo
+                    ]);
+                } else {
+                    return response()->json([
+                        "status" => 0,
+                        "message" => "No se encontró el libro con ID {$request->idlibro}"
+                    ]);
+                }
+            } else {
+                return response()->json([
+                    "status" => 0,
+                    "message" => "No se recibió un ID de libro válido"
+                ]);
+            }
+        } catch (\Exception $ex) {
+            return response()->json([
+                "status" => 0,
+                "message" => "Hubo problemas con la conexión al servidor: " . $ex->getMessage()
+            ]);
         }
     }
     //para eliminar el libro
