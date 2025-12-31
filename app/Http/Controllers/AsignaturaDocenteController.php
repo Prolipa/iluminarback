@@ -129,16 +129,73 @@ class AsignaturaDocenteController extends Controller
         }
         return "se guardo correctamente";
     }
+    // public function asignaturas_x_docente(Request $request)
+    // {
+    //     $dato = DB::table('asignaturausuario as ausu')
+    //     ->where('ausu.usuario_idusuario','=',$request->idusuario)
+    //     ->leftjoin('asignatura as asig','ausu.asignatura_idasignatura','=','asig.idasignatura')
+    //     ->leftjoin('periodoescolar as pe','pe.idperiodoescolar','=','ausu.periodo_id')
+    //     ->select('asig.nombreasignatura','asig.idasignatura','asig.area_idarea', 'ausu.usuario_idusuario as user','ausu.asignatura_idasignatura','ausu.idasiguser as idasignado','pe.periodoescolar','ausu.periodo_id','ausu.updated_at')
+    //     ->get();
+    //     return $dato;
+    // }
     public function asignaturas_x_docente(Request $request)
-    {
-        $dato = DB::table('asignaturausuario as ausu')
-        ->where('ausu.usuario_idusuario','=',$request->idusuario)
-        ->leftjoin('asignatura as asig','ausu.asignatura_idasignatura','=','asig.idasignatura')
-        ->leftjoin('periodoescolar as pe','pe.idperiodoescolar','=','ausu.periodo_id')
-        ->select('asig.nombreasignatura','asig.idasignatura','asig.area_idarea', 'ausu.usuario_idusuario as user','ausu.asignatura_idasignatura','ausu.idasiguser as idasignado','pe.periodoescolar','ausu.periodo_id','ausu.updated_at')
+{
+    $asignaturas = DB::table('asignaturausuario as ausu')
+        ->where('ausu.usuario_idusuario', '=', $request->idusuario)
+        ->leftjoin('asignatura as asig', 'ausu.asignatura_idasignatura', '=', 'asig.idasignatura')
+        ->leftjoin('periodoescolar as pe', 'pe.idperiodoescolar', '=', 'ausu.periodo_id')
+        ->select(
+            'asig.nombreasignatura',
+            'asig.idasignatura',
+            'asig.area_idarea',
+            'ausu.usuario_idusuario as user',
+            'ausu.asignatura_idasignatura',
+            'ausu.idasiguser as idasignado',
+            'pe.periodoescolar',
+            'ausu.periodo_id',
+            'ausu.unidades_x_usuario',
+            'ausu.updated_at'
+        )
         ->get();
-        return $dato;
-    }
+
+    // Procesar cada asignatura
+    return $asignaturas->map(function ($asignatura) {
+        // Inicializar propiedades
+        $asignatura->tiene_unidades_asignadas = false;
+        $asignatura->total_unidades_asignadas = 0;
+        $asignatura->ids_unidades_guardadas = [];
+        $asignatura->detalles_unidades_guardadas = []; // Nuevo: detalles completos
+
+        // Si hay unidades asignadas, obtener sus detalles
+        if ($asignatura->unidades_x_usuario !== null && !empty($asignatura->unidades_x_usuario)) {
+            $idsUnidades = explode(',', $asignatura->unidades_x_usuario);
+            $asignatura->tiene_unidades_asignadas = true;
+            $asignatura->total_unidades_asignadas = count($idsUnidades);
+            $asignatura->ids_unidades_guardadas = $idsUnidades;
+
+            // Consultar la tabla unidades_libros para obtener los detalles
+            if (!empty($idsUnidades)) {
+                $detallesUnidades = DB::table('unidades_libros')
+                    ->whereIn('id_unidad_libro', $idsUnidades)
+                    ->where('estado', 1)
+                    ->select(
+                        'id_unidad_libro as id',
+                        'id_unidad_libro',
+                        'unidad',
+                        'nombre_unidad',
+                        DB::raw('CONCAT(unidad, " - ", nombre_unidad) as label_unidad')
+                    )
+                    ->orderBy('unidad')
+                    ->get();
+
+                $asignatura->detalles_unidades_guardadas = $detallesUnidades;
+            }
+        }
+
+        return $asignatura;
+    });
+}
     public function asignaturas_x_docente_xPeriodo(Request $request)
     {
         $dato = DB::table('asignaturausuario as ausu')

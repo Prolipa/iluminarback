@@ -147,8 +147,11 @@ class CombosCodigosController extends Controller
     }
 
     public function getCodigosXCombo($combo){
-        $query = DB::SELECT("SELECT codigo,libro,codigo_proforma,factura,combo FROM codigoslibros c
+        $query = DB::SELECT("SELECT
+        codigo,libro,codigo_proforma,factura,combo , c.prueba_diagnostica, c.codigo_union
+        FROM codigoslibros c
         WHERE c.codigo_combo = '$combo'
+        AND c.prueba_diagnostica = 0
         ");
         return $query;
     }

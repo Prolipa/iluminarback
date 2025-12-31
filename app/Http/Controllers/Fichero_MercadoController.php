@@ -1055,6 +1055,17 @@ class Fichero_MercadoController extends Controller
                     'message' => 'El fichero no se encuentra pendiente de aprobación.'
                 ]);
             }
+            /** ACTUALIZAR NOTIFICACIÓN SI EXISTE */
+            DB::table('notificaciones_general')
+                ->where('tipo', 6)
+                ->where('id_padre', $fm_id)
+                ->where('estado', 0)
+                ->update([
+                    'estado' => 1,
+                    'updated_at' => now(),
+                    'fecha_finaliza' => now(),
+                    'user_finaliza' => $user_aprobacion
+                ]);
             // Cambiar el estado a 2 (enviado para aprobación)
             $fichero->fm_estado = '3';
             // Guardar info de aprobación como JSON
@@ -1125,6 +1136,17 @@ class Fichero_MercadoController extends Controller
                     'message' => 'El fichero no se encuentra pendiente de aprobación ni aprobado.'
                 ]);
             }
+            /** ACTUALIZAR NOTIFICACIÓN SI EXISTE */
+            DB::table('notificaciones_general')
+                ->where('tipo', 6)
+                ->where('id_padre', $fm_id)
+                ->where('estado', 0)
+                ->update([
+                    'estado' => 1,
+                    'updated_at' => now(),
+                    'fecha_finaliza' => now(),
+                    'user_finaliza' => $user_aprobacion
+                ]);
             // Cambiar el estado a 2 (enviado para aprobación)
             $fichero->fm_estado = '4';
             // Guardar info de aprobación como JSON

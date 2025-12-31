@@ -174,6 +174,12 @@ trait TraitPedidosGeneral
             AND c.estado <> 2
             AND c.convenio_aprobado = 4
         ) AS contadorConvenioAprobadoFacturador,
+         (
+           SELECT COUNT(c.id) FROM  pedidos_convenios  c
+            where  c.id = p.pedidos_convenios_id
+            AND c.estado <> 2
+            AND c.convenio_aprobado = 2
+        ) AS convenioRechazado,
        (
             SELECT COUNT(pc.id)
             FROM pedidos_convenios pc

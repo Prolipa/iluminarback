@@ -821,8 +821,11 @@ class PaqueteController extends Controller
         return $datos;
     }
     public function getCodigosXPaquete($paquete){
-        $query = DB::SELECT("SELECT codigo,libro,codigo_proforma,factura,combo FROM codigoslibros c
+        $query = DB::SELECT("SELECT codigo,libro,codigo_proforma,factura,combo ,
+        c.prueba_diagnostica, c.codigo_union
+        FROM codigoslibros c
         WHERE c.codigo_paquete = '$paquete'
+        AND c.prueba_diagnostica = 0
         ");
         return $query;
     }
@@ -1349,13 +1352,18 @@ class PaqueteController extends Controller
                                 $ifliquidado_regaladoD  = $validarD[0]->liquidado_regalado;
 
                                 $ifOmitirA              = false;
-                                //si es es liquidado y liquidado regalado colocar error en 1
-                                if($ifDevueltoA == '0' || $ifliquidado_regaladoA == '1' || $ifDevueltoA == '4'){
-                                    $errorA = 1;
+                                if($request->dLiquidado ==  '1'){
+                                    //  si envia dLiquidado dejar activar aunque este liquidado
+                                }else{
+                                    //si es es liquidado y liquidado regalado colocar error en 1
+                                    if($ifDevueltoA == '0' || $ifliquidado_regaladoA == '1'){
+                                        $errorA = 1;
+                                    }
+                                    if($ifDevueltoD == '0' || $ifliquidado_regaladoD == '1'){
+                                        $errorD = 1;
+                                    }
                                 }
-                                if($ifDevueltoD == '0' || $ifliquidado_regaladoD == '1' || $ifDevueltoD == '4'){
-                                    $errorD = 1;
-                                }
+
 
                                 // Record problems
                                 if ($errorA == 1 && $errorD == 0) {

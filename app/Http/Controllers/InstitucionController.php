@@ -146,8 +146,8 @@ class InstitucionController extends Controller
             'vendedorInstitucion' => 'required',
             'region_idregion' => 'required',
             'solicitudInstitucion' => 'required',
-            'idprovincia' => 'required',
-            'idciudad' => 'required',
+            // 'idprovincia' => 'required',
+            // 'idciudad' => 'required',
             // 'zona_id' => 'required', se debe quitar cuando la zona sea obligatoria
             'tipo_institucion' => 'required',
         ]);
@@ -196,7 +196,7 @@ class InstitucionController extends Controller
         $cambio->vendedorInstitucion            = $request->vendedorInstitucion;
         $cambio->tipo_institucion               = $request->tipo_institucion;
         $cambio->region_idregion                = $request->region_idregion;
-        $cambio->idprovincia                    = $request->idprovincia;
+        $cambio->idprovincia                    = $request->idprovincia == null || $request->idprovincia == "null" ? null : $request->idprovincia;;
         $cambio->ciudad_id                      = $request->idciudad == null || $request->idciudad == "null" ? null : $request->idciudad;
         $cambio->parr_id                        = $request->parr_id == null || $request->parr_id == "null" ? null : $request->parr_id;
         $cambio->tipo_descripcion               = $request->tipo_descripcion == null || $request->tipo_descripcion == "null" ? null : $request->tipo_descripcion;

@@ -3077,7 +3077,12 @@ class CodigoLibrosController extends Controller
                 //para ver el estado devuelto proforma
                 // $ifdevuelto_proforma        = $validar[0]->devuelto_proforma;
                 //VALIDACION QUE NO SEA LIQUIDADO
-                if($ifDevuelto != '0' && $ifliquidado_regalado == '0' && $ifDevuelto != '4'){ $EstatusProceso = true; }
+                // si envia dLiquidado dejar activar aunque este liquidado
+                if($request->dLiquidado ==  '1'){
+                    $EstatusProceso = true;
+                }else{
+                    if($ifDevuelto != '0' && $ifliquidado_regalado == '0'){ $EstatusProceso = true; }
+                }
                 //====PROFORMA============================================
                 //ifdevuelto_proforma => 0 => nada; 1 => devuelta antes del enviar el pedido; 2 => enviada despues de enviar al pedido
                 // if($ifdevuelto_proforma == 2 ){ $EstatusProceso = false; $messageProforma = "No se puede activar el código, ya que tiene proforma que no se pudo devolver por que ya fue enviado a perseo el pedido"; }

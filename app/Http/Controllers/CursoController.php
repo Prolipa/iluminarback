@@ -194,9 +194,30 @@ class CursoController extends Controller
 
         if ($request->filled('idcurso')) {
             $dato = Curso::find($request->idcurso);
+            // el nombre del curso y paralelo debe ser unico pero el idcurso puede ser el mismo
+            $validateCurso = Curso::where('nombre', $request->nombre)
+                ->where('aula', $request->aula)
+                ->where('idusuario', $request->idusuario)
+                ->where('estado', '1')
+                ->where('idcurso', '!=', $request->idcurso)
+                ->where('id_asignatura', $request->id_asignatura)
+                ->first();
+            if ($validateCurso) {
+                return ["status" => "0", "message" => "Ya existe un curso con el mismo nombre y paralelo. por favor cambie el nombre o paralelo."];
+            }
         }else{
             $dato = new Curso();
             $dato->codigo = $this->codigo(8);
+            //el nombre del curso y paralelo debe ser unico
+            $validateCurso = Curso::where('nombre', $request->nombre)
+                ->where('aula', $request->aula)
+                ->where('idusuario', $request->idusuario)
+                ->where('estado', '1')
+                ->where('id_asignatura', $request->id_asignatura)
+                ->first();
+            if ($validateCurso) {
+                return ["status" => "0", "message" => "Ya existe un curso con el mismo nombre y paralelo. por favor cambie el nombre o paralelo."];
+            }
         }
 
         $dato->nombre = $request->nombre;
@@ -209,20 +230,7 @@ class CursoController extends Controller
         $dato->save();
 
         return $dato;
-        // if(empty($request->idcurso)){
-        //     $curso = Curso::create([
-        //         'nombre' => $request->nombre,
-        //         'id_asignatura'=> $request->id_asignatura,
-        //         'seccion' => $request->seccion,
-        //         'materia' => $request->materia,
-        //         'aula' => $request->aula,
-        //         'codigo' => $this->codigo(8),
-        //         'idusuario'=> $request->idusuario,
-        //     ]);
-        // }else{
-        //     $curso=DB::update("UPDATE curso SET nombre=?,seccion=?,materia=?,aula=?, id_asignatura=? WHERE idcurso=?",[$request->nombre,$request->seccion,$request->materia,$request->aula,$request->id_asignatura,$request->idcurso]);
-        // }
-        // return $periodo[0]->periodo;
+
     }
 
     function codigo($count)

@@ -1664,6 +1664,14 @@ class VentasController extends Controller
 
     public function PostFacturarReal(Request $request)
     {
+        // Validar que tip_ven_codigo sea requerido
+        if (!$request->has('tip_ven_codigo') || $request->tip_ven_codigo === null || $request->tip_ven_codigo === '') {
+            return response()->json([
+                "status" => "0",
+                "message" => "El tipo de venta es requerido. Por favor seleccione el tipo de venta."
+            ], 400);
+        }
+
         try {
             $miarray = json_decode($request->data_detalle);
             $maxIntentos = 5; // Máximo número de intentos
@@ -1705,6 +1713,7 @@ class VentasController extends Controller
                     $venta->clientesidPerseo = $request->clientesidPerseo;
                     $venta->ven_fecha = $request->ven_fecha;
                     $venta->user_created = $request->user_created;
+                    $venta->tip_ven_codigo = $request->tip_ven_codigo;
                     $venta->updated_at = now();
                     // Agregar campos de facturación cruzada
                     $venta->factura_cruzada = $request->factura_cruzada ?? 0;
@@ -3214,11 +3223,19 @@ class VentasController extends Controller
 
     public function cambioPrefacturasANota(Request $request)
     {
+        // Validar que tip_ven_codigo sea requerido
+        if (!$request->has('tip_ven_codigo') || $request->tip_ven_codigo === null || $request->tip_ven_codigo === '') {
+            return response()->json([
+                "status" => "0",
+                "message" => "El tipo de venta es requerido. Por favor seleccione el tipo de venta."
+            ], 400);
+        }
+
         // Recibimos los datos desde el frontend
         $id_ins_depacho = $request->id_ins_depacho;
         $empresa = $request->id_empresa;
         $data_detalle = $request->data_detalle;
-        $tipoVenta = $request->tipoVenta; // Tipo de venta: 1 o 2
+        $tipoVenta = $request->tip_ven_codigo; // Tipo de venta: 1 o 2
         $nuevoVenCodigo = $request->ven_codigo; // Nuevo código de venta
         $data_documentos = $request->documentos;
         $codigos_detalles = $request->codigosVentas;
@@ -3591,10 +3608,18 @@ class VentasController extends Controller
 
     public function cambioDesfasANotaCredito(Request $request)
     {
+        // Validar que tip_ven_codigo sea requerido
+        if (!$request->has('tip_ven_codigo') || $request->tip_ven_codigo === null || $request->tip_ven_codigo === '') {
+            return response()->json([
+                "status" => "0",
+                "message" => "El tipo de venta es requerido. Por favor seleccione el tipo de venta."
+            ], 400);
+        }
+
         // Recibimos los datos desde el frontend (ahora por cliente, no por institución)
         $empresa = $request->id_empresa;
         $data_detalle = $request->data_detalle;
-        $tipoVenta = $request->tipoVenta; // Tipo de venta: 1 o 2
+        $tipoVenta = $request->tip_ven_codigo; // Tipo de venta: 1 o 2
         $nuevoVenCodigo = $request->ven_codigo; // Nuevo código de venta
 
         // Si los detalles vienen como cadena JSON, decodificarlo

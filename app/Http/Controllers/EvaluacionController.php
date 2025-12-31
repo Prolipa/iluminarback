@@ -72,10 +72,20 @@ class EvaluacionController extends Controller
 
         if( $request->id ){
             $evaluacion = Evaluaciones::find($request->id);
+            //validar si el nombre_evaluacion y el codigo ya existen decir que no puede tener el mismo nombre de evaluacion en el mismo curso pero excluir el id actual
+            $validarEvaluacion = Evaluaciones::where('nombre_evaluacion', $request->nombre_evaluacion)->where('codigo_curso', $request->codigo)->where('id', '!=', $request->id)->first();
+            if($validarEvaluacion){
+                return ["status" => 0, "message" => "Ya existe una evaluación con el mismo nombre en este curso, por favor ingrese otro nombre."];
+            }
         }else{
             $evaluacion = new Evaluaciones();
+            //validar si el nombre_evaluacion y el codigo ya existen decir que no puede tener el mismo nombre de evaluacion en el mismo curso
+            $validarEvaluacion = Evaluaciones::where('nombre_evaluacion', $request->nombre_evaluacion)->where('codigo_curso', $request->codigo)->first();
+            if($validarEvaluacion){
+                return ["status" => 0, "message" => "Ya existe una evaluación con el mismo nombre en este curso, por favor ingrese otro nombre."];
+            }
         }
-        $evaluacion->nombre_evaluacion  = $request->nombre;
+        $evaluacion->nombre_evaluacion  = $request->nombre_evaluacion;
         $evaluacion->id_asignatura      = $request->asignatura;
         $evaluacion->descripcion        = $request->descripcion;
         $evaluacion->puntos             = $request->puntos;
@@ -632,13 +642,18 @@ class EvaluacionController extends Controller
                 u.name_usuario as emailEstudiante,
                 a.nombreasignatura,
                 c.nombre AS nombre_curso,
-                e.descripcion AS nombre_evaluacion,
+                e.nombre_evaluacion,
                 IFNULL(cal.calificacion, 0) AS calificacion,
-                c.id_asignatura,
-                a.nivel_idnivel
+                a.nivel_idnivel,
+                e.id AS id_evaluacion,
+                ni.nombrenivel,
+                e.id_asignatura,
+                c.aula as paralelo,
+                c.codigo as codigo_curso
             FROM evaluaciones e
             JOIN curso c ON e.codigo_curso = c.codigo
             JOIN asignatura a ON e.id_asignatura = a.idasignatura
+            LEFT JOIN nivel ni ON a.nivel_idnivel = ni.idnivel
             JOIN estudiante est ON est.codigo = c.codigo
             JOIN usuario u ON est.usuario_idusuario = u.idusuario
             LEFT JOIN calificaciones cal
@@ -650,8 +665,7 @@ class EvaluacionController extends Controller
             $additionalFilters
             ORDER BY estudiante, c.nombre
         ", $params);
-
-        // Agrupar por estudiante
+        // Agrupar por estudiante primero
         $arrayReporte = [];
         foreach ($resultados as $fila) {
             $id = $fila->id_estudiante;
@@ -669,27 +683,69 @@ class EvaluacionController extends Controller
                 'nombre_curso' => $fila->nombre_curso,
                 'nombre_evaluacion' => $fila->nombre_evaluacion,
                 'nombreasignatura' => $fila->nombreasignatura,
-                'calificacion' => $fila->calificacion
+                'id_asignatura' => $fila->id_asignatura,
+                'calificacion' => $fila->calificacion,
+                'id_evaluacion' => $fila->id_evaluacion,
+                'nombrenivel' => $fila->nombrenivel,
+                'paralelo' => $fila->paralelo,
+                'codigo_curso' => $fila->codigo_curso,
+                'curso_nombre_evaluacion' => '' // Se llenará después
             ];
         }
 
-        // Consulta de asignaturas del docente (sin filtro por nivel)
-        $asignaturasDocente = DB::select("
-            SELECT DISTINCT
-                a.idasignatura AS id_asignatura,
-                a.nombreasignatura
-            FROM evaluaciones e
-            JOIN curso c ON e.codigo_curso = c.codigo
-            JOIN asignatura a ON e.id_asignatura = a.idasignatura
-            WHERE e.id_docente = ?
-            AND c.id_periodo = ?
-            AND e.estado = '1'
-            ORDER BY a.nombreasignatura
-        ", [$id_docente, $id_periodo]);
+        // Detectar duplicados por estudiante y construir curso_nombre_evaluacion
+        foreach ($arrayReporte as $idEstudiante => $estudiante) {
+            // Contar duplicados para este estudiante
+            $contadorDuplicados = [];
+            foreach ($estudiante['evaluaciones'] as $evaluacion) {
+                $clave = $evaluacion['id_asignatura'] . '_' . $evaluacion['nombre_evaluacion'];
+                if (!isset($contadorDuplicados[$clave])) {
+                    $contadorDuplicados[$clave] = 0;
+                }
+                $contadorDuplicados[$clave]++;
+            }
+
+            // Construir curso_nombre_evaluacion según si hay duplicados
+            foreach ($estudiante['evaluaciones'] as $index => $evaluacion) {
+                $clave = $evaluacion['id_asignatura'] . '_' . $evaluacion['nombre_evaluacion'];
+                $hayDuplicados = $contadorDuplicados[$clave] > 1;
+
+                $cursoNombreEvaluacion = $evaluacion['nombreasignatura'] . ' - ' . $evaluacion['nombre_evaluacion'];
+                if ($hayDuplicados) {
+                    $cursoNombreEvaluacion .= ' (' . $evaluacion['nombre_curso'] . ' - ' . $evaluacion['paralelo'] . ' - ' . $evaluacion['codigo_curso'] . ')';
+                }
+
+                $arrayReporte[$idEstudiante]['evaluaciones'][$index]['curso_nombre_evaluacion'] = $cursoNombreEvaluacion;
+            }
+        }
+
+        // Extraer asignaturas únicas del arrayReporte
+        $asignaturasUnicas = [];
+        $asignaturasYaAgregadas = [];
+
+        foreach ($arrayReporte as $estudiante) {
+            foreach ($estudiante['evaluaciones'] as $evaluacion) {
+                $id_asignatura = $evaluacion['id_asignatura'];
+
+                // Solo agregar si no se ha agregado antes
+                if (!in_array($id_asignatura, $asignaturasYaAgregadas)) {
+                    $asignaturasUnicas[] = [
+                        'id_asignatura' => $id_asignatura,
+                        'nombreasignatura' => $evaluacion['nombreasignatura']
+                    ];
+                    $asignaturasYaAgregadas[] = $id_asignatura;
+                }
+            }
+        }
+
+        // Ordenar por nombre de asignatura
+        usort($asignaturasUnicas, function($a, $b) {
+            return strcmp($a['nombreasignatura'], $b['nombreasignatura']);
+        });
 
         return [
             'arrayReporte' => array_values($arrayReporte),
-            'arrayAsignaturasDocentes' => $asignaturasDocente
+            'arrayAsignaturasDocentes' => $asignaturasUnicas
         ];
     }
 }

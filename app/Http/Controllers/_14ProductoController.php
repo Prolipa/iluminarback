@@ -1452,6 +1452,37 @@ class _14ProductoController extends Controller {
         // Verifica que el array `DatosAcumuladosStockMasivo` esté presente en el request
         DB::beginTransaction();
         try {
+            // === VALIDACIÓN PREVIA: Verificar que ningún pro_reservar quede negativo ===
+            $erroresValidacion = [];
+            foreach ($request->DatosAcumuladosStockMasivo as $index => $item) {
+                $producto = _14Producto::find($item['pro_codigo']);
+                if (!$producto) {
+                    $erroresValidacion[] = "Producto con código {$item['pro_codigo']} no existe.";
+                    continue;
+                }
+                // Calcular el nuevo pro_reservar
+                $diferencia_reservar = $item['pro_reservar'] - $item['pro_reservar_anterior'];
+                $nuevo_pro_reservar = $producto->pro_reservar + $diferencia_reservar;
+                // Validar que no quede negativo
+                if ($nuevo_pro_reservar < 0) {
+                    $erroresValidacion[] = [
+                        'codigo' => $item['pro_codigo'],
+                        'nombre' => $item['pro_nombre'],
+                        'nuevo_reservar' => $nuevo_pro_reservar, // el valor negativo
+                        'mensaje' => "El stock general no puede quedar negativo."
+                    ];
+                }
+            }
+            // Si hay errores de validación, rollback y retornar
+            if (!empty($erroresValidacion)) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 5,
+                    'message' => 'pro_reservar no puede quedar negativo. Operación cancelada.',
+                    'errores' => $erroresValidacion
+                ], 200);
+            }
+            // === FIN VALIDACIÓN PREVIA ===
             if ($request->has('DatosAcumuladosStockMasivo') && is_array($request->DatosAcumuladosStockMasivo)) {
                 $cambios = []; // Array para almacenar los productos con cambios detectados
                 // Recorre cada elemento en `DatosAcumuladosStockMasivo`
@@ -1544,17 +1575,55 @@ class _14ProductoController extends Controller {
                 }
                 // Guarda historico y retorna una respuesta de éxito
                 if ($request->has('EdicionCombos') && $request->EdicionCombos == 'yes') {
-                    // Si hay cambios, consolida todo en un único registro para el historial
+                    // Si hay cambios, consolidar todo pero dividiendo en chunks seguros
                     if (!empty($cambios)) {
-                        $registroHistorial = [
-                            'psh_old_values' => json_encode(array_column($cambios, 'psh_old_values', 'pro_codigo')),
-                            'psh_new_values' => json_encode(array_column($cambios, 'psh_new_values', 'pro_codigo')),
-                            'psh_tipo' => 1,
-                            'user_created' => $request->user_created,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
-                        _14ProductoStockHistorico::insert($registroHistorial);
+                        $MAX = 150000; // límite por registro
+                        $chunks = [];  // lista final de partes
+                        $currentOld = [];
+                        $currentNew = [];
+                        foreach ($cambios as $codigo => $valores) {
+                            // Intentar agregar al chunk actual
+                            $testOld = $currentOld;
+                            $testNew = $currentNew;
+                            $testOld[$codigo] = $valores['psh_old_values'];
+                            $testNew[$codigo] = $valores['psh_new_values'];
+                            // Codificar para medir tamaño
+                            $jsonOld = json_encode($testOld);
+                            $jsonNew = json_encode($testNew);
+                            // Si excede → guardar chunk y empezar otro
+                            if (strlen($jsonOld) > $MAX || strlen($jsonNew) > $MAX) {
+                                // Guardar chunk actual
+                                $chunks[] = [
+                                    'old' => $currentOld,
+                                    'new' => $currentNew
+                                ];
+                                // Reiniciar el chunk con SOLO este producto
+                                $currentOld = [$codigo => $valores['psh_old_values']];
+                                $currentNew = [$codigo => $valores['psh_new_values']];
+                            } else {
+                                // Aún cabe → agregar
+                                $currentOld = $testOld;
+                                $currentNew = $testNew;
+                            }
+                        }
+                        // Agregar último chunk que haya quedado
+                        if (!empty($currentOld)) {
+                            $chunks[] = [
+                                'old' => $currentOld,
+                                'new' => $currentNew
+                            ];
+                        }
+                        // Insertar cada chunk como un registro separado del historial
+                        foreach ($chunks as $parte) {
+                            _14ProductoStockHistorico::insert([
+                                'psh_old_values' => json_encode($parte['old']),
+                                'psh_new_values' => json_encode($parte['new']),
+                                'psh_tipo'       => 1,
+                                'user_created'   => $request->user_created,
+                                'created_at'     => now(),
+                                'updated_at'     => now(),
+                            ]);
+                        }
                     }
                     DB::commit();
                     return response()->json([
@@ -1563,17 +1632,55 @@ class _14ProductoController extends Controller {
                         'message' => 'Stock de productos actualizados exitosamente.'
                     ], 200);
                 }else{
-                    // Si hay cambios, consolida todo en un único registro para el historial
+                    // Si hay cambios, consolidar todo pero dividiendo en chunks seguros
                     if (!empty($cambios)) {
-                        $registroHistorial = [
-                            'psh_old_values' => json_encode(array_column($cambios, 'psh_old_values', 'pro_codigo')),
-                            'psh_new_values' => json_encode(array_column($cambios, 'psh_new_values', 'pro_codigo')),
-                            'psh_tipo' => 0,
-                            'user_created' => $request->user_created,
-                            'created_at' => now(),
-                            'updated_at' => now(),
-                        ];
-                        _14ProductoStockHistorico::insert($registroHistorial);
+                        $MAX = 150000; // límite por registro
+                        $chunks = [];  // lista final de partes
+                        $currentOld = [];
+                        $currentNew = [];
+                        foreach ($cambios as $codigo => $valores) {
+                            // Intentar agregar al chunk actual
+                            $testOld = $currentOld;
+                            $testNew = $currentNew;
+                            $testOld[$codigo] = $valores['psh_old_values'];
+                            $testNew[$codigo] = $valores['psh_new_values'];
+                            // Codificar para medir tamaño
+                            $jsonOld = json_encode($testOld);
+                            $jsonNew = json_encode($testNew);
+                            // Si excede → guardar chunk y empezar otro
+                            if (strlen($jsonOld) > $MAX || strlen($jsonNew) > $MAX) {
+                                // Guardar chunk actual
+                                $chunks[] = [
+                                    'old' => $currentOld,
+                                    'new' => $currentNew
+                                ];
+                                // Reiniciar el chunk con SOLO este producto
+                                $currentOld = [$codigo => $valores['psh_old_values']];
+                                $currentNew = [$codigo => $valores['psh_new_values']];
+                            } else {
+                                // Aún cabe → agregar
+                                $currentOld = $testOld;
+                                $currentNew = $testNew;
+                            }
+                        }
+                        // Agregar último chunk que haya quedado
+                        if (!empty($currentOld)) {
+                            $chunks[] = [
+                                'old' => $currentOld,
+                                'new' => $currentNew
+                            ];
+                        }
+                        // Insertar cada chunk como un registro separado del historial
+                        foreach ($chunks as $parte) {
+                            _14ProductoStockHistorico::insert([
+                                'psh_old_values' => json_encode($parte['old']),
+                                'psh_new_values' => json_encode($parte['new']),
+                                'psh_tipo'       => 0,
+                                'user_created'   => $request->user_created,
+                                'created_at'     => now(),
+                                'updated_at'     => now(),
+                            ]);
+                        }
                     }
                     DB::commit();
                     return response()->json([
@@ -1900,49 +2007,117 @@ class _14ProductoController extends Controller {
     //     ];
     // }
     //SOLO VERIFICACION_STOCK
-    public function Getstockproductosrestablecer_SINACTUALIZAR() {
-        // Inicializar las variables de respuesta
+    public function Getstockproductosrestablecer_SINACTUALIZAR()
+    {
         $query_proforma_y_detalles = [];
         $query_sumas = [];
         $producto_actual = [];
-
-        // Obtener los registros principales
-        $query = DB::SELECT("SELECT prof.id, prof.prof_id, prof.prof_estado
-                             FROM f_proforma prof
-                             WHERE prof.prof_estado = 1 OR prof.prof_estado = 3");
-
-        // Recorrer cada registro para agregar los detalles
-        foreach ($query as &$proforma) {
-            // Realizar la consulta de detalles basada en el prof_id
-            $detalles = DB::SELECT("SELECT det.prof_id, det.pro_codigo, det.det_prof_cantidad, det.det_prof_valor_u
-                                    FROM f_detalle_proforma det
-                                    WHERE det.prof_id = ?", [$proforma->id]);
-
-            // Agregar los detalles al registro principal
-            $proforma->detalles_proforma = $detalles;
-
-            // Acumular cantidades en query_sumas
-            foreach ($detalles as $detalle) {
-                if (isset($query_sumas[$detalle->pro_codigo])) {
+        // ===============================================
+        // 🔥 1) TRAER PROFORMAS ESTADO 1,3 Y 6
+        // ===============================================
+        $proformas = DB::SELECT("SELECT
+                prof.id,
+                prof.prof_id,
+                prof.prof_estado,
+                pe.descripcion AS descripcion_periodo
+            FROM f_proforma prof
+            LEFT JOIN f_contratos_agrupados ca
+                ON ca.ca_codigo_agrupado = prof.idPuntoventa
+            LEFT JOIN periodoescolar pe
+                ON pe.idperiodoescolar = ca.id_periodo
+            WHERE prof.prof_estado IN (1,3,6)
+        ");
+        // ===============================================
+        // 🔥 2) PROCESAR CADA PROFORMA
+        // ===============================================
+        foreach ($proformas as &$proforma) {
+            // -------------------------------------------------
+            // ESTADOS 1 Y 3 → MISMO COMPORTAMIENTO DE SIEMPRE
+            // -------------------------------------------------
+            if (in_array($proforma->prof_estado, [1, 3])) {
+                $detalles = DB::SELECT("SELECT det.prof_id, det.pro_codigo, det.det_prof_cantidad, det.det_prof_cantidad as pendiente, det.det_prof_valor_u
+                    FROM f_detalle_proforma det
+                    WHERE det.prof_id = ?
+                ", [$proforma->id]);
+                $proforma->detalles_proforma = $detalles;
+                // SUMAR AL TOTAL GLOBAL
+                foreach ($detalles as $detalle) {
+                    if (!isset($query_sumas[$detalle->pro_codigo])) {
+                        $query_sumas[$detalle->pro_codigo] = 0;
+                    }
                     $query_sumas[$detalle->pro_codigo] += $detalle->det_prof_cantidad;
-                } else {
-                    $query_sumas[$detalle->pro_codigo] = $detalle->det_prof_cantidad;
                 }
+                continue;
+            }
+            // -------------------------------------------------
+            // 🔥 ESTADO 6 → PROCESO COMPLEJO (PENDIENTES)
+            // -------------------------------------------------
+            if ($proforma->prof_estado == 6) {
+                // 2.1) Obtener detalle de proforma
+                $det_proforma = DB::SELECT("SELECT pro_codigo, det_prof_cantidad
+                    FROM f_detalle_proforma
+                    WHERE prof_id = ?
+                ", [$proforma->id]);
+                // 2.2) Obtener todas las ventas asociadas a la proforma
+                $ventas = DB::SELECT("SELECT ven_codigo
+                    FROM f_venta
+                    WHERE ven_idproforma = ?
+                ", [$proforma->prof_id]);
+                // Obtener cantidades vendidas agrupadas
+                $vendido_total = [];
+                foreach ($ventas as $v) {
+                    $det_venta = DB::SELECT("SELECT pro_codigo, det_ven_cantidad
+                        FROM f_detalle_venta
+                        WHERE ven_codigo = ?
+                    ", [$v->ven_codigo]);
+                    foreach ($det_venta as $dv) {
+                        if (!isset($vendido_total[$dv->pro_codigo])) {
+                            $vendido_total[$dv->pro_codigo] = 0;
+                        }
+                        $vendido_total[$dv->pro_codigo] += $dv->det_ven_cantidad;
+                    }
+                }
+
+                // 2.3) Calcular pendientes: proforma - ventas
+                $pendientes = [];
+                foreach ($det_proforma as $dp) {
+                    $pro = $dp->pro_codigo;
+                    $cant_prof = $dp->det_prof_cantidad;
+                    $cant_vendida = $vendido_total[$pro] ?? 0;
+                    $pendiente = $cant_prof - $cant_vendida;
+                    if ($pendiente > 0) {
+                        // Guardar en query_sumas
+                        if (!isset($query_sumas[$pro])) {
+                            $query_sumas[$pro] = 0;
+                        }
+                        $query_sumas[$pro] += $pendiente;
+                        $pendientes[] = [
+                            "pro_codigo" => $pro,
+                            "pendiente" => $pendiente,
+                            "det_prof_cantidad" => $cant_prof,
+                            "vendido" => $cant_vendida
+                        ];
+                    }
+                }
+                // Guardar pendientes como detalles de la proforma
+                $proforma->detalles_proforma = $pendientes;
             }
         }
-
-        // Consultar los datos de cada producto en query_sumas
+        // ===============================================
+        // 3) CONSULTAR PRODUCTOS PARA producto_actual
+        // ===============================================
         foreach ($query_sumas as $pro_codigo => $cantidad) {
             $producto = DB::SELECT("SELECT pro_reservar, pro_stock, pro_stockCalmed, pro_deposito, pro_depositoCalmed
-                                    FROM 1_4_cal_producto
-                                    WHERE pro_codigo = ?", [$pro_codigo]);
-
-                                    // Calcular la cantidad a restar
-            $cantidad_a_restar = $query_sumas[$pro_codigo];
-
+                FROM 1_4_cal_producto
+                WHERE pro_codigo = ?
+            ", [$pro_codigo]);
             if (!empty($producto)) {
-                $producto = $producto[0]; // Acceder al primer resultado
-                $suma = $producto->pro_stock + $producto->pro_stockCalmed + $producto->pro_deposito + $producto->pro_depositoCalmed;
+                $producto = $producto[0];
+                $suma =
+                    $producto->pro_stock +
+                    $producto->pro_stockCalmed +
+                    $producto->pro_deposito +
+                    $producto->pro_depositoCalmed;
                 $producto_actual[] = [
                     'pro_codigo' => $pro_codigo,
                     'pro_reservar' => $producto->pro_reservar,
@@ -1951,22 +2126,38 @@ class _14ProductoController extends Controller {
                     'pro_deposito' => $producto->pro_deposito,
                     'pro_depositoCalmed' => $producto->pro_depositoCalmed,
                     'suma' => $suma,
-                    'cantidad_a_restar' => $cantidad_a_restar,
-                    'sumamenos_querysumas' => $suma - $cantidad_a_restar,
+                    'cantidad_a_restar' => $cantidad,
+                    'sumamenos_querysumas' => $suma - $cantidad,
                 ];
             }
         }
+        // ===============================================
+        // 4) AGREGAR pro_nombre A CADA CODIGO DEL query_sumas
+        // ===============================================
+        $query_sumas_detallado = [];
+        foreach ($query_sumas as $codigo => $total) {
 
-        // Asignar el resultado al query_proforma_y_detalles
-        $query_proforma_y_detalles = $query;
-
-        // Retornar las dos variables en un arreglo asociativo
-        return [
-            'query_proforma_y_detalles' => $query_proforma_y_detalles,
-            'query_sumas' => $query_sumas,
+            $prod = DB::select("
+                SELECT pro_nombre
+                FROM 1_4_cal_producto
+                WHERE pro_codigo = ?
+                LIMIT 1
+            ", [$codigo]);
+            $nombre = $prod[0]->pro_nombre ?? "SIN NOMBRE";
+            $query_sumas_detallado[$codigo] = [
+                "total" => $total,
+                "pro_nombre" => $nombre
+            ];
+        }
+                return [
+            'query_proforma_y_detalles' => $proformas,
+            'query_sumas' => $query_sumas,                    // sigue igual
+            'query_sumas_detallado' => $query_sumas_detallado, // nuevo con nombres
             'producto_actual' => $producto_actual,
         ];
     }
+
+
     //VERIFICAR STOCKS
     public function GetSumarTodo_Productos() {
         // Obtener los registros principales con la suma de los campos

@@ -268,24 +268,24 @@ class ConvenioController extends Controller
     }
     public function updateCamposDatos($request){
         Cache::flush();
-        $datos = [];
-        $campo1 = $request->campo1;
-        $campo2 = $request->campo2;
-        $campo3 = $request->campo3;
-        $campo4 = $request->campo4;
-        $valor1 = $request->valor1;
-        $valor2 = $request->valor2;
-        $valor3 = $request->valor3;
-        $valor4 = $request->valor4;
-        $user_created   = $request->user_created;
-        $tipoAccion     = $request->tipoAccion;
-        $convenio_gerencia = $request->convenio_gerencia;
-        $infoUsuario  = User::findOrFail($user_created);
-        $id_group     = $infoUsuario->id_group;
-        if($request->unCampo)   { $datos = [ $campo1 => $valor1]; }
-        if($request->dosCampos) { $datos = [ $campo1 => $valor1, $campo2 => $valor2 ]; }
-        if($request->tresCampos) { $datos = [ $campo1 => $valor1, $campo2 => $valor2, $campo3 => $valor3 ]; }
-        if($request->cuatroCampos) { $datos = [ $campo1 => $valor1, $campo2 => $valor2, $campo3 => $valor3 ,$campo4 => $valor4 ]; }
+        $datos                  = [];
+        $campo1                 = $request->campo1;
+        $campo2                 = $request->campo2;
+        $campo3                 = $request->campo3;
+        $campo4                 = $request->campo4;
+        $valor1                 = $request->valor1;
+        $valor2                 = $request->valor2;
+        $valor3                 = $request->valor3;
+        $valor4                 = $request->valor4;
+        $user_created           = $request->user_created;
+        $tipoAccion             = $request->tipoAccion;
+        $convenio_gerencia      = $request->convenio_gerencia;
+        $infoUsuario            = User::findOrFail($user_created);
+        $id_group               = $infoUsuario->id_group;
+        if($request->unCampo)       { $datos = [ $campo1 => $valor1]; }
+        if($request->dosCampos)     { $datos = [ $campo1 => $valor1, $campo2 => $valor2 ]; }
+        if($request->tresCampos)    { $datos = [ $campo1 => $valor1, $campo2 => $valor2, $campo3 => $valor3 ]; }
+        if($request->cuatroCampos)  { $datos = [ $campo1 => $valor1, $campo2 => $valor2, $campo3 => $valor3 ,$campo4 => $valor4 ]; }
         $old_values         = PedidoConvenio::findOrFail($request->id);
         if ($id_group == 22 || $id_group == 23 || $id_group == 1 && $tipoAccion == 1) {
             $datos['convenio_aprobado'] = 4; // ← Aquí estaba el problema

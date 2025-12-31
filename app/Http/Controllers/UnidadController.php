@@ -265,4 +265,216 @@ class UnidadController extends Controller
             ], 500);
         }
     }
+    public function get_unidades_x_libro_asignado($idasignatura)
+    {
+        return DB::table('unidades_libros as u')
+            ->join('libro as l', 'u.id_libro', '=', 'l.idlibro')
+            ->select([
+                'u.id_unidad_libro as id',  // Usamos solo el alias 'id'
+                'u.id_libro',
+                'u.unidad',
+                'u.nombre_unidad',
+                DB::raw('CONCAT(u.unidad, " - ", u.nombre_unidad) as label_unidad') // Asegurar nombre exacto
+            ])
+            ->where('l.asignatura_idasignatura', $idasignatura)
+            ->where('u.estado', 1)
+            ->orderBy('u.unidad')
+            ->get();
+    }
+    // Endpoint: guardar_unidades_libro
+    public function guardar_unidades_libro(Request $request)
+{
+    try {
+        $idasignado = $request->idasignado;
+        $id_unidades = $request->id_unidades ?? []; // Siempre array, puede estar vacío
+
+        // Validación
+        if (!$idasignado) {
+            return response()->json([
+                'success' => false,
+                'message' => 'ID de asignación requerido'
+            ], 400);
+        }
+
+        // Verificar que existe el registro
+        $asignacion = DB::table('asignaturausuario')
+            ->where('idasiguser', $idasignado)
+            ->first();
+
+        if (!$asignacion) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Registro no encontrado'
+            ], 404);
+        }
+
+        // Obtener total de unidades disponibles para este libro/asignatura
+        $totalUnidades = DB::table('unidades_libros as u')
+            ->join('libro as l', 'u.id_libro', '=', 'l.idlibro')
+            ->where('l.asignatura_idasignatura', $asignacion->asignatura_idasignatura)
+            ->where('u.estado', 1)
+            ->count();
+
+        // Si el array está vacío, guardar NULL (todas las unidades)
+        if (empty($id_unidades)) {
+            DB::table('asignaturausuario')
+                ->where('idasiguser', $idasignado)
+                ->update([
+                    'unidades_x_usuario' => null,
+                    'updated_at' => now()
+                ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Campo actualizado a NULL. Se mostrarán todas las unidades.',
+                'data' => [
+                    'unidades' => null,
+                    'total_unidades' => $totalUnidades,
+                    'tipo' => 'todas'
+                ]
+            ]);
+        }
+
+        // Validar que no esté intentando guardar todas las unidades
+        if (count($id_unidades) >= $totalUnidades) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Has seleccionado todas las unidades. Para mostrar todas las unidades, deja el campo vacío.',
+                'total_disponibles' => $totalUnidades,
+                'seleccionadas' => count($id_unidades)
+            ], 400);
+        }
+
+        // Validar que las unidades existan
+        $unidadesValidas = DB::table('unidades_libros')
+            ->whereIn('id_unidad_libro', $id_unidades)
+            ->where('estado', 1)
+            ->count();
+
+        if ($unidadesValidas !== count($id_unidades)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Algunas unidades no son válidas o están inactivas'
+            ], 400);
+        }
+
+        // Convertir array a string separado por comas
+        $unidades_str = implode(',', $id_unidades);
+
+        // Actualizar
+        DB::table('asignaturausuario')
+            ->where('idasiguser', $idasignado)
+            ->update([
+                'unidades_x_usuario' => $unidades_str,
+                'updated_at' => now()
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Unidades guardadas correctamente',
+            'data' => [
+                'unidades' => $unidades_str,
+                'total_guardadas' => count($id_unidades),
+                'tipo' => 'parcial'
+            ]
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
+    // Endpoint: get_unidades_guardadas/{id_libro}
+    public function get_unidades_guardadas($idasignado)
+{
+    try {
+        // Obtener el registro
+        $asignacion = DB::table('asignaturausuario')
+            ->where('idasiguser', $idasignado)
+            ->first();
+
+        if (!$asignacion) {
+            return response()->json([]);
+        }
+
+        // Si es NULL, retornar array vacío (significa "todas las unidades")
+        if ($asignacion->unidades_x_usuario === null) {
+            return response()->json([]);
+        }
+
+        // Si está vacío, también retornar array vacío
+        if (empty($asignacion->unidades_x_usuario)) {
+            return response()->json([]);
+        }
+
+        // Obtener detalles de las unidades específicas
+        $ids_unidades = explode(',', $asignacion->unidades_x_usuario);
+
+        $unidades = DB::table('unidades_libros')
+            ->whereIn('id_unidad_libro', $ids_unidades)
+            ->where('estado', 1)
+            ->orderBy('unidad')
+            ->get()
+            ->map(function ($unidad) {
+                return [
+                    'id' => $unidad->id_unidad_libro,
+                    'id_unidad_libro' => $unidad->id_unidad_libro,
+                    'label_unidad' => $unidad->unidad . ' - ' . $unidad->nombre_unidad,
+                    'unidad' => $unidad->unidad,
+                    'nombre_unidad' => $unidad->nombre_unidad
+                ];
+            });
+
+        return response()->json($unidades);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+    public function eliminar_unidad_asignada_user(Request $request)
+    {
+        try {
+            $idasignado = $request->idasignado;
+            $id_unidad = $request->id_unidad;
+
+            // Obtener las unidades actuales
+            $asignacion = DB::table('asignaturausuario')
+                ->where('idasiguser', $idasignado)
+                ->first();
+
+            if (!$asignacion) {
+                return response()->json(['success' => false, 'message' => 'Registro no encontrado']);
+            }
+
+            // Procesar las unidades actuales
+            $unidades_actuales = [];
+            if (!empty($asignacion->unidades_x_usuario)) {
+                $unidades_actuales = explode(',', $asignacion->unidades_x_usuario);
+            }
+
+            // Eliminar la unidad del array
+            $unidades_nuevas = array_diff($unidades_actuales, [$id_unidad]);
+
+            // Convertir a string
+            $unidades_str = !empty($unidades_nuevas) ? implode(',', $unidades_nuevas) : null;
+
+            // Actualizar
+            DB::table('asignaturausuario')
+                ->where('idasiguser', $idasignado)
+                ->update([
+                    'unidades_x_usuario' => $unidades_str,
+                    'updated_at' => now()
+                ]);
+
+            return response()->json(['success' => true, 'message' => 'Unidad eliminada']);
+
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
 }

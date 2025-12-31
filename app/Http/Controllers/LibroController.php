@@ -490,6 +490,87 @@ class LibroController extends Controller
         return $datos;
     }
 
+    public function menu_unidades_libros_new($libro, $region, $idusuario, $periodo_id)
+    {
+        /** =======================================================
+         *  1. OBTENER LAS UNIDADES DEL LIBRO (TAL COMO YA LO HACÍAS)
+         * ======================================================== */
+        $unidades = DB::SELECT('SELECT u.*, l.weblibro, s_weblibro, c_weblibro
+            FROM unidades_libros u
+            JOIN libro l ON u.id_libro = l.idlibro
+            WHERE u.id_libro = ?', [$libro]);
+        if (empty($unidades)) {
+            return [];
+        }
+
+        /** =======================================================
+         *  2. OBTENER EL idasignatura DESDE EL LIBRO
+         * ======================================================== */
+        $asignatura = DB::selectOne("
+            SELECT asi.idasignatura
+            FROM libro li
+            LEFT JOIN asignatura asi ON li.asignatura_idasignatura = asi.idasignatura
+            WHERE li.idlibro = ?
+        ", [$libro]);
+        if (!$asignatura) {
+            return []; // si no existe asignatura no hay nada que filtrar
+        }
+        $idasignatura = $asignatura->idasignatura;
+        /** =======================================================
+         *  3. BUSCAR EL REGISTRO DE asignaturausuario
+         * ======================================================== */
+        $asigUser = DB::selectOne("
+            SELECT unidades_x_usuario
+            FROM asignaturausuario
+            WHERE usuario_idusuario = ?
+            AND periodo_id = ?
+            AND asignatura_idasignatura = ?
+            LIMIT 1
+        ", [$idusuario, $periodo_id, $idasignatura]);
+
+        // Convertir la cadena "7,8,9" en array
+        $unidades_permitidas = [];
+        if ($asigUser && $asigUser->unidades_x_usuario != null && $asigUser->unidades_x_usuario != "") {
+            $unidades_permitidas = explode(",", $asigUser->unidades_x_usuario);
+        }
+
+        /** =======================================================
+         *  4. ARMAR RESPUESTA + FILTRAR SI HAY unidades_x_usuario
+         * ======================================================== */
+        $datos = [];
+        foreach ($unidades as $key => $item) {
+
+            // Asignación de libro web según región
+            $weblibro = $item->weblibro;
+            if ($region == 1 && ($item->s_weblibro != null && $item->s_weblibro != "")) {
+                $weblibro = $item->s_weblibro;
+            }
+            if ($region == 2 && ($item->c_weblibro != null && $item->c_weblibro != "")) {
+                $weblibro = $item->c_weblibro;
+            }
+            // FILTRO: si existen unidades_x_usuario SOLO devolver esas
+            if (!empty($unidades_permitidas)) {
+                if (!in_array($item->id_unidad_libro, $unidades_permitidas)) {
+                    continue; // omitir unidad no permitida
+                }
+            }
+            $datos[] = [
+                "id_unidad_libro"   => $item->id_unidad_libro,
+                "id_libro"          => $item->id_libro,
+                "unidad"            => $item->unidad,
+                "nombre_unidad"     => $item->nombre_unidad,
+                "txt_nombre_unidad" => $item->txt_nombre_unidad,
+                "pag_inicio"        => $item->pag_inicio,
+                "pag_fin"           => $item->pag_fin,
+                "estado"            => $item->estado,
+                "created_at"        => $item->created_at,
+                "updated_at"        => $item->updated_at,
+                "weblibro"          => $weblibro,
+            ];
+        }
+        return $datos;
+    }
+
 
     public function unidades_asignatura($idasignatura)
     {

@@ -456,226 +456,6 @@ class DevolucionController extends Controller
         return $query;
     }
 
-    // public function generateCombos($request)
-    // {
-    //     try {
-    //         $arrayCombosNoDisponibles = [];
-    //         $contador = 0;
-    //         //transacaccion
-    //         DB::beginTransaction();
-    //         // Validar entrada
-    //         $id_devolucion = $request->input('id_devolucion');
-    //         if (!$id_devolucion) {
-    //             return response()->json(['status' => '0', 'message' => 'El id_devolucion es requerido.'], 200);
-    //         }
-    //         //obtener padre
-    //         $padre = CodigosLibrosDevolucionHeader::where('id', $id_devolucion)->first();
-    //         if(!$padre){
-    //             return response()->json(['status' => '0', 'message' => 'No se pudo obtener el padre del documento.'], 200);
-    //         }
-    //         $estadoPadre = $padre->estado;
-    //         //si es estado 2 es finalizado y ya no se debe hacer nada
-    //         if($estadoPadre == 2){
-    //             return response()->json(['status' => '0', 'message' => 'El documento ya finalizo, no se puede agregar combos'], 200);
-    //         }
-    //         $id_cliente = $padre->id_cliente;
-    //         $id_periodo = $padre->periodo_id;
-    //         // Obtener datos
-    //         $getCombos = CodigosLibrosDevolucionSon::query()
-    //             ->where('codigoslibros_devolucion_id', $id_devolucion)
-    //             ->where('tipo_codigo', '0')
-    //             ->whereNotNull('id_empresa') // Filtramos por id_empresa no nulo
-    //             ->whereNotNull('combo') // Filtramos por combo no nulo
-    //             ->whereNotNull('codigo_combo')
-    //             ->select('pro_codigo', 'combo', 'codigo_combo', 'factura', 'documento', 'id_empresa')
-    //             ->get();
-
-    //         // Agrupar por combo y id_empresa
-    //         $result = $getCombos->groupBy(function ($item) {
-    //             // return $item->combo . '-' . $item->id_empresa;
-    //             return $item->combo . '||' . $item->id_empresa;
-    //         })->map(function ($items, $key) {
-    //             [$combo, $id_empresa] = explode('||', $key);
-    //             // [$combo, $id_empresa] = explode('-', $key);
-
-    //             // Agrupar por codigo_combo y construir los hijos
-    //             $hijos = $items->groupBy('codigo_combo')->map(function ($subItems, $codigoCombo) {
-    //                 $subhijos = $subItems->map(function ($item) {
-    //                     return [
-    //                         'pro_codigo' => $item->pro_codigo,
-    //                         'factura' => $item->factura,
-    //                         'documento' => $item->documento,
-    //                     ];
-    //                 })->toArray();
-
-    //                 return [
-    //                     'codigo_combo' => $codigoCombo,
-    //                     'cantidad_subhijos' => count($subhijos),
-    //                     'subhijos' => $subhijos,
-    //                 ];
-    //             })->values()->toArray();
-    //             //filtrar codigo_combo diferente de vacio o nulo
-    //             $hijos = array_filter($hijos, function ($item) {
-    //                 return !empty($item['codigo_combo']);
-    //             });
-
-    //             return [
-    //                 'combo' => $combo,
-    //                 'id_empresa' => $id_empresa,
-    //                 'cantidad_hijos' => count($hijos), // Número total de hijos
-    //                 'hijos' => $hijos,
-    //             ];
-    //         })->values()->toArray();
-    //         //GUARDAR EN TABLA CODIGOS LIBROS SON
-    //         foreach ($result as $comboItem) {
-    //             $cantidadLibroDescontar  = 1;
-    //             $ifBusquedaDocumento     = 0;
-    //             $getidtipodoc            = 1;
-    //             $id_empresa              = $comboItem['id_empresa'];
-    //             $combo                   = $comboItem['combo'];
-    //             $cantidad_hijos          = $comboItem['cantidad_hijos'];
-    //             $cantidadCombosXDevolver = 0;
-    //             //total ingresado en combos lo devolver y por devolver para no volver a ingresar
-    //             $totalDevueltoYPorDevolver = DB::table('codigoslibros_devolucion_son as s')
-    //             ->where('s.codigoslibros_devolucion_id', $id_devolucion)
-    //             ->where('s.tipo_codigo', 1)
-    //             ->where('s.pro_codigo', $combo)
-    //             ->select(DB::raw('SUM(s.combo_cantidad + s.combo_cantidad_devuelta) as total_sum'))
-    //             ->value('total_sum');
-    //             // si es igual continuo porque ya no tengo nada que ingresar
-    //             if($totalDevueltoYPorDevolver  >= $cantidad_hijos) {
-    //                 continue;
-    //             }
-    //             $cantidadCombosXDevolver = $cantidad_hijos - $totalDevueltoYPorDevolver;
-    //             // Array para almacenar los hijos que queremos devolver
-    //             $arrayHijosDevolver = [];
-    //             $cantidad = $cantidadCombosXDevolver; // número de hijos que queremos devolver
-
-    //             for ($i = 0; $i < $cantidad && $i < count($comboItem['hijos']); $i++) {
-    //                 $hijo = $comboItem['hijos'][$i];
-    //                 // No tocamos subhijos ni cantidad_subhijos,
-    //                 // simplemente añadimos el objeto hijo completo:
-    //                 $arrayHijosDevolver[] = $hijo;
-    //             }
-
-    //             $arregloDocumentosCombos = [];
-
-    //             $datos = (object)[
-    //                 "pro_codigo"     => $combo,
-    //                 "id_institucion" => $id_cliente,
-    //                 "id_periodo"     => $id_periodo,
-    //                 "id_empresa"     => $id_empresa
-    //             ];
-
-    //             foreach($arrayHijosDevolver as $hijo){
-    //                 $codigo_proforma = $hijo['subhijos'][0]['documento'] ?? null;
-    //                 $codigo_combo    = $hijo['codigo_combo'];
-    //                 //VALIDAR QUE EL DOCUMENTO ACTUAL ESTE DISPONIBLE
-    //                 $getDisponibilidadDocumento = $this->devolucionRepository->getFacturaAvailableCombo($datos, $cantidadLibroDescontar, [],$codigo_proforma);
-    //                 if($getDisponibilidadDocumento){
-    //                     $getidtipodoc = $getDisponibilidadDocumento->idtipodoc;
-    //                     //si es 1 no hacer nada porque es pre factura
-    //                     if($getidtipodoc == 1 || $getidtipodoc == 2)   { $ifBusquedaDocumento  = 0; }
-    //                     else                                           { $ifBusquedaDocumento  = 1; }
-    //                 }
-    //                 // si hay disponibilidad en la pre factura
-    //                 if($getDisponibilidadDocumento && $ifBusquedaDocumento == 0) {
-    //                     // Si es una pre-factura, asignar directamente
-    //                     $arregloDocumentosCombos[] = [
-    //                         "ven_codigo" => $getDisponibilidadDocumento->ven_codigo,
-    //                         'det_ven_valor_u' => $getDisponibilidadDocumento->det_ven_valor_u,
-    //                         "pro_codigo" => $combo,
-    //                         "codigo_combo" => $codigo_combo,
-    //                         'id_empresa' => $id_empresa,
-    //                         'id_cliente' => $id_cliente,
-    //                         'id_periodo' => $id_periodo,
-    //                         'cantidad'   => $cantidadLibroDescontar,
-    //                     ];
-    //                     $saveCombo = $this->devolucionRepository->guardarComboSon($combo, $cantidadLibroDescontar,$getDisponibilidadDocumento->det_ven_valor_u, $id_cliente,$id_periodo,$id_empresa,$id_devolucion,$getDisponibilidadDocumento->ven_codigo);
-    //                     if($saveCombo == 1){
-    //                         $contador++;
-    //                     }
-    //                     if($saveCombo == 2){
-    //                         continue;
-    //                     }
-    //                 }
-    //                 // Si no hay disponibilidad asignar un documento o si es una nota buscar una pre factura
-    //                 if(!$getDisponibilidadDocumento || $ifBusquedaDocumento == 1){
-    //                     // Intentar obtener la prefactura
-    //                     $getPrefactura = $this->devolucionRepository->getFacturaAvailableCombo($datos, $cantidadLibroDescontar, [1]);
-    //                     if (!$getPrefactura) {
-    //                         // Si no hay prefactura disponible, intentar obtener una nota
-    //                         $getPrefactura = $this->devolucionRepository->getFacturaAvailableCombo($datos, $cantidadLibroDescontar, [3, 4]);
-    //                         if (!$getPrefactura) {
-    //                             $mensajeError                            = 'No se pudo obtener la disponibilidad del combo '.$combo;
-    //                             $itemError['mensajeError']               = $mensajeError;
-    //                             $itemError['combo']                      = $combo;
-    //                             $itemError['codigo_combo']               = $codigo_combo;
-    //                             $arrayCombosNoDisponibles[]              = $itemError;
-    //                             continue;
-    //                         }else{
-    //                             $arregloDocumentosCombos[] =[
-    //                                 "ven_codigo" => $getPrefactura->ven_codigo,
-    //                                 'det_ven_valor_u' => $getPrefactura->det_ven_valor_u,
-    //                                 "pro_codigo" => $combo,
-    //                                 "codigo_combo" => $codigo_combo,
-    //                                 'id_empresa' => $id_empresa,
-    //                                 'id_cliente' => $id_cliente,
-    //                                 'id_periodo' => $id_periodo,
-    //                                 'cantidad'   => $cantidadLibroDescontar,
-    //                             ];
-    //                             $saveCombo =$this->devolucionRepository->guardarComboSon($combo, $cantidadLibroDescontar,$getPrefactura->det_ven_valor_u, $id_cliente,$id_periodo,$id_empresa,$id_devolucion,$getPrefactura->ven_codigo);
-    //                             if($saveCombo == 1){
-    //                                 $contador++;
-    //                             }
-    //                             if($saveCombo == 2){
-    //                                 continue;
-    //                             }
-    //                         }
-    //                     }else{
-    //                         $arregloDocumentosCombos[] =[
-    //                             "ven_codigo" => $getPrefactura->ven_codigo,
-    //                             'det_ven_valor_u' => $getPrefactura->det_ven_valor_u,
-    //                             "pro_codigo" => $combo,
-    //                             "codigo_combo" => $codigo_combo,
-    //                             'id_empresa' => $id_empresa,
-    //                             'id_cliente' => $id_cliente,
-    //                             'id_periodo' => $id_periodo,
-    //                             'cantidad'   => $cantidadLibroDescontar,
-    //                         ];
-    //                         $saveCombo =$this->devolucionRepository->guardarComboSon($combo, $cantidadLibroDescontar,$getPrefactura->det_ven_valor_u, $id_cliente,$id_periodo,$id_empresa,$id_devolucion,$getPrefactura->ven_codigo);
-    //                         if($saveCombo == 1){
-    //                             $contador++;
-    //                         }
-    //                         if($saveCombo == 2){
-    //                             continue;
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //             $datosAgrupados = collect($arregloDocumentosCombos)
-    //                 ->groupBy(fn($item) => $item['pro_codigo'] . '-' . $item['ven_codigo'])
-    //                 ->map(fn($items) => [
-    //                     'pro_codigo' => $items[0]['pro_codigo'],
-    //                     'ven_codigo' => $items[0]['ven_codigo'],
-    //                     'cantidad' => $items->sum('cantidad'),
-    //                     'det_ven_valor_u' => $items[0]['det_ven_valor_u']
-    //                 ])
-    //                 ->values();
-
-    //         }
-
-
-    //         DB::commit();
-    //         return [
-    //             "contador" => $contador,
-    //             "noDisponibles" => $arrayCombosNoDisponibles
-    //         ];
-    //     } catch (\Exception $e) {
-    //         DB::rollback();
-    //         return response()->json(['status' => '0', 'message' => 'Error al generar combos: ' . $e->getMessage(), "line" => $e->getLine()], 200);
-    //     }
-    // }
 
     //api:get/devoluciones?generateCombos=1&id_devolucion=119
     public function generateCombos($request)
@@ -1482,7 +1262,13 @@ class DevolucionController extends Controller
             $validarDocumento = CodigosLibrosDevolucionHeader::where('id', $idDevolucion)
             ->first();
             if($validarDocumento->estado == 2){
-                return response()->json(['status' => '0', 'message' => 'El documento ya finalizo, no se puede agregar mas devoluciones']);
+                $importacion_con_combos = $validarDocumento->importacion_con_combos;
+                $combo_estado            = $validarDocumento->combo_estado;
+                if($importacion_con_combos == 1 && $combo_estado == 0){
+                    //DEJO PASAR SI LOS COMBOS NO HAN SIDO PROCESADOS
+                }else{
+                   return response()->json(['status' => '0', 'message' => 'El documento ya finalizo, no se puede agregar mas devoluciones']);
+                }
             }
             $arrayOldValues = [];
             $arrayNewValues = [];
@@ -1708,9 +1494,13 @@ class DevolucionController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
+
+    //api:get/devoluciones/{id}
     public function show($id)
     {
-        //
+        $id_documento = $id;
+        $documento = CodigosLibrosDevolucionHeader::find($id_documento);
+        return $documento;
     }
 
     /**

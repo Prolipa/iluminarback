@@ -243,7 +243,7 @@ class EstudianteController extends Controller
             WHERE e.usuario_idusuario = '$idusuario'
             AND pe.estado = '1'
             ORDER BY l.nombrelibro
-        ",[$idusuario]);
+        ");
         return $query;
     }
     public function evaluacionesxCodigo($codigo,$estudiante){

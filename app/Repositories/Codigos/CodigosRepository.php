@@ -191,20 +191,20 @@ class  CodigosRepository extends BaseRepository
             }
             $codigoU = DB::table('codigoslibros')
             ->where('codigo', '=', $codigo_union)
-            ->where('estado_liquidacion',   '<>', '0')
+            // ->where('estado_liquidacion',   '<>', '0')
             // ->where('bc_estado',            '=', '1')
             ->update($arrayCombinar);
             //si el codigo de union se actualiza actualizo el codigo
                 //actualizar el primer codigo
                 $codigo = DB::table('codigoslibros')
                 ->where('codigo', '=', $codigo)
-                ->where('estado_liquidacion',   '<>', '0')
+                // ->where('estado_liquidacion',   '<>', '0')
                 ->update($arrayCombinar);
         }else{
             //actualizar el primer codigo
             $codigo = DB::table('codigoslibros')
             ->where('codigo', '=', $codigo)
-            ->where('estado_liquidacion',   '<>', '0')
+            // ->where('estado_liquidacion',   '<>', '0')
             // ->where('bc_estado',            '=', '1')
             ->update($arrayCombinar);
         }

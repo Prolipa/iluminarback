@@ -2080,6 +2080,7 @@ class PedidosController extends Controller
                 'contadorConvenioAprobadoFacturador' => $item->contadorConvenioAprobadoFacturador,
                 'convenioAnulado'                => $item->convenioAnulado,
                 'convenioFinalizados'             => $item->convenioFinalizados,
+                'convenioRechazado'              => $item->convenioRechazado,
                 'estadoPedido_Pagos'              => $item->estadoPedido_Pagos,
                 'revision_pedido'                 => $item->revision_pedido,
                 'revision_observacion'            => $item->revision_observacion
@@ -2184,6 +2185,7 @@ class PedidosController extends Controller
                     'contadorConvenioAprobadoFacturador' => $item->contadorConvenioAprobadoFacturador,
                     'convenioAnulado'                => $item->convenioAnulado,
                     'convenioFinalizados'            => $item->convenioFinalizados,
+                    'convenioRechazado'              => $item->convenioRechazado,
                     'estadoPedido_Pagos'            => $item->estadoPedido_Pagos,
                 ];
             }
@@ -3573,7 +3575,7 @@ class PedidosController extends Controller
                u.idusuario,u.nombres,u.apellidos,i.nombreInstitucion, c.nombre AS nombre_ciudad,pe.periodoescolar as periodo, p.TotalVentaReal,
                1 as TipoPendiente,co.fecha_sugerido as fechaCreacionPedido, i.idInstitucion as id_institucion, pe.codigo_contrato
                 FROM pedidos_convenios co
-                LEFT JOIN pedidos p ON p.id_pedido = co.id_pedido
+                INNER JOIN pedidos p ON p.id_pedido = co.id_pedido
                 LEFT JOIN institucion i ON p.id_institucion = i.idInstitucion
                 LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
                 LEFT JOIN periodoescolar pe ON p.id_periodo = pe.idperiodoescolar
@@ -3587,7 +3589,7 @@ class PedidosController extends Controller
                 pe.periodoescolar as periodo, ps.created_at as fechaCreacionPedido,p.descuento,p.total_series_basicas,p.total_venta,
                 p.TotalVentaReal, i.idInstitucion as id_institucion, pe.codigo_contrato
                 FROM pedidos_solicitudes_gerencia ps
-                LEFT JOIN pedidos p ON p.id_pedido = ps.id_pedido
+                INNER JOIN pedidos p ON p.id_pedido = ps.id_pedido
                 LEFT JOIN usuario u ON p.id_asesor = u.idusuario
                 LEFT JOIN institucion i ON p.id_institucion = i.idInstitucion
                 LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
@@ -3595,6 +3597,7 @@ class PedidosController extends Controller
                 WHERE ps.estado <> '2'
                 and ps.estado = '0'
                 and ps.tipo = '0'
+                and p.estado = '1'
                 ORDER BY ps.id DESC
             ");
             //obsequios
@@ -3616,7 +3619,7 @@ class PedidosController extends Controller
                 pa.observacion_asesor AS observacion,
                 p.id_pedido AS pedido_id
             FROM p_libros_obsequios pa
-            LEFT JOIN pedidos p ON pa.id_pedido = p.id_pedido
+            INNER JOIN pedidos p ON pa.id_pedido = p.id_pedido
             LEFT JOIN usuario u ON p.id_asesor = u.idusuario
             LEFT JOIN usuario uc ON uc.idusuario = pa.user_created
             LEFT JOIN institucion i ON p.id_institucion = i.idInstitucion
@@ -3624,6 +3627,7 @@ class PedidosController extends Controller
             LEFT JOIN periodoescolar pe ON p.id_periodo = pe.idperiodoescolar
             WHERE pa.estado_libros_obsequios = 3
             AND pa.porcentaje_descuento = 100
+            AND p.estado = '1'
             ORDER BY pa.id DESC
             ");
 
@@ -6054,25 +6058,44 @@ class PedidosController extends Controller
                 throw new \Exception('Los datos detalle no son válidos');
             }
             $errores = [];
+            $productosConError = [];
+
             if ($request->switch_activar_todo_stock === "true") {
                 //Validará stock disponible de las 4 bodegas
                 foreach ($datosDetalle as $detalle) {
                     $codigoProducto = $detalle['pro_codigo'];
                     $cantidadAprobada = $detalle['p_libros_cantidad_aprobada'];
+                    $nombreProducto = $detalle['pro_nombre'] ?? 'Producto sin nombre';
+
                     // Consultar el stock actual en la base de datos
                     $producto = DB::table('1_4_cal_producto')
-                        ->select('pro_stock', 'pro_stockCalmed', 'pro_deposito', 'pro_depositoCalmed', 'pro_reservar')
+                        ->select('pro_nombre', 'pro_stock', 'pro_stockCalmed', 'pro_deposito', 'pro_depositoCalmed', 'pro_reservar')
                         ->where('pro_codigo', $codigoProducto)
                         ->first();
+
                     if (!$producto) {
-                        $errores[] = "Producto con código $codigoProducto no encontrado.";
+                        $errores[] = "❌ Producto [$codigoProducto] - $nombreProducto: No encontrado en el sistema.";
+                        $productosConError[] = [
+                            'codigo' => $codigoProducto,
+                            'nombre' => $nombreProducto,
+                            'error' => 'No encontrado'
+                        ];
                         continue;
                     }
+
                     // Verificar si hay suficiente stock en pro_reservar
                     $proReservar = $producto->pro_reservar ?? 0;
                     if ($cantidadAprobada > $proReservar) {
-                        $errores[] = "Stock general insuficiente (pro_reservar) para el producto $codigoProducto. Disponible: $proReservar, Solicitado: $cantidadAprobada";
+                        $errores[] = "⚠️ Producto [$codigoProducto] - {$producto->pro_nombre}: Stock reservado insuficiente. Disponible: $proReservar, Solicitado: $cantidadAprobada";
+                        $productosConError[] = [
+                            'codigo' => $codigoProducto,
+                            'nombre' => $producto->pro_nombre,
+                            'disponible' => $proReservar,
+                            'solicitado' => $cantidadAprobada,
+                            'error' => 'Stock reservado insuficiente'
+                        ];
                     }
+
                     // Sumar solo los stocks que sean >= 0
                     $stockTotal = 0;
                     if (($producto->pro_stock ?? 0) >= 0) {
@@ -6087,9 +6110,17 @@ class PedidosController extends Controller
                     if (($producto->pro_depositoCalmed ?? 0) >= 0) {
                         $stockTotal += $producto->pro_depositoCalmed;
                     }
+
                     // Validar si la cantidad aprobada supera el stock disponible
                     if ($cantidadAprobada > $stockTotal) {
-                        $errores[] = "Stock total insuficiente para el producto $codigoProducto. Disponible: $stockTotal, Solicitado: $cantidadAprobada";
+                        $errores[] = "❌ Producto [$codigoProducto] - {$producto->pro_nombre}: Stock total insuficiente. Disponible: $stockTotal, Solicitado: $cantidadAprobada";
+                        $productosConError[] = [
+                            'codigo' => $codigoProducto,
+                            'nombre' => $producto->pro_nombre,
+                            'disponible' => $stockTotal,
+                            'solicitado' => $cantidadAprobada,
+                            'error' => 'Stock total insuficiente'
+                        ];
                     }
                 }
             } else if ($request->switch_activar_todo_stock === "false") {
@@ -6097,30 +6128,59 @@ class PedidosController extends Controller
                 foreach ($datosDetalle as $detalle) {
                     $codigoProducto = $detalle['pro_codigo'];
                     $cantidadAprobada = $detalle['p_libros_cantidad_aprobada'];
+                    $nombreProducto = $detalle['pro_nombre'] ?? 'Producto sin nombre';
+
                     // Consultar el stock actual en la base de datos
                     $producto = DB::table('1_4_cal_producto')
-                        ->select('pro_deposito', 'pro_depositoCalmed', 'pro_reservar')
+                        ->select('pro_nombre', 'pro_deposito', 'pro_depositoCalmed', 'pro_reservar')
                         ->where('pro_codigo', $codigoProducto)
                         ->first();
+
                     if (!$producto) {
-                        $errores[] = "Producto con código $codigoProducto no encontrado.";
+                        $errores[] = "❌ Producto [$codigoProducto] - $nombreProducto: No encontrado en el sistema.";
+                        $productosConError[] = [
+                            'codigo' => $codigoProducto,
+                            'nombre' => $nombreProducto,
+                            'error' => 'No encontrado'
+                        ];
                         continue;
                     }
+
                     // Verificar si pro_reservar tiene suficiente stock
                     $stockReservado = $producto->pro_reservar ?? 0;
                     if ($cantidadAprobada > $stockReservado) {
-                        $errores[] = "Stock general insuficiente (pro_reservar) para el producto $codigoProducto. Disponible: $stockReservado, Solicitado: $cantidadAprobada";
+                        $errores[] = "⚠️ Producto [$codigoProducto] - {$producto->pro_nombre}: Stock reservado insuficiente. Disponible: $stockReservado, Solicitado: $cantidadAprobada";
+                        $productosConError[] = [
+                            'codigo' => $codigoProducto,
+                            'nombre' => $producto->pro_nombre,
+                            'disponible' => $stockReservado,
+                            'solicitado' => $cantidadAprobada,
+                            'error' => 'Stock reservado insuficiente'
+                        ];
                     }
+
                     // Determinar qué stock comparar según la empresa
                     $stockDisponible = 0;
+                    $bodegaNombre = '';
                     if ($empresa == 1) {
                         $stockDisponible = max(0, $producto->pro_deposito ?? 0);
+                        $bodegaNombre = 'Prolipa';
                     } else if ($empresa == 3) {
                         $stockDisponible = max(0, $producto->pro_depositoCalmed ?? 0);
+                        $bodegaNombre = 'Calmed';
                     }
+
                     // Validar si la cantidad aprobada supera el stock disponible
                     if ($cantidadAprobada > $stockDisponible) {
-                        $errores[] = "Stock total insuficiente para el producto $codigoProducto. Disponible: $stockDisponible, Solicitado: $cantidadAprobada";
+                        $errores[] = "❌ Producto [$codigoProducto] - {$producto->pro_nombre}: Stock insuficiente en bodega $bodegaNombre. Disponible: $stockDisponible, Solicitado: $cantidadAprobada";
+                        $productosConError[] = [
+                            'codigo' => $codigoProducto,
+                            'nombre' => $producto->pro_nombre,
+                            'bodega' => $bodegaNombre,
+                            'disponible' => $stockDisponible,
+                            'solicitado' => $cantidadAprobada,
+                            'error' => "Stock insuficiente en bodega $bodegaNombre"
+                        ];
                     }
                 }
             }
@@ -6130,13 +6190,43 @@ class PedidosController extends Controller
                 DB::rollBack();
                 return response()->json([
                     'status' => 3,
-                    'message' => 'Stock insuficiente.',
-                    'errores' => $errores
+                    'message' => 'No se pudo generar el acta. Se detectó stock insuficiente en ' . count($errores) . ' producto(s).',
+                    'errores' => $errores,
+                    'productos_error' => $productosConError,
+                    'total_errores' => count($errores)
                 ], 200);
             }
             //Fin Verificar si hay stock disponible antes de realizar cualquier acción.
 
             // Crear la venta
+
+            // ==================== RECÁLCULO DE TOTALES (SOBRESCRITURA) ====================
+            $subtotalCalculado = 0;
+            $erroresValidacion = [];
+
+            foreach ($datosDetalle as $detalle) {
+                if (!isset($detalle['p_libros_cantidad_aprobada']) || $detalle['p_libros_cantidad_aprobada'] <= 0) {
+                    $erroresValidacion[] = "Producto [{$detalle['pro_codigo']}]: Cantidad aprobada inválida.";
+                    continue;
+                }
+                if (!isset($detalle['p_libros_valor_u']) || $detalle['p_libros_valor_u'] < 0) {
+                    $erroresValidacion[] = "Producto [{$detalle['pro_codigo']}]: Valor unitario inválido.";
+                    continue;
+                }
+                $subtotalProducto = $detalle['p_libros_valor_u'] * $detalle['p_libros_cantidad_aprobada'];
+                $subtotalCalculado += $subtotalProducto;
+            }
+
+            if (!empty($erroresValidacion)) {
+                DB::rollBack();
+                return response()->json(['status' => 0, 'message' => 'Error de validación en los productos.', 'errores' => $erroresValidacion], 200);
+            }
+
+            $porcentajeDescuento = floatval($request->ven_desc_por);
+            $descuentoCalculado = round(($subtotalCalculado * $porcentajeDescuento) / 100, 2);
+            $request->merge(['valor_total' => $subtotalCalculado, 'ven_descuento' => $descuentoCalculado]);
+            // ==================== FIN RECÁLCULO DE TOTALES ====================
+
             $actaLibrosObsequios = new Ventas;
             $actaLibrosObsequios->ven_codigo = $request->ven_codigo;
             $actaLibrosObsequios->id_empresa = $request->id_empresa;
@@ -8232,31 +8322,10 @@ class PedidosController extends Controller
     }
 
     //FIN METODOS JEYSON
-    // public function get_liquidaciones(Request $request){
-    //     $liquidaciones = DB::table('pedidos as p')
-    //     ->join('institucion as i', 'i.idInstitucion', '=', 'p.id_institucion')
-    //     ->join('usuario as usu', 'usu.idusuario', '=', 'p.id_asesor')
-    //     ->select(
-    //         'p.id_asesor',
-    //         'usu.iniciales as codigo',
-    //         DB::raw("CONCAT(usu.nombres, ' ', usu.apellidos) as vendedor"),
-    //         DB::raw("SUM(p.TotalVentaReal) as ventabruta"),
-    //         DB::raw("SUM(p.descuento) as Descuento"),
-    //         DB::raw("SUM(p.anticipo_aprobado) as anticipo"),
-    //         DB::raw("SUM(p.descuento - p.anticipo_aprobado) as liq_proyectada"),
-    //         DB::raw("SUM(p.totalPagado) as liq_Pagada"),
-    //         DB::raw("SUM(p.totalPendienteLiquidar) as liq_pendiente")
-    //     )
-    //     ->where('p.id_periodo', $request->periodo)
-    //     ->where('p.estado', 1)
-    //     ->groupBy('p.id_asesor', 'usu.iniciales', 'usu.nombres', 'usu.apellidos')
-    //     ->get();
-    //     return $liquidaciones;
-    // }
     public function get_liquidaciones(Request $request) {
         // Definir el periodo de forma segura
         $periodo = $request->input('periodo');
-
+        $tipoVenta = $request->input('tipoVenta', 2); // Valor por defecto 2 si no se proporciona
         // Realizar la consulta utilizando Query Builder para evitar inyección SQL
         $liquidaciones = DB::table('pedidos as p')
             ->select(
@@ -8264,6 +8333,8 @@ class PedidosController extends Controller
                 'p.contrato_generado',
                 'i.nombreInstitucion',
                 'p.id_asesor',
+                'p.tipo_venta',
+                'p.estadoPedido_Pagos',
                 DB::raw("CONCAT(usu.nombres, ' ', usu.apellidos) as vendedor"),
                 'p.total_venta',
                 DB::raw("(SELECT COUNT(*) FROM verificaciones v WHERE v.contrato = p.contrato_generado AND v.nuevo = '1' AND v.estado = '0') as verificaciones"),
@@ -8279,19 +8350,23 @@ class PedidosController extends Controller
             ->leftJoin('usuario as usu', 'usu.idusuario', '=', 'p.id_asesor')
             ->where('p.id_periodo', '=', $periodo)
             ->where('p.estado', '=', '1')
-            ->where('p.tipo_venta', '=', '2')
+            ->where('p.tipo_venta', '=', $tipoVenta)
             ->whereNotNull('p.contrato_generado')
             ->get();
         foreach($liquidaciones as $key => $item){
             $alcances = DB::SELECT("SELECT SUM(a.venta_bruta) as ventaalcance FROM pedidos_alcance a
             LEFT JOIN pedidos p ON p.id_pedido = a.id_pedido
             WHERE  a.id_periodo = ?
-            AND p.tipo_venta = '1'
             AND a.id_pedido = ?
             AND a.estado_alcance = 1
             ",[$periodo,$item->id_pedido]);
             $item->alcances = $alcances[0]->ventaalcance;
-
+            // verificaciones
+            $arrayVerificaciones = DB::SELECT("SELECT v.id, v.num_verificacion, v.fecha_fin FROM verificaciones v
+            WHERE v.contrato = '$item->contrato_generado'
+            AND v.estado = '0'
+            ");
+            $item->arrayVerificaciones = $arrayVerificaciones;
         }
         return response()->json($liquidaciones);
     }

@@ -2001,7 +2001,7 @@ class UsuarioController extends Controller
                             ->ignore($userficheronew->idusuario, 'idusuario')
                     ],
                     'email' => [
-                        'required',
+                        'nullable',
                         'email',
                         'max:255',
                         Rule::unique('usuario', 'email')
@@ -2040,7 +2040,7 @@ class UsuarioController extends Controller
             $userficheronew->nombres = $datosValidados['nombres'];
             $userficheronew->apellidos = $datosValidados['apellidos'];
             $userficheronew->telefono = $datosValidados['telefono'];
-            $userficheronew->email = $datosValidados['email'];
+            $userficheronew->email = $datosValidados['email'] ?? null;
             // $userficheronew->password = sha1(md5($datosValidados['cedula']));
             if (!empty($request->cedula)) {
                 $userficheronew->password = sha1(md5($request->cedula));
@@ -2048,7 +2048,7 @@ class UsuarioController extends Controller
                 // Si no hay cédula, asigna un valor por defecto
                 $userficheronew->password = sha1(md5('sin_cedula_' . time()));
             }
-            $userficheronew->name_usuario = $datosValidados['email'];
+            $userficheronew->name_usuario = !empty($datosValidados['email']) ? $datosValidados['email'] : null;
             $userficheronew->fecha_nacimiento = $request->fecha_nacimiento == null || $request->fecha_nacimiento == "null" ? null : $request->fecha_nacimiento;
             // Valores fijos del sistema
             $userficheronew->id_group = 6; // DOCENTES

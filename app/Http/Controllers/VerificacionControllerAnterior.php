@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\CodigosLibros;
 use App\Models\CodigosLibrosDevolucionHeader;
+use App\Models\FormatoPedidoNew;
 use App\Models\HistoricoCodigos;
 use App\Models\Pedidos;
 use App\Models\Temporada;
@@ -188,6 +189,13 @@ class VerificacionControllerAnterior extends Controller
             AND v.nuevo = '1'
             ORDER BY v.id DESC
         ");
+
+        // Create a map for quick lookup of previous verifications
+        $verificacionesMap = [];
+        foreach($query as $item){
+            $verificacionesMap[$item->num_verificacion] = $item;
+        }
+
         $datos = [];
         $contador = 0;
         foreach($query as $key => $item){
@@ -197,9 +205,20 @@ class VerificacionControllerAnterior extends Controller
            $archivosFacturas = $this->obtenerArchivosFacturas($item->id);
            $observacion = $this->obtenerObservacion($item->id);
 
+           // Calculate deuda_verificacion_anterior
+           $deuda_verificacion_anterior = 0;
+           $prev_num = $item->num_verificacion - 1;
+           if(isset($verificacionesMap[$prev_num])){
+               $prev_verificacion = $verificacionesMap[$prev_num];
+               if($prev_verificacion->valor_liquidacion < 0){
+                   $deuda_verificacion_anterior = abs($prev_verificacion->valor_liquidacion);
+               }
+           }
+
            $datos [$contador] = (Object)[
             "id"                            => $item->id,
             "num_verificacion"              => $item->num_verificacion,
+            "deuda_verificacion_anterior"   => $deuda_verificacion_anterior,
             "fecha_inicio"                  => $item->fecha_inicio,
             "fecha_fin"                     => $item->fecha_fin,
             "estado"                        => $item->estado,
@@ -336,11 +355,13 @@ class VerificacionControllerAnterior extends Controller
          //PARA VER LA INFORMACION DE LAS VERIFICACIONES DEL CONTRATO
          if($request->informacion){
             $verificaciones = $this->getVerificacionXcontrato($request->contrato);
+
             $institucion = DB::SELECT("SELECT t.*, i.nombreInstitucion
             FROM temporadas t
             LEFT JOIN institucion i ON i.idInstitucion = t.idInstitucion
             WHERE t.contrato = '$request->contrato'
             ");
+
             $pedido = DB::SELECT("SELECT pe.regaladosReporteNuevo
             FROM pedidos p
             LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
@@ -355,10 +376,6 @@ class VerificacionControllerAnterior extends Controller
          //para calcular la venta real
          if($request->getVentaRealXVerificacion){
             return $this->getVentaRealXVerificacion($request);
-         }
-         //para traer todos los codigos
-         if($request->getAllCodigosXContrato){
-            return $this->getAllCodigosXContrato($request);
          }
          //para traer todos los codigos new
          if($request->getAllCodigosXContrato_new){
@@ -529,120 +546,7 @@ class VerificacionControllerAnterior extends Controller
             return $this->getHistoricoVerificacionesCambios($request);
         }
      }
-     //api:get/n_verificacion?getAllCodigosXContrato=1&periodo_id=25&institucion_id=1611&porInstitucion=1&sinPrecio=1
-     public function getAllCodigosXContrato($request){
-        try{
-            //limpiar cache
-            Cache::flush();
-            $institucion_id         = $request->institucion_id;
-            $periodo                = $request->periodo_id;
-            $IdVerificacion         = $request->IdVerificacion;
-            $contrato               = $request->contrato;
-            $detalles               = $this->codigoRepository->getCodigosIndividuales($request);
-            $getCombos              = $this->codigoRepository->getCombos();
-            $sinPrecio              = $request->sinPrecio;
-            //formData filtrar del detalles los codigos que tenga combo diferente de null y codigo_combo diferente de null
-            $formData               = collect($detalles)->filter(function ($item) {
-                return $item->combo != null && $item->codigo_combo != null && ($item->quitar_de_reporte == 0 || $item->quitar_de_reporte == null);
-            })->values();
-            $getAgrupadoCombos      = $this->codigoRepository->getAgrupadoCombos($formData,$getCombos);
-            //unir $detalles con $getAgrupadoCombos
-            $detalles               = collect($detalles)->merge($getAgrupadoCombos);
-            if($sinPrecio){
-                $id_pedido = 0;
-                $getPedigo = DB::SELECT("SELECT * FROM pedidos p
-                WHERE p.id_institucion = '$institucion_id'
-                AND p.id_periodo = '$periodo'
-                AND p.estado = '1'");
-                if(count($getPedigo) > 0){
-                    $id_pedido = $getPedigo[0]->id_pedido;
-                }
-                foreach($detalles as $item){
-                    $item->id_pedido = $id_pedido;
-                }
-                return $detalles;
-            }
-            $datos                  = [];
-            $contador = 0;
-            foreach($detalles as $key => $item){
-                //plan lector
-                $precio = 0;
-                $query = [];
-                if($item->id_serie == 6){
-                    $query = DB::SELECT("SELECT f.pvp AS precio
-                    FROM pedidos_formato f
-                    WHERE f.id_serie    = '6'
-                    AND f.id_area       = '69'
-                    AND f.id_libro      = '$item->libro_idReal'
-                    AND f.id_periodo    = '$periodo'");
-                }else{
-                    $query = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,
-                    (
-                        SELECT f.pvp AS precio
-                        FROM pedidos_formato f
-                        WHERE f.id_serie = ls.id_serie
-                        AND f.id_area = a.area_idarea
-                        AND f.id_periodo = '$periodo'
-                    )as precio
-                    FROM libros_series ls
-                    LEFT JOIN libro l ON ls.idLibro = l.idlibro
-                    LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
-                    WHERE ls.id_serie = '$item->id_serie'
-                    AND a.area_idarea  = '$item->area_idarea'
-                    AND l.Estado_idEstado = '1'
-                    AND a.estado = '1'
-                    AND ls.year = '$item->year'
-                    LIMIT 1
-                    ");
-                }
-                if(count($query) > 0){
-                    $precio = $query[0]->precio;
-                }
-                $datos[$contador] = [
-                    "codigo_libro"              => $item->codigo_libro,
-                    "IdVerificacion"            => $IdVerificacion,
-                    "verificacion_id"           => $request->verificacion_id,
-                    "contrato"                  => $contrato,
-                    "codigo"                    => $item->codigo,
-                    "nombre_libro"              => $item->nombrelibro,
-                    "libro_id"                  => $item->libro_idlibro,
-                    "libro_idlibro"             => $item->libro_idlibro,
-                    "id_serie"                  => $item->id_serie,
-                    "id_periodo"                => $periodo,
-                    "precio"                    => $precio,
-                    "estado_liquidacion"        => $item->estado_liquidacion ?? null,
-                    "estado"                    => $item->estado ?? null,
-                    "bc_estado"                 => $item->bc_estado?? null,
-                    "venta_estado"              => $item->venta_estado?? null,
-                    "liquidado_regalado"        => $item->liquidado_regalado?? null,
-                    "bc_institucion"            => $item->bc_institucion?? null,
-                    "contrato"                  => $item->contrato?? null,
-                    "venta_lista_institucion"   => $item->venta_lista_institucion?? null,
-                    "plus"                      => $item->plus?? null,
-                    'quitar_de_reporte'         => $item->quitar_de_reporte?? null,
-                    'combo'                     => $item->combo?? null,
-                    'codigo_combo'              => $item->codigo_combo?? null,
-                    'tipo_codigo'               => $item->tipo_codigo,
-                    'codigos_combos'            => $item->codigos_combos?? null,
-                    'cantidad_combos'           => $item->cantidad_combos?? null,
-                    'hijos'                     => $item->hijos?? null,
-                    'cantidad_items'            => $item->cantidad_items?? null,
-                    'cantidad_subitems'         => $item->cantidad_subitems?? null,
-                    'verificacion'              => $item->verificacion?? null,
-                    'idtipodocumento'           => $item->idtipodocumento?? null,
-                    'descuento'                 => $item->descuento?? null,
-                    'porcentaje_personalizado_regalado' => $item->porcentaje_personalizado_regalado?? null,
-                    'codigo_proforma'           => $item->codigo_proforma?? null,
-                    'proforma_empresa'          => $item->proforma_empresa?? null,
-                ];
-                $contador++;
-            }
-            return $datos;
-        }
-        catch(\Exception $e){
-            return ["status"=>"0","message"=> $e->getMessage(), "error" => $e->getLine() ];
-        }
-     }
+
      public function getVentaRealXVerificacion($request){
         $periodo        = $request->periodo_id;
         $institucion    = $request->institucion_id;
@@ -2100,9 +2004,25 @@ class VerificacionControllerAnterior extends Controller
             $archivosFacturas = $this->obtenerArchivosFacturas($item->id);
             $observacion = $this->obtenerObservacion($item->id);
 
+            // Calculate deuda_verificacion_anterior
+            $deuda_verificacion_anterior = 0;
+            $prev_num = $item->num_verificacion - 1;
+            if($prev_num > 0){
+                $prev_verificacion = DB::table('verificaciones')
+                    ->where('contrato', $item->contrato)
+                    ->where('num_verificacion', $prev_num)
+                    ->where('nuevo', '1')
+                    ->first();
+
+                if($prev_verificacion && $prev_verificacion->valor_liquidacion < 0){
+                    $deuda_verificacion_anterior = abs($prev_verificacion->valor_liquidacion);
+                }
+            }
+
             $datos[$key] = [
                 "id"                                        => $item->id,
                 "num_verificacion"                          => $item->num_verificacion,
+                "deuda_verificacion_anterior"               => $deuda_verificacion_anterior,
                 "fecha_inicio"                              => $item->fecha_inicio,
                 "fecha_fin"                                 => $item->fecha_fin,
                 "estado"                                    => $item->estado,
@@ -2731,6 +2651,74 @@ class VerificacionControllerAnterior extends Controller
                 ->where('idperiodoescolar', $periodo)
                 ->where('idlibro', $item->libro_idReal)
                 ->value('pfn_pvp');
+                if ($item->tipo_codigo == 1) {
+
+                    // Obtener el PFN PVP del combo general
+                    $getLibro = FormatoPedidoNew::where('idlibro', $item->libro_idReal)
+                        ->where('idperiodoescolar', $periodo)
+                        ->first();
+
+                    $pfn_pvp_result = $getLibro ? (float) $getLibro->pfn_pvp : 0;
+                    // Procesar hijos
+                    $hijosArray = collect($item->hijos)->map(function ($hijo) use ($item, $periodo, $pfn_pvp_result) {
+
+                        $codigo_combo = $hijo['codigo_combo'];
+                        $totalDevolucionesSueltos = 0;
+
+                        // Consulta de devoluciones sueltos
+                        $getDevolucionSueltos = DB::select("
+                            SELECT COALESCE(SUM(COALESCE(s.precio_especial, s.precio)), 0) AS total_precio_final
+                            FROM codigoslibros_devolucion_desarmados_son s
+                            LEFT JOIN codigoslibros_devolucion_desarmados_header h
+                                ON h.id = s.codigoslibros_devolucion_desarmados_header_id
+                            WHERE s.codigo_combo = :combo
+                            AND s.combo = :comboPadre
+                            AND h.periodo_id = :periodo
+                            AND h.estado = '2'
+                        ", [
+                            'combo' => $codigo_combo,
+                            'comboPadre' => $item->combo,
+                            'periodo' => $periodo
+                        ]);
+
+                        if (count($getDevolucionSueltos) > 0) {
+                            $totalDevolucionesSueltos = (float) $getDevolucionSueltos[0]->total_precio_final;
+                        }
+
+                        // ➤ AGREGAR el valor al hijo
+                        $hijo['totalDevolucionesSueltos'] = $totalDevolucionesSueltos;
+
+                        // ➤ Calcular total con devoluciones
+                        $hijo['totalWithDevoluciones'] = round($pfn_pvp_result - $totalDevolucionesSueltos, 2);
+
+                        return $hijo;
+                    });
+
+                    // Reemplazar hijos en el item
+                    $item->hijos = $hijosArray->toArray();
+
+                    //
+                    // ===== CALCULOS DEL PADRE =====
+                    //
+
+                    // 1) Sumar totalWithDevoluciones de todos los hijos
+                    $ResultadoTotalDevolucionSueltos = collect($item->hijos)
+                        ->sum('totalWithDevoluciones');
+
+                    $item->ResultadoTotalDevolucionSueltos = round($ResultadoTotalDevolucionSueltos, 2);
+
+                    // 2) Aplicar descuento (porcentaje)
+                    $descuento = $item->descuento ?? 0;
+                    $porcentaje = $descuento / 100;
+
+                    $CombosTotalDevolucionSueltosPorcentaje =
+                        $ResultadoTotalDevolucionSueltos - ($ResultadoTotalDevolucionSueltos * $porcentaje);
+
+                    $item->CombosTotalDevolucionSueltosPorcentaje = round($CombosTotalDevolucionSueltosPorcentaje, 2);
+
+                }
+
+
                 $datos[$contador] = [
                     "codigo_libro"              => $item->codigo_libro,
                     "IdVerificacion"            => $IdVerificacion,
@@ -2767,6 +2755,7 @@ class VerificacionControllerAnterior extends Controller
                     'idtipodoc'                 => $item->idtipodoc?? null,
                     'codigo_proforma'           => $item->codigo_proforma?? null,
                     'proforma_empresa'          => $item->proforma_empresa?? null,
+                    'CombosTotalDevolucionSueltosPorcentaje' => $item->CombosTotalDevolucionSueltosPorcentaje ?? null,
                 ];
                 $contador++;
             }

@@ -101,13 +101,14 @@ Route::get('colegios_get_links_libro','ColegiosController@colegios_get_links_lib
 //=============FIN RUTAS PARA COLEGIO==============================
 Route::get('periodoInstitucion', 'PeriodoController@institucion');
 //api para ver si la institucion de usuario es activa
-Route::get('institucionActiva','InstitucionController@institucionActiva');
-Route::post('institucionEliminar','InstitucionController@institucionEliminar');
-Route::apiResource('menu','MenuController');
-Route::get('menuHospital','MenuController@menuHospital');
-Route::get('menu_unidades_libros/{id}/{region}','LibroController@menu_unidades_libros');
+Route::get('institucionActiva', 'InstitucionController@institucionActiva');
+Route::post('institucionEliminar', 'InstitucionController@institucionEliminar');
+Route::apiResource('menu', 'MenuController');
+Route::get('menuHospital', 'MenuController@menuHospital');
+Route::get('menu_unidades_libros/{id}/{region}', 'LibroController@menu_unidades_libros');
+Route::get('menu_unidades_libros_new/{id}/{region}/{idusuario}/{periodo_id}', 'LibroController@menu_unidades_libros_new');
 Route::post('cuadernos_usuario_libro', 'CuadernoController@cuadernos_usuario_libro');
-Route::get('desgloselibrousuario/{id}/{region}','LibroController@desgloselibrousuario');
+Route::get('desgloselibrousuario/{id}/{region}', 'LibroController@desgloselibrousuario');
 
 Route::get('get_links_libro/{id}','LibroController@get_links_libro');
 Route::post('guardar_link_libro','LibroController@guardar_link_libro');
@@ -2309,3 +2310,8 @@ Route::prefix('pedidosSecuencia/comparativo')->group(function () {
     Route::post('detalles-facturas', 'ComparativoVentasController@getDetallesFacturas');
     Route::post('comparativo-completo', 'ComparativoVentasController@getComparativoCompleto');
 });
+
+Route::get('get_unidades_x_libro_asignado/{id_asignatura}', 'UnidadController@get_unidades_x_libro_asignado');
+Route::post('guardar_unidades_libro', 'UnidadController@guardar_unidades_libro');
+Route::post('eliminar_unidad_asignada_user', 'UnidadController@eliminar_unidad_asignada_user');
+Route::get('get_unidades_guardadas/{id_asignatura}', 'UnidadController@get_unidades_guardadas');
