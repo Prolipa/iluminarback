@@ -16,6 +16,7 @@ use App\Models\CodigosLibros;
 use App\Models\Models\Verificacion\VerificacionDescuentoDetalle;
 use App\Models\Pedidos;
 use App\Models\VerificacionHistoricoCambios;
+use App\Repositories\Codigos\CodigosRepository;
 use App\Traits\Pedidos\TraitPedidosGeneral;
 use App\Traits\Verificacion\TraitVerificacionGeneral;
 use Illuminate\Support\Facades\DB;
@@ -32,6 +33,11 @@ class TemporadaController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
+    protected $codigosRepository;
+    public function __construct(CodigosRepository $codigosRepository)
+    {
+        $this->codigosRepository = $codigosRepository;
+    }
     //api para el get para milton
     public function temporadaDatos(){
         $temporada = DB::select("select t.*
@@ -437,7 +443,7 @@ class TemporadaController extends Controller
              }
             else{
                 //almancenar el periodo
-                 $periodo =  $verificarPeriodo[0]->idperiodoescolar;
+                $periodo =  $verificarPeriodo[0]->idperiodoescolar;
                 //traer temporadas
                 $temporadas = DB::SELECT("SELECT t.*, CONCAT(u.nombres,' ',u.apellidos) AS asesor,i.nombreInstitucion,
                 pe.periodoescolar AS periodo
@@ -448,22 +454,94 @@ class TemporadaController extends Controller
                 WHERE t.contrato = '$contrato'
                 AND t.estado = '1'
                 ");
-                $data = DB::SELECT("SELECT ls.codigo_liquidacion AS codigo,  COUNT(ls.codigo_liquidacion) AS cantidad, c.serie,
-                c.libro_idlibro,ls.nombre as nombrelibro
-                    FROM codigoslibros c
-                    LEFT JOIN usuario u ON c.idusuario = u.idusuario
-                    LEFT JOIN  libros_series ls ON ls.idLibro = c.libro_idlibro
-                    WHERE c.bc_estado = '2'
-                    AND c.estado <> 2
-                    and c.estado_liquidacion = '1'
-                    AND c.bc_periodo  = '$periodo'
-                    AND c.bc_institucion = '$institucion'
-                    AND ls.idLibro = c.libro_idlibro
-                    AND c.prueba_diagnostica = '0'
-                   GROUP BY ls.codigo_liquidacion,ls.nombre, c.serie,c.libro_idlibro");
+                // $data = DB::SELECT("SELECT ls.codigo_liquidacion AS codigo,  COUNT(ls.codigo_liquidacion) AS cantidad, c.serie,
+                // c.libro_idlibro,ls.nombre as nombrelibro
+                //     FROM codigoslibros c
+                //     LEFT JOIN usuario u ON c.idusuario = u.idusuario
+                //     LEFT JOIN  libros_series ls ON ls.idLibro = c.libro_idlibro
+                //     WHERE c.bc_estado = '2'
+                //     AND c.estado <> 2
+                //     and c.estado_liquidacion = '1'
+                //     AND c.bc_periodo  = '$periodo'
+                //     AND c.bc_institucion = '$institucion'
+                //     AND ls.idLibro = c.libro_idlibro
+                //     AND c.prueba_diagnostica = '0'
+                //    GROUP BY ls.codigo_liquidacion,ls.nombre, c.serie,c.libro_idlibro");
+
+                $requestCodigos = new Request(['periodo_id' => $periodo, 'institucion_id' => $institucion, 'contrato' => $contrato, 'porInstitucion' => 1]);
+                $detalles = $this->codigosRepository->getCodigosIndividuales($requestCodigos);
+
+                //Filtrar y agrupar por codigo, serie, libro_idReal y nombrelibro
+                $codigosNormalesLiquidar = collect($detalles)
+                    ->filter(function ($item) {
+                        return $item->bc_estado == '2' && $item->estado != 2 && $item->estado_liquidacion == '1';
+                    })
+                    ->groupBy(function ($item) {
+                        return $item->codigo . '|' . $item->serie . '|' . $item->libro_idReal . '|' . $item->nombrelibro;
+                    })
+                    ->map(function ($group) {
+                        $first = $group->first();
+                        return [
+                            'codigo'        => $first->codigo,
+                            'serie'         => $first->serie,
+                            'libro_idReal'  => $first->libro_idReal,
+                            'nombrelibro'   => $first->nombrelibro,
+                            'cantidad'      => $group->count(),
+                        ];
+                    })
+                    ->values()
+                    ->toArray();
+
+                //Filtrar regalados leídos: estado_liquidacion = 2 y bc_estado = 2 y contrato vacío o null
+                $codigosRegaladosLeidos = collect($detalles)
+                    ->filter(function ($item) {
+                        return $item->bc_estado == '2' && $item->estado_liquidacion == '2' && (empty($item->contrato) || $item->contrato == null || $item->contrato == '0');
+                    })
+                    ->groupBy(function ($item) {
+                        return $item->codigo . '|' . $item->serie . '|' . $item->libro_idReal . '|' . $item->nombrelibro;
+                    })
+                    ->map(function ($group) {
+                        $first = $group->first();
+                        return [
+                            'codigo'        => $first->codigo,
+                            'serie'         => $first->serie,
+                            'libro_idReal'  => $first->libro_idReal,
+                            'nombrelibro'   => $first->nombrelibro,
+                            'cantidad'      => $group->count(),
+                        ];
+                    })
+                    ->values()
+                    ->toArray();
+
+                //Filtrar regalados no leídos: estado_liquidacion = 2 y bc_estado <> 2 y contrato vacío o null
+                $codigosRegaladosNoLeidos = collect($detalles)
+                    ->filter(function ($item) {
+                        return $item->bc_estado != '2' && $item->estado_liquidacion == '2' && (empty($item->contrato) || $item->contrato == null || $item->contrato == '0');
+                    })
+                    ->groupBy(function ($item) {
+                        return $item->codigo . '|' . $item->serie . '|' . $item->libro_idReal . '|' . $item->nombrelibro;
+                    })
+                    ->map(function ($group) {
+                        $first = $group->first();
+                        return [
+                            'codigo'        => $first->codigo,
+                            'serie'         => $first->serie,
+                            'libro_idReal'  => $first->libro_idReal,
+                            'nombrelibro'   => $first->nombrelibro,
+                            'cantidad'      => $group->count(),
+                        ];
+                    })
+                    ->values()
+                    ->toArray();
+
                 //SI TODO HA SALIDO BIEN TRAEMOS LA DATA
-                if(count($data) >0){
-                 return ['temporada'=>$temporadas,'codigos_libros' => $data];
+                if(count($codigosNormalesLiquidar) > 0 || count($codigosRegaladosLeidos) > 0 || count($codigosRegaladosNoLeidos) > 0){
+                    return [
+                        'temporada'                 => $temporadas,
+                        'codigosNormalesLiquidar'   => $codigosNormalesLiquidar,
+                        'codigosRegaladosLeidos'    => $codigosRegaladosLeidos,
+                        'codigosRegaladosNoLeidos'  => $codigosRegaladosNoLeidos
+                    ];
                 }else{
                     return ["status"=>"0", "message" => "No hay codigos para la liquidación"];
                 }

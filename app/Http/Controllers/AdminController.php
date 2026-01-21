@@ -62,6 +62,82 @@ class AdminController extends Controller
         $this->codigosRepository     = $codigosRepository;
         $this->pedidoRepository      = $pedidoRepository;
     }
+    public function groqProxy(Request $request)
+    {
+        $apiKey = "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"; // ponla en .env
+        $apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+
+        try {
+            $response = Http::timeout(30)
+                ->withHeaders([
+                    'Authorization' => 'Bearer ' . $apiKey,
+                    'Content-Type'  => 'application/json'
+                ])
+                ->post($apiUrl, [
+                    'model' => 'llama-3.1-8b-instant',
+                    'messages' => $request->input('messages'),
+                    'temperature' => 0.7,
+                    'max_tokens' => 1024
+                ]);
+
+            if ($response->status() === 429) {
+                return response()->json([
+                    'choices' => [[
+                        'message' => [
+                            'content' => '⏳ El servicio está muy ocupado. Intenta nuevamente en unos segundos.'
+                        ]
+                    ]]
+                ]);
+            }
+
+            return response()->json($response->json(), $response->status());
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error conectando con Groq: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // public function proxy(Request $request)
+    // {
+    //     $apiKey = 'AIzaSyDxG7aeJOuw8GpHnlvRu1wv8FKca-aO6qI';
+    //     $apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-lite-latest:generateContent?key=' . $apiKey;
+
+    //     try {
+    //         $response = Http::timeout(30)
+    //             ->withHeaders(['Content-Type' => 'application/json'])
+    //             ->post($apiUrl, $request->all());
+
+    //         // Si hay error de cuota, devolver mensaje amigable
+    //         if ($response->status() == 429) {
+    //             return response()->json([
+    //                 'candidates' => [[
+    //                     'content' => [
+    //                         'parts' => [[
+    //                             'text' => '⏳ El servicio está ocupado. Por favor, intenta de nuevo en unos segundos.'
+    //                         ]]
+    //                     ]
+    //                 ]]
+    //             ]);
+    //         }
+
+    //         return response()->json($response->json(), $response->status());
+
+    //     } catch (\Exception $e) {
+    //         return response()->json([
+    //             'error' => 'Error de conexión con Gemini: ' . $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
+    public function listModels()
+    {
+        $apiKey = 'AIzaSyDxG7aeJOuw8GpHnlvRu1wv8FKca-aO6qI';
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models?key=' . $apiKey;
+
+        $response = Http::get($url);
+        return response()->json($response->json());
+    }
     public function getFilesTest(){
       $query = DB::SELECT("SELECT pd.*,c.convenio_anios
       FROM pedidos_convenios_detalle pd
@@ -865,30 +941,7 @@ class AdminController extends Controller
         return $result;
     }
     public function pruebaData(Request $request){
-        $query = DB::SELECT("SELECT st.combo AS comboTest, s.combo , s.id, s.temporal
-            FROM codigoslibros_devolucion_desarmados_son s
-            INNER JOIN codigoslibros_devolucion_desarmados_son_test st ON st.id = s.id
-            WHERE s.temporal = 0
-            AND s.combo IS NOT NULL
-
-        ");
-        $contador = 0;
-        $arrayNoGuardados = [];
-        foreach($query as $key => $item){
-            $comboTest              = $item->comboTest;
-                DB::table('codigoslibros_devolucion_desarmados_son')
-                ->where('id', $item->id)
-                ->update([
-                    'combo'      => $comboTest,
-                    'temporal'   => '1'
-                ]);
-                $contador++;
-
-        }
-        return [
-            "guardados"         => $contador,
-            "no_guardados"      => $arrayNoGuardados
-        ];
+        return "hola mundo";
         // $getCodigos = 'SMCLL3-CFZCY9WFCC,
         // PSMCLL3-8E7RBKE7Y7,
         // SMCLL3-N9TKFGNVT2,
@@ -2570,7 +2623,7 @@ class AdminController extends Controller
             ], 500);
         }
     }
-    
+
     private function generarJsonFacturado($tipo_reporte, $id_periodo, $procedimiento, $startTime){
         try {
             // Usar DB::select en lugar de PDO directo para evitar problemas de packets
@@ -2594,7 +2647,7 @@ class AdminController extends Controller
             ], 500);
         }
     }
-    
+
     private function generarJsonVentas($tipo_reporte, $id_periodo, $procedimiento, $startTime){
         try {
             // Usar DB::select en lugar de PDO directo para evitar problemas de packets
@@ -2618,7 +2671,7 @@ class AdminController extends Controller
             ], 500);
         }
     }
-    
+
     private function generarExcelFacturado($tipo_reporte, $id_periodo, $procedimiento, $startTime){
         if (!class_exists('PhpOffice\PhpSpreadsheet\Spreadsheet')) {
             return response()->json([
@@ -2633,8 +2686,8 @@ class AdminController extends Controller
                 ->where('idperiodoescolar', $id_periodo)
                 ->first();
 
-            $descripcionPeriodo = ($periodo && !empty($periodo->descripcion)) 
-                ? $periodo->descripcion 
+            $descripcionPeriodo = ($periodo && !empty($periodo->descripcion))
+                ? $periodo->descripcion
                 : ($periodo ? $periodo->periodoescolar : $id_periodo);
 
             $descripcionLimpia = preg_replace('/[^A-Za-z0-9\-_]/', '_', $descripcionPeriodo);
@@ -2714,7 +2767,7 @@ class AdminController extends Controller
                                 $mergeRanges[] = "H{$inicioFila}:H{$finFila}"; // Fecha
                             }
                         }
-                    } 
+                    }
                     // === OTROS REPORTES: Formato normal (sin desglose) ===
                     else {
                         $headerWritten = false;
@@ -2894,7 +2947,7 @@ class AdminController extends Controller
         }, 200, $headers);
     }
 
-    
+
     /**
      * Generar archivo Excel
      */

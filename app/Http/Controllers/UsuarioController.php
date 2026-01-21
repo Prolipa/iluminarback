@@ -45,12 +45,16 @@ class UsuarioController extends Controller
         $usuario = DB::select("SELECT u.idusuario, u.cedula,u.nombres,u.apellidos,
         u.name_usuario,u.email, u.id_group, u.institucion_idInstitucion, u.iniciales,
         u.foto_user,u.telefono, i.idInstitucion, i.nombreInstitucion, c.nombre as ciudad,
-        u.nacionalidad, fecha_nacimiento, curso, paralelo, sexo,n.nombrenivel ,p.descripcion
+        u.nacionalidad, fecha_nacimiento, curso, paralelo, sexo,n.nombrenivel ,p.descripcion,
+        u.cli_ins_codigo, u.estado_idEstado, g.level as perfil, u.cargo_id, u.change_password,
+        u.fecha_change_password, u.capacitador ,ca.cargo
         FROM usuario u
         LEFT JOIN institucion i ON i.idInstitucion = u.institucion_idInstitucion
+        LEFT JOIN sys_group_users g ON g.id = u.id_group
         LEFT JOIN ciudad c ON  c.idciudad = i.ciudad_id
         LEFT JOIN nivel n ON u.curso = n.orden
         LEFT JOIN mat_paralelos p ON u.paralelo = p.paralelo_id
+         LEFT JOIN institucion_cargos  ca ON u.cargo_id = ca.id
         WHERE u.idusuario = $request->idusuario
         ");
 
@@ -893,7 +897,7 @@ class UsuarioController extends Controller
         u.name_usuario,u.email, u.id_group, u.institucion_idInstitucion, u.iniciales,
         u.foto_user,u.telefono, i.idInstitucion, i.nombreInstitucion, c.nombre as ciudad,
         u.nacionalidad, fecha_nacimiento, curso,  sexo,n.nombrenivel ,p.descripcion,u.estado_idEstado,
-        CAST(u.paralelo AS UNSIGNED)  as paralelo
+        CAST(u.paralelo AS UNSIGNED)  as paralelo, u.updated_at
         FROM usuario u
         LEFT JOIN institucion i ON i.idInstitucion = u.institucion_idInstitucion
         LEFT JOIN ciudad c ON  c.idciudad = i.ciudad_id
@@ -1789,12 +1793,7 @@ class UsuarioController extends Controller
             "codigoNoExiste" => $codigoNoExiste
         ];
     }
-    public function getUsuario($cedula){
-        $user = DB::SELECT("SELECT * FROM usuario u
-        WHERE u.cedula = '$cedula'
-        ");
-        return $user;
-    }
+
     public function actualizarIdusuarioInstitucion(Request $request){
         //actualizar los idusuario del asesor de la institucion
         $validate =DB::SELECT("SELECT * FROM usuario u
@@ -2193,5 +2192,88 @@ class UsuarioController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+    //api:post>>/metodosPostUsuario
+    public function metodosPostUsuario(Request $request){
+        $action = $request->input('action');
+
+        switch ($action) {
+            case 'Post_Traer_Data_Usuarios':
+                return $this->Post_Traer_Data_Usuarios($request);
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
+    }
+
+    //api:post>>/metodosPostUsuario?action=Post_Traer_Data_Usuarios
+    public function Post_Traer_Data_Usuarios(Request $request){
+        set_time_limit(6000000);
+        ini_set('max_execution_time', 6000000);
+        $usuarios           = json_decode($request->data_usuarios);
+        $dataUsuarios       = [];
+        $usuariosNoEncontrados  = [];
+        foreach($usuarios as $key => $item){
+            //validar si la cedula existe
+            $validar = $this->getUsuarioCedula($item->cedula);
+            if(count($validar) > 0){
+                $institucion_id             = $item->institucion_id;
+                $nombreInstitucion          = $validar[0]->nombreInstitucion;
+                $institucion_idInstitucion  = $validar[0]->institucion_idInstitucion;
+                if($institucion_id != $institucion_idInstitucion){
+                    $consultarNombreInstitucionNueva = DB::SELECT("SELECT nombreInstitucion FROM institucion WHERE idInstitucion = '$institucion_id'");
+                    $nombreInstitucion = count($consultarNombreInstitucionNueva) > 0 ? $consultarNombreInstitucionNueva[0]->nombreInstitucion : null;
+                    //actual
+                }
+                //usuario ya existe
+                $dataUsuarios[$key] =[
+                    "idusuario"         => $validar[0]->idusuario,
+                    "cedula"            => $item->cedula,
+                    "nombres_bd"        => $validar[0]->nombres,
+                    "nombres"           => $item->nombres,
+                    "apellidos_bd"      => $validar[0]->apellidos,
+                    "apellidos"         => $item->apellidos,
+                    "email_bd"          => $validar[0]->email,
+                    "correo"            => $item->correo,
+                    "nombreInstitucion" => $nombreInstitucion,
+                    "nombreInstitucion_db" => $validar[0]->nombreInstitucion,
+                    "grupo"             => $validar[0]->grupo,
+                    "estado_usuario"    => $validar[0]->estado_usuario,
+                    "estadoUsuario"     => $validar[0]->estadoUsuario,
+                    "institucion_id"    => $institucion_id,
+                ];
+            }
+            else{
+                //usuario no existe
+                $item->mensaje = "Usuario no encontrado";
+                $usuariosNoEncontrados[] = $item;
+            }
+        }
+        return [
+            "usuariosNoEncontrados" => $usuariosNoEncontrados,
+            "dataUsuarios" => $dataUsuarios
+        ];
+    }
+
+    public function getUsuarioCedula($cedula){
+        $user = DB::SELECT("SELECT u.*, i.nombreInstitucion, g.level as grupo,
+        u.estado_idEstado as estadoUsuario,
+        -- estado_idEstado 1 activo else inactivo
+        CASE
+            WHEN u.estado_idEstado = 1 THEN 'Activo'
+            ELSE 'Inactivo'
+        END AS estado_usuario
+         FROM usuario u
+        LEFT JOIN institucion i ON u.institucion_idInstitucion = i.idInstitucion
+        LEFT JOIN sys_group_users g ON u.id_group = g.id
+        WHERE u.cedula = '$cedula'
+        ");
+        return $user;
+    }
+
+    public function getUsuarioEmail($email){
+        $user = DB::SELECT("SELECT * FROM usuario u
+        WHERE u.email = '$email'
+        ");
+        return $user;
     }
 }

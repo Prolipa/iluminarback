@@ -305,6 +305,39 @@ class PedidosController extends Controller
         if($request->informacionPedido){
             return $this->informacionPedido($request);
         }
+        // VALIDAR GENERAR NUEVO DESDE PEDIDO ANTERIOR
+        if ($request->generarNuevo == 'yes') {
+            // Obtener pedido anterior
+            $pedidoAnterior = DB::select("
+                SELECT id_periodo, id_institucion
+                FROM pedidos
+                WHERE id_pedido = ?
+                LIMIT 1
+            ", [$request->pedidoAnterior]);
+            if (empty($pedidoAnterior)) {
+                return [
+                    "status"  => 0,
+                    "message" => "No se encontró el pedido anterior"
+                ];
+            }
+            $idPeriodo     = $pedidoAnterior[0]->id_periodo;
+            $idInstitucion = $pedidoAnterior[0]->id_institucion;
+            // Verificar existencia en fichero_mercado
+            $existeFichero = DB::select("
+                SELECT fm_id
+                FROM fichero_mercado
+                WHERE idInstitucion = ?
+                AND idperiodoescolar = ?
+                AND fm_estado = '3'
+                LIMIT 1
+            ", [$idInstitucion, $idPeriodo]);
+            if (empty($existeFichero)) {
+                return [
+                    "status"  => 0,
+                    "message" => "No se puede generar el pedido. No existe Fichero de Mercado aprobado para este establecimiento y periodo."
+                ];
+            }
+        }
         //validar un pedido de institucion por periodo solo para cuando va a guardar no el editar
         if( $request->id_pedido ){
         }else{
@@ -429,11 +462,11 @@ class PedidosController extends Controller
             if($request->generarNuevo == 'yes'){
                 //JEYSON METODOS
                 //Si se genera un pedido apartir de un  pedido anulado (cambiar id periodo inicio)mixinIdInicioFormatoNewData
-                if($request->periodo <= 4){
+                if($request->periodo <= 26){
                     //Si se genera un pedido apartir de un  pedido anulado
                     $this->changeBeneficiariosLibros($request->pedidoAnterior,$pedido->id_pedido);
                     // (cambiar id periodo inicio)mixinIdInicioFormatoNewData
-                }else if($request->periodo > 4){
+                }else if($request->periodo > 26){
                     $this->changeBeneficiariosLibros_new($request->pedidoAnterior,$pedido->id_pedido);
                 }
                 //CAMBIAR PEDIDO  EN PROCESO A PEDIDO CREADO-> actualizar la fecha de creacion de pedido
@@ -2974,7 +3007,7 @@ class PedidosController extends Controller
         $tipo  = 0;
         $idVerificacion = 0;
         $searchPedido = DB::SELECT("SELECT * FROM pedidos p
-            WHERE p.estado  ='1'
+            WHERE p.estado  in('0','1')
             AND p.id_institucion = '$institucion'
             AND p.id_periodo = '$periodo'
         ");
@@ -4420,7 +4453,7 @@ class PedidosController extends Controller
                 //===PROCESO======
                 //ACTUALIZAR DETALLE DE VENTA
                 //METODO MODIFICADO JEYSON (cambiar id periodo inicio)mixinIdInicioFormatoNewData
-            if ($id_periodo <= 4) {
+            if ($id_periodo <= 26) {
                 $nuevoIngreso       = $this->get_val_pedidoInfo_alcance($id_pedido,$id_alcance);
                 if(!empty($nuevoIngreso)){
                     // foreach($nuevoIngreso as $key => $item){
@@ -4485,7 +4518,7 @@ class PedidosController extends Controller
                     return ["status" => "0", "message" => "El alcance # $id_alcance del contrato $contrato no existe valores"];
                 }
                 // (cambiar id periodo inicio)mixinIdInicioFormatoNewData
-            }else if ($id_periodo > 4) {
+            }else if ($id_periodo > 26) {
                 $nuevoIngreso       = $this->get_val_pedidoInfo_alcance_new($id_pedido,$id_alcance);
                 if(!empty($nuevoIngreso)){
                     // foreach($nuevoIngreso as $key => $item){
@@ -5324,13 +5357,27 @@ class PedidosController extends Controller
             set_time_limit(6000000);
             ini_set('max_execution_time', 6000000);
             $beneficiarios                = json_decode($request->beneficiarios);
+            $actualizoPrimeroBeneficiario = false;
             foreach($beneficiarios as $key => $item){
                 $porcentaje = Beneficiarios::findOrFail($item->id_beneficiario_pedido);
                 $porcentaje->porcentaje_real = $item->porcentajeReal;
                 $porcentaje->comision_real   = $item->valorPorcentajeReal;
                 $porcentaje->save();
             }
-            return ["status" => "1", "message" => "Se guardo correctamente"];
+            // validar si hay beneficiarios
+            if(count($beneficiarios) > 0){
+                // pedido
+                $id_pedido = $beneficiarios[0]->id_pedido;
+                $pedido    = Pedidos::findOrFail($id_pedido);
+                /// validar si id_responsable es null o vacio asignar el primer beneficiario
+                if($pedido->id_responsable == null || $pedido->id_responsable == "" || $pedido->id_responsable == "null"){
+                    $primerBeneficiario = $beneficiarios[0]->id_usuario;
+                    $pedido->id_responsable = $primerBeneficiario;
+                    $pedido->save();
+                    $actualizoPrimeroBeneficiario = true;
+                }
+            }
+            return ["status" => "1", "message" => "Se guardo correctamente", "actualizoPrimeroBeneficiario" => $actualizoPrimeroBeneficiario];
         }
     }
     //api:post/actualizarPedido

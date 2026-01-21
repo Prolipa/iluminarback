@@ -27,13 +27,21 @@ class VerificacionDescuentoController extends Controller
         if($request->limpiarDescuentos)         { return $this->limpiarDescuentos(); }
     }
     //verificacionesDescuentos?getListadoDescuentos=yes&contrato=C-S23-0000014-DC&num_verificacion=1
-    public function getListadoDescuentos($contrato,$num_verificacion){
-        $query = VerificacionDescuento::Where('contrato',$contrato)
-        ->Where('num_verificacion',$num_verificacion)
-        ->OrderBy('id','ASC')
-        ->get();
+    public function getListadoDescuentos($contrato, $num_verificacion)
+    {
+        $query = VerificacionDescuento::where('contrato', $contrato)
+            ->where('num_verificacion', $num_verificacion)
+            ->leftJoin('usuario as uc', 'uc.idusuario', '=', 'verificaciones_descuentos.user_created')
+            ->select(
+                'verificaciones_descuentos.*',
+                DB::raw("CONCAT(uc.nombres, ' ', uc.apellidos) AS creador")
+            )
+            ->orderBy('verificaciones_descuentos.id', 'ASC')
+            ->get();
+
         return $query;
     }
+
     public function getDescuentosVerificacion($request){
         $verificaciones_descuentos_id   = $request->verificaciones_descuentos_id;
         $contrato                       = $request->contrato;
@@ -369,7 +377,7 @@ class VerificacionDescuentoController extends Controller
 
     //INICIO METODOS JEYSON
     public function getDescuentosVerificacion_new($request){
-        
+
         $verificaciones_descuentos_id   = $request->verificaciones_descuentos_id;
         $contrato                       = $request->contrato;
         $periodo                        = $request->periodo_id;

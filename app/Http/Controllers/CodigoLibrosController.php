@@ -1147,7 +1147,7 @@ class CodigoLibrosController extends Controller
             ib.nombreInstitucion as institucionBarra,
             pb.periodoescolar as periodo_barras, ivl.nombreInstitucion as InstitucionLista,
             c.codigo_proforma, c.proforma_empresa, c.combo, c.codigo_combo, ls.codigo_liquidacion,
-            c.documento_devolucion, c.plus, c.quitar_de_reporte
+            c.documento_devolucion, c.plus, c.quitar_de_reporte, c.devuelto_proforma,c.documento_devolucion
             FROM codigoslibros c
             LEFT JOIN institucion ib ON c.bc_institucion = ib.idInstitucion
             LEFT JOIN institucion ivl ON c.venta_lista_institucion = ivl.idInstitucion

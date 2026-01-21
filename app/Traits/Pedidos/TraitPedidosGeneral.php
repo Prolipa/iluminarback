@@ -2,6 +2,7 @@
 
 namespace App\Traits\Pedidos;
 
+use App\Models\_14Empresa;
 use App\Models\Models\Pedidos\PedidosDocumentosLiq;
 use App\Models\Pedidos;
 use App\Models\PedidoValArea;
@@ -10,10 +11,10 @@ use Illuminate\Support\Facades\Http;
 trait TraitPedidosGeneral
 {
     //=====PERSEO=======
-    public $api_keyProlipaProduction    = "RfVaC9hIMhn49J4jSq2_I_50FLWFrX8qOhXa9PacnqU-";
-    public $api_keyCalmedProduction     = "RfVaC9hIMhn49J4jSq2_I8kXMeIRjM.3WlDNPyOqfu0";
-    public $api_keyProlipaLocal         = "RfVaC9hIMhn49J4jSq2_IzB1.iNzqGb9M38jmd1DfQs-";
-    public $api_keyCalmedLocal          = "RfVaC9hIMhn49J4jSq2_I5FdjyUYFOLEGVaHnPJ9Pyw-";
+    // public $api_keyProlipaProduction    = "RfVaC9hIMhn49J4jSq2_I_50FLWFrX8qOhXa9PacnqU-";
+    // public $api_keyCalmedProduction     = "RfVaC9hIMhn49J4jSq2_I8kXMeIRjM.3WlDNPyOqfu0";
+    // public $api_keyProlipaLocal         = "RfVaC9hIMhn49J4jSq2_IzB1.iNzqGb9M38jmd1DfQs-";
+    // public $api_keyCalmedLocal          = "RfVaC9hIMhn49J4jSq2_I5FdjyUYFOLEGVaHnPJ9Pyw-";
     //=====END PERSEO=======
     //=====SOLINFA==========
     public $api_KeyGONZALEZ             = "RfVaC9hIMhn49J4jSq2_Iw3h5qF1Dg0ecy.kFTzdqnA-";
@@ -24,9 +25,7 @@ trait TraitPedidosGeneral
     public $tr_rutaCedulaDominio        = "https://app3902.privynote.net";
     public $tr_rutaCedulaRegistroCivil  = "https://app3902.privynote.net/api/v1/client/find-names";
     public $tr_rutaRucSRI               = "https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest/ConsolidadoContribuyente/obtenerPorNumerosRuc";
-    public $tr_periodoPedido            = 4;
-    public $gl_perseoProduccion         = 1;
-    // public $ipLocal        = "http://localhost:5000/api/";
+    public $tr_periodoPedido            = 26;
     public function FacturacionGet($endpoint)
     {
         $dato = Http::get($this->ipProlipa.$endpoint);
@@ -38,21 +37,25 @@ trait TraitPedidosGeneral
     }
     //===PERSEO PROLIPA===
     public function tr_PerseoPost($endpoint,$data,$empresa=1){
-        //empresa 1 => prolipa; 3 => calmed
-        $dato = [];
-        if ($this->gl_perseoProduccion == 1) {
-            //agregar la api key al array de data
-            if($empresa == 1){ $data['api_key'] = $this->api_keyProlipaProduction; }
-            if($empresa == 3){ $data['api_key'] = $this->api_keyCalmedProduction;  }
+        try {
+            //empresa 1 => prolipa; 3 => calmed
+            $dato = [];
+            //Obtener la empresa desde la base de datos
+            $empresaData = _14Empresa::find($empresa);
+            if(!$empresaData){
+                throw new \Exception("No se encontró la empresa con ID: " . $empresa);
+            }
+            //Obtener el token según el ambiente (perseo_enviroment: 0 = local, 1 = producción)
+            $apiKey = $empresaData->perseo_enviroment == 1 ? $empresaData->token_prod : $empresaData->token_local;
+            if(!$apiKey){
+                throw new \Exception("No se encontró el token para la empresa: " . $empresa);
+            }
+            $data['api_key'] = $apiKey;
             $dato = Http::post($this->ipPerseo.$endpoint,$data);
-
-        } else {
-           //agregar la api key al array de data
-            if($empresa == 1){ $data['api_key'] = $this->api_keyProlipaLocal; }
-            if($empresa == 3){ $data['api_key'] = $this->api_keyCalmedLocal;  }
-            $dato = Http::post($this->ipPerseo.$endpoint,$data);
+            return $jsonData = json_decode($dato, true);
+        } catch (\Exception $e) {
+            return ["status" => "0", "message" => $e->getMessage()];
         }
-        return $jsonData = json_decode($dato, true);
     }
     //==SOLINFA===
     public function tr_SolinfaPost($endpoint,$data,$empresa=1){

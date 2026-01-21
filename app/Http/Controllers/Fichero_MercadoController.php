@@ -6,6 +6,8 @@ namespace App\Http\Controllers;
 use App\Models\Fichero_Mercado;
 use App\Models\Fichero_Mercado_Autoridades;
 use App\Models\Fichero_Mercado_Detalle;
+use App\Models\Institucion;
+use App\Models\Beneficiarios;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use App\Repositories\pedidos\NotificacionRepository;
@@ -69,6 +71,12 @@ class Fichero_MercadoController extends Controller
                 return $this->Busqueda_get_Fichero_Mercado_Todo_Instituciones_Root($request);
             case 'Busqueda_get_Fichero_Mercado_Todo_Export_Completo':
                 return $this->Busqueda_get_Fichero_Mercado_Todo_Export_Completo($request);
+            case 'Listar_Ficheros_Por_Institucion':
+                return $this->Listar_Ficheros_Por_Institucion($request);
+            case 'Listar_Beneficiarios_por_insitucion_y_periodo':
+                return $this->Listar_Beneficiarios_por_insitucion_y_periodo($request);
+            case 'Verificar_EstadoFichero':
+                return $this->Verificar_EstadoFichero($request);
             default:
                 return response()->json(['error' => 'Acción no válida'], 400);
         }
@@ -94,6 +102,10 @@ class Fichero_MercadoController extends Controller
                 return $this->GuardarDatos_FicheroRechazado($request);
             case 'Fechas_Entrega_muestras_masivo':
                 return $this->Fechas_Entrega_muestras_masivo($request);
+            case 'Copiar_Informacion_Fichero_Nuevo':
+                return $this->Copiar_Informacion_Fichero_Nuevo($request);
+            case 'Eliminar_FicheroMercado':
+                return $this->Eliminar_FicheroMercado($request);
             default:
                 return response()->json(['error' => 'Acción no válida'], 400);
         }
@@ -493,6 +505,18 @@ class Fichero_MercadoController extends Controller
             // LEFT JOIN de usuarios creador y editor
             ->leftJoin('usuario as usercreated', 'fm.user_created', '=', 'usercreated.idusuario')
             ->leftJoin('usuario as user_edit', 'fm.user_edit', '=', 'user_edit.idusuario')
+            // LEFT JOIN verificar pedidos
+            ->leftJoin('pedidos as ped', function ($join) {
+                $join->on('ped.id_pedido', '=', DB::raw("(
+                    SELECT p.id_pedido
+                    FROM pedidos p
+                    WHERE p.id_institucion = fm.idInstitucion
+                    AND p.id_periodo = fm.idperiodoescolar
+                    AND p.estado IN (0,1,2)
+                    ORDER BY p.created_at DESC
+                    LIMIT 1
+                )"));
+            })
             // LEFT JOIN a usuarios desde JSON usando DB::raw
             ->leftJoin('usuario as user_envia', DB::raw('user_envia.idusuario'), '=', DB::raw("JSON_UNQUOTE(JSON_EXTRACT(fm.info_enviar_para_aprobacion, '$.user_envia_para_aprobacion'))"))
             ->leftJoin('usuario as user_aprob', DB::raw('user_aprob.idusuario'), '=', DB::raw("JSON_UNQUOTE(JSON_EXTRACT(fm.info_aprobacion, '$.user_aprobacion'))"))
@@ -520,6 +544,9 @@ class Fichero_MercadoController extends Controller
                 'usercreated.apellidos as usercreated_apellidos',
                 'user_edit.nombres as user_edit_nombres',
                 'user_edit.apellidos as user_edit_apellidos',
+                // Campos de pedidos
+                'ped.id_pedido',
+                'ped.estado as estado_pedido',
                 // Campos de usuarios del JSON
                 'user_envia.nombres as user_envia_nombres',
                 'user_envia.apellidos as user_envia_apellidos',
@@ -552,6 +579,18 @@ class Fichero_MercadoController extends Controller
             // LEFT JOIN de usuarios creador y editor
             ->leftJoin('usuario as usercreated', 'fm.user_created', '=', 'usercreated.idusuario')
             ->leftJoin('usuario as user_edit', 'fm.user_edit', '=', 'user_edit.idusuario')
+            // LEFT JOIN verificar pedidos
+            ->leftJoin('pedidos as ped', function ($join) {
+                $join->on('ped.id_pedido', '=', DB::raw("(
+                    SELECT p.id_pedido
+                    FROM pedidos p
+                    WHERE p.id_institucion = fm.idInstitucion
+                    AND p.id_periodo = fm.idperiodoescolar
+                    AND p.estado IN (0,1,2)
+                    ORDER BY p.created_at DESC
+                    LIMIT 1
+                )"));
+            })
             // LEFT JOIN a usuarios desde JSON usando DB::raw
             ->leftJoin('usuario as user_envia', DB::raw('user_envia.idusuario'), '=', DB::raw("JSON_UNQUOTE(JSON_EXTRACT(fm.info_enviar_para_aprobacion, '$.user_envia_para_aprobacion'))"))
             ->leftJoin('usuario as user_aprob', DB::raw('user_aprob.idusuario'), '=', DB::raw("JSON_UNQUOTE(JSON_EXTRACT(fm.info_aprobacion, '$.user_aprobacion'))"))
@@ -579,6 +618,9 @@ class Fichero_MercadoController extends Controller
                 'usercreated.apellidos as usercreated_apellidos',
                 'user_edit.nombres as user_edit_nombres',
                 'user_edit.apellidos as user_edit_apellidos',
+                // Campos de pedidos
+                'ped.id_pedido',
+                'ped.estado as estado_pedido',
                 // Campos de usuarios del JSON
                 'user_envia.nombres as user_envia_nombres',
                 'user_envia.apellidos as user_envia_apellidos',
@@ -717,6 +759,45 @@ class Fichero_MercadoController extends Controller
             'total' => $ficheros->count(),
             'data' => $ficheros
         ]);
+    }
+    public function Listar_Ficheros_Por_Institucion($request){
+        $idInstitucion = $request->idInstitucion;
+        $query = DB::SELECT("SELECT fm.fm_id, fm.idperiodoescolar, fm.fm_estado, pe.descripcion AS descripcion_periodoescolar, fm.idInstitucion
+            FROM fichero_mercado fm
+            LEFT JOIN periodoescolar pe ON fm.idperiodoescolar = pe.idperiodoescolar
+            WHERE fm.idInstitucion = $idInstitucion
+            ORDER BY fm.idperiodoescolar ASC");
+        return $query;
+    }
+    public function Listar_Beneficiarios_por_insitucion_y_periodo($request){
+        $idInstitucion = $request->institucion_id;
+        $idperiodoescolar = $request->periodo_id;
+        $query = DB::SELECT("SELECT CONCAT(us.nombres,' ', us.apellidos) AS beneficiario_nombres, us.cedula, us.email, pb.comision,
+            pb.banco, pb.num_cuenta, pb.tipo_cuenta
+            FROM pedidos_beneficiarios pb
+            LEFT JOIN usuario us ON pb.id_usuario = us.idusuario
+            WHERE pb.idInstitucion = $idInstitucion
+            AND pb.idperiodoescolar = $idperiodoescolar");
+        return $query;
+    }
+    public function Verificar_EstadoFichero($request){
+        $fm_id = $request->fm_id;
+        $query = DB::SELECT("SELECT fm.fm_id, fm.idInstitucion, fm.asesor_id, fm.idperiodoescolar, fm.fm_estado,
+            ins.nombreInstitucion, pe.id_pedido, pe.estado AS estado_pedido
+            FROM fichero_mercado fm
+            LEFT JOIN institucion ins ON ins.idInstitucion = fm.idInstitucion
+            LEFT JOIN pedidos pe
+            ON pe.id_pedido = (
+                SELECT p.id_pedido
+                FROM pedidos p
+                WHERE p.id_institucion = fm.idInstitucion
+                  AND p.id_periodo = fm.idperiodoescolar
+                  AND p.estado IN (0,1,2)
+                ORDER BY p.created_at DESC
+                LIMIT 1
+            )
+            WHERE fm.fm_id = $fm_id");
+        return $query;
     }
     // METODOS GET FIN
     // METODOS POST INICIO
@@ -1189,5 +1270,321 @@ class Fichero_MercadoController extends Controller
             ]);
         }
     }
+
+    public function Copiar_Informacion_Fichero_Nuevo(Request $request)
+    {
+        // return $request;
+        DB::beginTransaction();
+        try {
+            // =====================================================
+            // 1. Datos del request
+            // =====================================================
+            $fm_id_Origen     = $request->input('idFicheroOrigen');
+            $idPeriodoDestino = $request->input('idPeriodoDestino');
+            $idPeriodoOrigen  = $request->input('idPeriodoOrigen');
+            $idInstitucion    = $request->input('idInstitucion');
+            $user_created     = $request->input('user_created');
+            $secciones        = $request->input('secciones_a_copiar', []);
+            if (!$fm_id_Origen || !$idPeriodoDestino || !$idInstitucion || !$user_created) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'Faltan datos requeridos.'
+                ]);
+            }
+            // =====================================================
+            // 2. Buscar fichero origen
+            // =====================================================
+            $ficheroOrigen = Fichero_Mercado::find($fm_id_Origen);
+            if (!$ficheroOrigen) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'El fichero origen no existe.'
+                ]);
+            }
+            // =====================================================
+            // 3. Obtener asesor_id desde institución
+            // =====================================================
+            $institucion = Institucion::where('idInstitucion', $idInstitucion)->first();
+            if (!$institucion) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'La institución no existe.'
+                ]);
+            }
+            $asesor_id = $institucion->asesor_id;
+            // =====================================================
+            // 4. DEFAULTS (CUANDO SECCIÓN = FALSE)
+            // =====================================================
+            $defaultFactores = [
+                "precio" => false,
+                "contenido" => false,
+                "pedagogia" => false,
+                "servicios" => false
+            ];
+            $defaultNivelesEducativos = [
+                "iniciales" => false,
+                "preparatoria" => false,
+                "elemental" => false,
+                "medio" => false,
+                "superior" => false,
+                "bachillerato" => false
+            ];
+            $defaultPensiones = [
+                "iniciales" => null,
+                "preparatoria" => null,
+                "elemental" => null,
+                "medio" => null,
+                "superior" => null,
+                "bachillerato" => null
+            ];
+            $defaultNumeroAulas = [
+                ["idnivel"=>18,"numeroAulas"=>0],
+                ["idnivel"=>19,"numeroAulas"=>0],
+                ["idnivel"=>4,"numeroAulas"=>0],
+                ["idnivel"=>5,"numeroAulas"=>0],
+                ["idnivel"=>6,"numeroAulas"=>0],
+                ["idnivel"=>7,"numeroAulas"=>0],
+                ["idnivel"=>8,"numeroAulas"=>0],
+                ["idnivel"=>9,"numeroAulas"=>0],
+                ["idnivel"=>11,"numeroAulas"=>0],
+                ["idnivel"=>15,"numeroAulas"=>0],
+                ["idnivel"=>16,"numeroAulas"=>0],
+                ["idnivel"=>17,"numeroAulas"=>0],
+                ["idnivel"=>20,"numeroAulas"=>0],
+                ["idnivel"=>21,"numeroAulas"=>0],
+                ["idnivel"=>22,"numeroAulas"=>0],
+            ];
+            $defaultEstudiantesXAula = array_map(function ($n) {
+                return [
+                    "idnivel" => $n["idnivel"],
+                    "estudiantesXAula" => []
+                ];
+            }, $defaultNumeroAulas);
+            // =====================================================
+            // 5. Crear nuevo Fichero_Mercado
+            // =====================================================
+            $nuevoFichero = $ficheroOrigen->replicate();
+            $nuevoFichero->idperiodoescolar = $idPeriodoDestino;
+            $nuevoFichero->asesor_id = $asesor_id;
+            // ---------------- DATOS COMERCIALES ----------------
+            if (!($secciones['datos_comerciales'] ?? false)) {
+                $nuevoFichero->fm_trabaja_con_prolipa = 1;
+                $nuevoFichero->fm_convenio = 0;
+                $nuevoFichero->fm_cantidad_anios_trabaja_con_prolipa = null;
+                $nuevoFichero->fm_tipo_venta = null;
+            }
+            // ---------------- FACTORES ----------------
+            if (!($secciones['factores'] ?? false)) {
+                $nuevoFichero->fm_factores_inciden_en_compra = json_encode($defaultFactores);
+            }
+            // ---------------- AULAS ----------------
+            if (!($secciones['aulas'] ?? false)) {
+                $nuevoFichero->fm_niveles_educativos = json_encode($defaultNivelesEducativos);
+                $nuevoFichero->fm_pensiones = json_encode($defaultPensiones);
+                $nuevoFichero->fm_numero_aulas_completo = json_encode($defaultNumeroAulas);
+                $nuevoFichero->fm_cantidad_estudiantes_x_aula_completo = json_encode($defaultEstudiantesXAula);
+                $nuevoFichero->fm_SumaTotal_EstudiantesxAula = 0;
+                $nuevoFichero->fm_cantidad_real_estudiantes = 0;
+            }
+            // ---------------- OBSERVACIÓN ----------------
+            if (!($secciones['observacion'] ?? false)) {
+                $nuevoFichero->fm_observacion = null;
+            }
+            // ---------------- RESET DE ESTADOS ----------------
+            $nuevoFichero->fm_fecha_aprobacion_definicion = null;
+            $nuevoFichero->fm_estado = '1';
+            $nuevoFichero->info_enviar_para_aprobacion = null;
+            $nuevoFichero->info_aprobacion = null;
+            $nuevoFichero->info_rechazo = null;
+            // Auditoría
+            $nuevoFichero->user_created = $user_created;
+            $nuevoFichero->user_edit = $user_created;
+            $nuevoFichero->created_at = now();
+            $nuevoFichero->updated_at = now();
+            $nuevoFichero->save();
+            $nuevoFmId = $nuevoFichero->fm_id;
+            // =====================================================
+            // 6. EDITORIALES (Fichero_Mercado_Detalle)
+            // =====================================================
+            if ($secciones['editoriales'] ?? false) {
+                $detalles = Fichero_Mercado_Detalle::where('fm_id', $fm_id_Origen)->get();
+                foreach ($detalles as $detalle) {
+                    $nuevoDetalle = $detalle->replicate();
+                    $nuevoDetalle->fm_id = $nuevoFmId;
+                    $nuevoDetalle->created_at = now();
+                    $nuevoDetalle->updated_at = now();
+                    $nuevoDetalle->save();
+                }
+            }
+            // =====================================================
+            // 7. PERSONAL (Fichero_Mercado_Autoridades)
+            // =====================================================
+            if ($secciones['personal'] ?? false) {
+                $autoridades = Fichero_Mercado_Autoridades::where('fm_id', $fm_id_Origen)->get();
+                foreach ($autoridades as $autoridad) {
+                    $nuevaAutoridad = $autoridad->replicate();
+                    $nuevaAutoridad->fm_id = $nuevoFmId;
+                    $nuevaAutoridad->created_at = now();
+                    $nuevaAutoridad->updated_at = now();
+                    $nuevaAutoridad->save();
+                }
+            }
+            // =====================================================
+            // 8. BENEFICIARIOS (pedidos_beneficiarios)
+            // =====================================================
+            if ($secciones['beneficiarios'] ?? false) {
+                $beneficiarios = Beneficiarios::where('idInstitucion', $idInstitucion)
+                    ->where('idperiodoescolar', $idPeriodoOrigen)
+                    ->get();
+                foreach ($beneficiarios as $beneficiario) {
+                    $nuevoBeneficiario = $beneficiario->replicate();
+                    $nuevoBeneficiario->id_beneficiario_pedido = null;
+                    $nuevoBeneficiario->id_pedido = 0;
+                    $nuevoBeneficiario->idperiodoescolar = $idPeriodoDestino;
+                    $nuevoBeneficiario->valor = 0;
+                    $nuevoBeneficiario->porcentaje_real = 0.00;
+                    $nuevoBeneficiario->comision_real = 0.00;
+                    $nuevoBeneficiario->verificado = 0;
+                    $nuevoBeneficiario->fecha_verificacion = null;
+                    $nuevoBeneficiario->user_verificado = null;
+                    $nuevoBeneficiario->estado = 1;
+                    $nuevoBeneficiario->created_at = now();
+                    $nuevoBeneficiario->updated_at = now();
+                    $nuevoBeneficiario->save();
+                }
+            }
+
+            DB::commit();
+            return response()->json([
+                'status' => 1,
+                'message' => 'Fichero copiado correctamente.',
+                'fm_id_nuevo' => $nuevoFmId
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 0,
+                'message' => 'Error al copiar el fichero.',
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+    public function Eliminar_FicheroMercado(Request $request)
+    {
+        DB::beginTransaction();
+        try {
+            $fm_id = $request->input('fm_id');
+            if (!$fm_id) {
+                return response()->json([
+                    'status'  => 0,
+                    'message' => 'fm_id es requerido.'
+                ]);
+            }
+            /* ===============================
+            * 1. CONSULTA PRINCIPAL DE VALIDACIÓN
+            * =============================== */
+            $query = DB::select("SELECT
+                    fm.fm_id,
+                    fm.idInstitucion,
+                    fm.idperiodoescolar,
+                    fm.fm_estado,
+                    pe.id_pedido,
+                    pe.estado AS estado_pedido
+                FROM fichero_mercado fm
+                LEFT JOIN pedidos pe
+                    ON pe.id_pedido = (
+                        SELECT p.id_pedido
+                        FROM pedidos p
+                        WHERE p.id_institucion = fm.idInstitucion
+                        AND p.id_periodo = fm.idperiodoescolar
+                        AND p.estado IN (0,1,2)
+                        ORDER BY p.created_at DESC
+                        LIMIT 1
+                    )
+                WHERE fm.fm_id = ?
+            ", [$fm_id]);
+            if (empty($query)) {
+                return response()->json([
+                    'status'  => 0,
+                    'message' => 'Fichero de mercado no encontrado.'
+                ]);
+            }
+            $data = $query[0];
+            /* ===============================
+            * 2. VALIDACIONES DE ESTADOS
+            * =============================== */
+            // Validar fm_estado controlado
+            if (!in_array($data->fm_estado, ['0','1','2','3','4'])) {
+                return response()->json([
+                    'status'  => 0,
+                    'message' => 'Estado del fichero no controlado.'
+                ]);
+            }
+            // Caso: pedido activo
+            if (
+                !is_null($data->id_pedido) &&
+                in_array($data->estado_pedido, [0,1])
+            ) {
+                return response()->json([
+                    'status'  => 0,
+                    'message' => 'No se puede eliminar: tiene un pedido activo.'
+                ]);
+            }
+            // Caso permitido:
+            // - sin pedido
+            // - pedido cerrado (estado 2)
+            /* ===============================
+            * 3. ELIMINACIONES
+            * =============================== */
+            // 3.1 Detalle
+            DB::table('fichero_mercado_detalle')
+                ->where('fm_id', $fm_id)
+                ->delete();
+            // 3.2 Autoridades
+            DB::table('fichero_mercado_autoridades')
+                ->where('fm_id', $fm_id)
+                ->delete();
+            // 3.3 Beneficiarios (por periodo + institución)
+            DB::table('pedidos_beneficiarios')
+                ->where('idperiodoescolar', $data->idperiodoescolar)
+                ->where('idInstitucion', $data->idInstitucion)
+                ->delete();
+            // 3.4 Fichero Mercado (FINAL)
+            DB::table('fichero_mercado')
+                ->where('fm_id', $fm_id)
+                ->delete();
+            $this->ActualizarAutoIncrementable_TodoFichero_Beneficiarios();
+            DB::commit();
+            return response()->json([
+                'status'  => 1,
+                'message' => 'Fichero de mercado eliminado correctamente.'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status'  => 0,
+                'message' => 'Error al eliminar el fichero.',
+                'error'   => $e->getMessage()
+            ]);
+        }
+    }
     // METODOS POST FIN
+    // METODOS PRIVADOS INICIO
+    private function ActualizarAutoIncrementable_TodoFichero_Beneficiarios()
+    {
+        // Reajustar el autoincremento de fichero_mercado
+        $ultimoId_Fichero_Mercado  = Fichero_Mercado::max('fm_id') + 1;
+        DB::statement('ALTER TABLE fichero_mercado AUTO_INCREMENT = ' . $ultimoId_Fichero_Mercado);
+        // Reajustar el autoincremento de fichero_mercado_autoridades
+        $ultimoId_Fichero_Mercado_Autoridades  = Fichero_Mercado_Autoridades::max('fma_id') + 1;
+        DB::statement('ALTER TABLE fichero_mercado_autoridades AUTO_INCREMENT = ' . $ultimoId_Fichero_Mercado_Autoridades);
+        // Reajustar el autoincremento de fichero_mercado_detalle
+        $ultimoId_Fichero_Mercado_Detalle  = Fichero_Mercado_Detalle::max('fmd_id') + 1;
+        DB::statement('ALTER TABLE fichero_mercado_detalle AUTO_INCREMENT = ' . $ultimoId_Fichero_Mercado_Detalle);
+        // Reajustar el autoincremento de pedidos_beneficiarios
+        $ultimoId_pedidos_beneficiarios  = Beneficiarios::max('id_beneficiario_pedido') + 1;
+        DB::statement('ALTER TABLE pedidos_beneficiarios AUTO_INCREMENT = ' . $ultimoId_pedidos_beneficiarios);
+    }
+    // METODOS PRIVADOS FIN
 }

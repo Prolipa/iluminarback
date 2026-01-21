@@ -65,3 +65,6 @@ Route::post('/mobile/editarPerfil', 'UsuarioController@UpdateMobilePerfilUsuario
 // Get message
 Route::post('/send-message', [
     AiMessageController::class, 'sendMessage']);
+Route::post('pruebatest','Pedidos2Controller@getRucBusqueda');
+Route::get('gemini-models', 'AdminController@listModels');
+Route::post('groq-proxy', 'AdminController@groqProxy');

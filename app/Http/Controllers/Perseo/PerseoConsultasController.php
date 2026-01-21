@@ -108,7 +108,8 @@ class PerseoConsultasController extends Controller
         try {
             $formData   = [];
             $url        = "bancos_consulta";
-            $process    = $this->tr_PerseoPost($url, $formData);
+            $id_empresa = $request->input('id_empresa',1);
+            $process    = $this->tr_PerseoPost($url, $formData,$id_empresa);
             return $process;
         } catch (\Exception $e) {
             return response()->json([

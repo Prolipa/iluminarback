@@ -693,8 +693,9 @@ class CodigosLibrosController extends Controller
             ];
             return $data;
         }
+
         //para mandar los codigos que esten devueltos
-        else if(($estado_liquidacion == '3' || $estado_liquidacion == '4') && $quitar_de_reporte == '0'){
+        else if(($estado_liquidacion == '3' || $estado_liquidacion == '4') && ($quitar_de_reporte == '0' || $quitar_de_reporte == null)){
             //si esta devuelto por yaneth  no mandar ticket
             $data = [
                 'status'            => '4',
@@ -931,7 +932,7 @@ class CodigosLibrosController extends Controller
             return $data;
         }
         //para mandar los codigos que esten devueltos
-        else if(($estado_liquidacion == '3' || $estado_liquidacion == '4') && $quitar_de_reporte == '0'){
+        else if(($estado_liquidacion == '3' || $estado_liquidacion == '4') && ($quitar_de_reporte == '0' || $quitar_de_reporte == null)){
             //si esta devuelto por yaneth  no mandar ticket
             $data = [
                 'status'            => '4',

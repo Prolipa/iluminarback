@@ -26,7 +26,7 @@ class PerseoTransaccionController extends Controller
     public function __construct(PerseoConsultasRepository $perseoConsultasRepository)
     {
         $this->perseoConsultaReposiory = $perseoConsultasRepository;
-        $this->perseoProduccion = $this->gl_perseoProduccion; // Asignar en el constructor
+        $this->perseoProduccion = 1; // Asignar en el constructor
     }
     /*
         Procedimiento para insertar una nueva proforma en el sistema contable de acuerdo con los datos que se envía en formato JSON.

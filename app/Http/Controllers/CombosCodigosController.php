@@ -318,26 +318,52 @@ class CombosCodigosController extends Controller
             DB::beginTransaction();
             $codigos                = json_decode($request->data_codigos);
             $id_usuario             = $request->id_usuario;
-            $NoEliminados           = [];
+            $arrayProblemasCombos   = [];
             $porcentaje             = 0;
-            $contador               = 0;
-            $codigosNoExisten       = [];
-            $codigosBloqueados      = [];
-            $contadorNoExisten      = 0;
-            $contadorNoEliminados   = 0;
-            $contadorBloqueados     = 0;
             $observacion            = $request->observacion;
             $periodo_id             = $request->periodo_id;
+            $arrayProblemasCodigosIndividuales  = [];
             $institucion_id         = 0;
             foreach($codigos as $key => $item){
                 $consulta = $this->getExistsCombo($item->codigo);
                 //si ya existe el codigo lo mando a un array
                 if(count($consulta) > 0){
                     $estadoCombo = $consulta[0]->estado;
+
                     //si el estado es 0 es que el combo esta utilizado
                     if($estadoCombo != 2){
+                        $arrayLiquidados = [];
                         //estado 0 => combo utilizado; 1 => combo no utilizado; 2 => combo bloqueado
-                        $arrayCodigos = codigoslibros::where('codigo_combo', $item->codigo)->get();
+                        $arrayCodigos = Codigoslibros::where('codigo_combo', $item->codigo)->get();
+                        if(count($arrayCodigos) == 0){
+                            $arrayProblemasCombos[] = [
+                                "problema"       => "No tiene códigos el combo etiqueta",
+                                "codigo"         => $item->codigo
+                            ];
+                            //continuar con el siguiente combo
+                            continue;
+                        }
+
+                        // Validar si alguno de los códigos está liquidado
+                        $arrayLiquidados = Codigoslibros::where('codigo_combo', $item->codigo)
+                        ->leftJoin('institucion as i', 'codigoslibros.bc_institucion', '=', 'i.idInstitucion')
+                        ->where('estado_liquidacion', 0)
+                        ->select('codigoslibros.codigo','i.nombreInstitucion')
+                        ->get();
+                        if(count($arrayLiquidados) > 0){
+                            //guardar en arrayProblemasCodigosIndividuales
+                            foreach($arrayLiquidados as $key2 => $item2){
+                                $arrayProblemasCodigosIndividuales[] = [
+                                    "codigo"         => $item2->codigo,
+                                    "problema"       => "NO SE PUEDE DEVOLVER O LIMPIAR EL COMBO, CUANDO EXISTEN CODIGOS LIQUIDADOS",
+                                    "combo_etiqueta" => $item->codigo,
+                                    'nombreInstitucion' => $item2->nombreInstitucion ?? 'Sin Institución'
+                                ];
+                            }
+                            //continuar con el siguiente combo
+                            continue;
+                        }
+
                         //historico codigos
                         foreach($arrayCodigos as $key2 => $item2){
                             $oldvalues = [];
@@ -346,7 +372,7 @@ class CombosCodigosController extends Controller
                             $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $item2->codigo, $id_usuario, $comentario, $oldvalues[0], null);
                         }
                         //limpiar el combo de los codigos
-                        codigoslibros::where('codigo_combo', $item->codigo)->update([
+                        CodigosLibros::where('codigo_combo', $item->codigo)->update([
                             'codigo_combo'         => null,
                             'fecha_registro_combo'    => null,
                         ]);
@@ -366,30 +392,24 @@ class CombosCodigosController extends Controller
                     }
                     //combos bloqueados
                     else{
-                        $codigosBloqueados[$contadorBloqueados] =[
-                            "codigo" => $item->codigo,
-                            "problema" => "Combo bloqueado"
+                        $arrayProblemasCombos[] = [
+                            "problema"       => "Combo bloqueado",
+                            "codigo"         => $item->codigo
                         ];
-                        $contadorBloqueados++;
                     }
                 }
                 //combo no existen
                 else{
-                    $codigosNoExisten[$contadorNoExisten] =[
-                        "codigo" => $item->codigo,
-                        "problema" => "No existe"
+                    $arrayProblemasCombos[] = [
+                        "problema"       => "No existe",
+                        "codigo"         => $item->codigo
                     ];
-                    $contadorNoExisten++;
                 }
             }
             $data = [
                 "porcentaje"            => $porcentaje,
-                "codigosNoExisten"      => $codigosNoExisten,
-                "NoEliminados"          => $NoEliminados,
-                "contadorNoExisten"     => $contadorNoExisten,
-                "contadorNoEliminados"  => $contadorNoEliminados,
-                "contadorBloqueados"    => $contadorBloqueados,
-                "codigosBloqueados"     => $codigosBloqueados
+                "arrayProblemasCombos"  => $arrayProblemasCombos,
+                "arrayProblemasCodigos" => $arrayProblemasCodigosIndividuales,
             ];
             DB::commit();
             return $data;

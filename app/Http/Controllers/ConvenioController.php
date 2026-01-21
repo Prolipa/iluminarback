@@ -287,7 +287,7 @@ class ConvenioController extends Controller
         if($request->tresCampos)    { $datos = [ $campo1 => $valor1, $campo2 => $valor2, $campo3 => $valor3 ]; }
         if($request->cuatroCampos)  { $datos = [ $campo1 => $valor1, $campo2 => $valor2, $campo3 => $valor3 ,$campo4 => $valor4 ]; }
         $old_values         = PedidoConvenio::findOrFail($request->id);
-        if ($id_group == 22 || $id_group == 23 || $id_group == 1 && $tipoAccion == 1) {
+        if (($id_group == 22 || $id_group == 23 || $id_group == 1) && $tipoAccion == 1) {
             $datos['convenio_aprobado'] = 4; // ← Aquí estaba el problema
             $datos['usuario_aprueba'] = $user_created;
             $datos['fecha_aprobacion'] = date('Y-m-d H:i:s');
@@ -454,8 +454,12 @@ class ConvenioController extends Controller
         $datoUser = User::findOrFail($user_created);
         $id_group = $datoUser->id_group;
         //validar si es id_group 11 no puede editar convenio en estado pendiente
-        if($id_group == 11 && $convenio_aprobado == 0){
-            return ["status" => "0", "message" => "No se puede editar un convenio en estado pendiente"];
+        if($id_group == 11){
+            if($convenio_aprobado == 0){
+                // puede editar porque esta pendiente de aprobacion
+            }else{
+                return ["status" => "0", "message" => "No se puede editar un convenio en estado pendiente"];
+            }
         }
         //validar que el anio de convenios no puede ser menor a la cantidad de pedidos
         $cantidadPedidosConvenio = Pedidos::where('pedidos_convenios_id',$request->idConvenio)->where('estado','1')->count();

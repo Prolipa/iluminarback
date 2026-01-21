@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\Facturacion\Inventario\ConfiguracionGeneral;
 use App\Models\Notification;
 use Illuminate\Http\Request;
 use DB;
@@ -162,5 +163,27 @@ class ConfiguracionController extends Controller
         $query = DB::SELECT("SELECT * FROM configuracion_general c
         WHERE c.id = '$id'");
         return $query;
+    }
+
+    //API:GET/metodosGetConfiguracion
+    public function metodosGetConfiguracion(Request $request){
+        $action = $request->input('action');
+        switch ($action) {
+            case 'prueba':
+                return 'prueba';
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
+    }
+
+    //API:POST/metodosPostConfiguracion
+    public function metodosPostConfiguracion(Request $request){
+        $action = $request->input('action');
+        switch ($action) {
+            case 'prueba':
+                return 'prueba';
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
     }
 }

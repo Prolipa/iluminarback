@@ -53,6 +53,8 @@ Route::group(['prefix' => 'perseo/productos'], function () {
     Route::post('productos_subgrupos_consulta','Perseo\PerseoProductoController@productos_subgrupos_consulta');
     //consulta de existencia de productos
     Route::post('existencia_producto','Perseo\PerseoProductoController@existencia_producto');
+    //procesar metodos post productos
+    Route::post('Procesar_MetodosPost_Productos','Perseo\PerseoProductoController@Procesar_MetodosPost_Productos');
 });
 //contabilidad
 Route::group(['prefix' => 'perseo/contabilidad'], function () {

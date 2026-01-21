@@ -62,6 +62,9 @@ class _14EmpresaController extends Controller
         $dato->secuencial               = $request->secuencial;
         $dato->facturas                 = $request->facturas;
         $dato->notas                    = $request->notas;
+        $dato->token_local              = $request->token_local;
+        $dato->token_prod               = $request->token_prod;
+        $dato->perseo_enviroment        = $request->perseo_enviroment;
         if($request->img_base64 != '' || $request->img_base64 != null){
             $dato->img_base64 = $request->img_base64;
         }

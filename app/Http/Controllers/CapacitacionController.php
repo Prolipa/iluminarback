@@ -203,7 +203,7 @@ class CapacitacionController extends Controller
             // $agenda->capacitador = $request->capacitador;
             $agenda->estado_institucion_temporal = $request->estado_institucion_temporal;
             $agenda->cant_asistentes = $request->asistentes;
-            $agenda->link_reunion   = $request->link_reunion ?? null;
+            $agenda->link_reunion   = $request->link_reunion == null || $request->link_reunion == "null" ? null : $request->link_reunion;
             $agenda->editor_id = $request->editor_id ?? null ;
             $agenda->save();
             return $agenda;
@@ -562,7 +562,7 @@ class CapacitacionController extends Controller
         return $reporteMes;
     }
     //=====FIN DE FILTRO POR MESES=====
-  
+
     public function TraerCapacionesAsesor(Request $request){
         //prolipa
         $institucionesProlipa       = $this->getCapacitaciones(0,$request->id_asesor);
@@ -571,7 +571,7 @@ class CapacitacionController extends Controller
         $unirArrays                 = array_merge(array($institucionesProlipa),array($institucionesTemporales));
         $coleccionUnir              = collect($unirArrays);
         $resultado                  = $coleccionUnir->flatten(10);
-    
+
         return response()->json($resultado);
     }
     public function getCapacitaciones($tipo,$asesor){

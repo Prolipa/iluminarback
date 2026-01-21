@@ -972,18 +972,29 @@ class EstudianteController extends Controller
     public function importRegistroUsuarios(Request $request){
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
-        $estudiantes                = json_decode($request->data_codigos);
+        $estudiantes                = json_decode($request->data_usuarios);
         $registroProblemas          = [];
         $contadorProblemas          = 0;
         $contador                   = 0;
+        $mantenerGrupoActual        = $request->mantenerGrupoActual; // 1 actualizar el grupo; 0 no actualizar el grupo
+        $activarUsuariosInactivos   = $request->activarUsuariosInactivos; // 1 activar usuarios inactivos; 0 no activar usuarios inactivos
+        $tipoAccion                 = $request->tipoAccion; // 1 actualizar usuarios existentes; 0 guardar solo nuevos usuarios
         foreach($estudiantes as $key => $item){
             $errorC                     = 0;
             $errorE                     = 0;
             $errorI                     = 0;
             $problema                   = "";
+            if($tipoAccion == 1){
+                $idusuario = $item->idusuario;
             //validar si existe la cedula
-            Usuario::Where('cedula',$item->cedula)->count()   > 0 ? $errorC = 1 : $errorC = 0;
-            Usuario::Where('email',$item->correo)->count()     > 0 ? $errorE = 1 : $errorE = 0;
+                Usuario::Where('cedula',$item->cedula)->where('idusuario','<>',$idusuario)->count()   > 0 ? $errorC = 1 : $errorC = 0;
+                Usuario::Where('email',$item->correo)->where('idusuario','<>',$idusuario)->count()     > 0 ? $errorE = 1 : $errorE = 0;
+            }else{
+                //validar si existe la cedula
+                Usuario::Where('cedula',$item->cedula)->count()   > 0 ? $errorC = 1 : $errorC = 0;
+                Usuario::Where('email',$item->correo)->count()     > 0 ? $errorE = 1 : $errorE = 0;
+            }
+
             //validar si existe la institucion
             Institucion::Where('idInstitucion',$item->institucion_id)->count() > 0 ? $errorI = 0 : $errorI = 1;
             if($errorC == 1 && $errorE == 0) { $problema = "cédula ya existen"; }
@@ -992,7 +1003,11 @@ class EstudianteController extends Controller
             if($errorI == 1)                 { $problema = "Institución no existe"; }
             //si no hay errores registro el estudiante
             if($errorC == 0 && $errorE == 0 && $errorI == 0) {
-                $registro = new Usuario();
+                if($tipoAccion == 1){
+                    $registro = Usuario::find($item->idusuario);
+                }else{
+                    $registro = new Usuario();
+                }
                 $registro->nombres                      = $item->nombres;
                 $registro->apellidos                    = $item->apellidos;
                 $registro->email                        = $item->correo;
@@ -1002,6 +1017,14 @@ class EstudianteController extends Controller
                 $registro->password                     = sha1(md5($item->cedula));
                 $registro->institucion_idInstitucion    = $item->institucion_id;
                 $registro->idcreadorusuario             = $request->idusuario;
+                // actualizar grupo
+                if($mantenerGrupoActual == 0){
+                    $registro->id_group                 = $request->id_group;
+                }
+                // activar usuarios inactivos
+                if($activarUsuariosInactivos == 1){
+                    $registro->estado_idEstado           = 1; //activo
+                }
                 $registro->save();
                 if($registro){ $contador++; }
                 else{

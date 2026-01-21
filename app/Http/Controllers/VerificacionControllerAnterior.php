@@ -2624,7 +2624,7 @@ class VerificacionControllerAnterior extends Controller
             $sinPrecio              = $request->sinPrecio;
             //formData filtrar del detalles los codigos que tenga combo diferente de null y codigo_combo diferente de null
             $formData               = collect($detalles)->filter(function ($item) {
-                return $item->combo != null && $item->codigo_combo != null && ($item->quitar_de_reporte == 0 || $item->quitar_de_reporte == null);
+                return $item->estado_liquidacion != 3 && $item->combo != null && $item->codigo_combo != null && ($item->quitar_de_reporte == 0 || $item->quitar_de_reporte == null);
             })->values();
             $getAgrupadoCombos      = $this->codigoRepository->getAgrupadoCombos($formData,$getCombos);
             //unir $detalles con $getAgrupadoCombos

@@ -11,4 +11,5 @@ class _14Empresa extends Model
     protected $table = "empresas";
 
     protected $primaryKey = 'id';
+
 }

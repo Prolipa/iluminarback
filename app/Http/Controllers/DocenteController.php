@@ -110,7 +110,9 @@ class DocenteController extends Controller
 
         return $usuarios;
     }
-    public function docentesInstitucionSalle($id,$evaluacion){
+    public function docentesInstitucionSalle($id,$evaluacion,$docente){
+        $institucion = $id;
+        $docente     = $docente;
         $usuarios = User::select(
             'usuario.idusuario',
             'usuario.cedula',
@@ -128,7 +130,16 @@ class DocenteController extends Controller
         )
         ->leftJoin('salle_evaluaciones as se', 'se.id_usuario', '=', 'usuario.idusuario')
         ->leftjoin('institucion as i', 'i.idInstitucion', '=', 'usuario.institucion_idInstitucion')
-        ->where('institucion_idInstitucion', $id)
+        // ->where('institucion_idInstitucion', $institucion)
+        ->when($institucion != 0, function ($query) use ($institucion) {
+            return $query->where('institucion_idInstitucion', $institucion);
+        })
+        ->when($docente != 0, function ($query) use ($docente) {
+            return $query->where(function ($q) use ($docente) {
+                $q->where('usuario.email', 'like', "%{$docente}%")
+                ->orWhere('usuario.cedula', 'like', "%{$docente}%");
+            });
+        })
         ->whereIn('id_group', [6, 13])
         ->groupBy(
             'usuario.idusuario',
@@ -200,26 +211,54 @@ class DocenteController extends Controller
             }
         }
 
-        if( $request->id != 0 ){
+        if ($request->id != 0) {
+
             $agenda = Agenda::find($request->id);
-            if($request->finalizar){
-                $agenda->estado            = "1";
-                $agenda->fecha_que_visita  = $request->fecha_que_visita;
-            }
-            // si ya tiene latitud y longitud no la actualiza
-            if($agenda->latitud){}
-            else{
-                $agenda->latitud  = $request->latitud;
-                $agenda->longitud = $request->longitud;
-                $agenda->fecha_captura_longitud = date('Y-m-d H:i:s');
+
+            if ($request->finalizar) {
+                $agenda->estado = "1";
+                $agenda->fecha_que_visita = $request->fecha_que_visita;
             }
 
-        }else{
+            // valores actuales
+            $latActual = $agenda->latitud;
+            $lonActual = $agenda->longitud;
+
+            // valores nuevos
+            $latNueva = $request->latitud;
+            $lonNueva = $request->longitud;
+
+            // CASO 1: el usuario quitó latitud y longitud
+            if (empty($latNueva) && empty($lonNueva)) {
+
+                if (!empty($latActual) || !empty($lonActual)) {
+                    $agenda->latitud = null;
+                    $agenda->longitud = null;
+                    $agenda->fecha_captura_longitud = null;
+                }
+
+            }
+            // CASO 2: cambió latitud o longitud
+            elseif ($latActual != $latNueva || $lonActual != $lonNueva) {
+
+                $agenda->latitud = $latNueva;
+                $agenda->longitud = $lonNueva;
+                $agenda->fecha_captura_longitud = now();
+
+            }
+            // CASO 3: son iguales → NO se hace nada
+        }
+        else {
+
             $agenda = new Agenda();
             $agenda->latitud  = $request->latitud;
             $agenda->longitud = $request->longitud;
-            $agenda->fecha_captura_longitud = date('Y-m-d H:i:s');
+
+            if (!empty($request->latitud) && !empty($request->longitud)) {
+                $agenda->fecha_captura_longitud = now();
+            }
         }
+
         //si crean una insitucion temporal
         if($request->estado_institucion_temporal == 1){
             $agenda->periodo_id = $request->periodo_id_temporal;

@@ -159,12 +159,60 @@ class SallePreguntasController extends Controller
         $opciones = DB::DELETE("DELETE FROM salle_opciones_preguntas WHERE id_opcion_pregunta = $id");
     }
 
-    public function eliminar_pregunta_salle($id)
+    //API:post/eliminar_pregunta_salle
+    public function eliminar_pregunta_salle(Request $request)
     {
-        $pregunta = DB::UPDATE("UPDATE `salle_preguntas` SET `estado` = 0 WHERE `id_pregunta` = $id");
+        DB::beginTransaction();
 
-        return $pregunta;
+        try {
+            $arrayPreguntas             = json_decode($request->arrayPreguntas);
+            $contador                   = 0;
+            $arrayPreguntasNoEliminadas = [];
+
+            foreach ($arrayPreguntas as $pregunta) {
+                $id_pregunta = $pregunta->pregunta->id_pregunta;
+
+                // Verificar si la pregunta está asociada a una evaluación
+                $query = DB::select(
+                    "SELECT 1 FROM salle_preguntas_evaluacion WHERE id_pregunta = ?",
+                    [$id_pregunta]
+                );
+
+                if (count($query) > 0) {
+                    $pregunta->message = "La pregunta no se puede eliminar porque está asociada a una evaluación.";
+                    $arrayPreguntasNoEliminadas[] = $pregunta;
+                    continue;
+                }
+
+                // Eliminación lógica
+                DB::update(
+                    "UPDATE salle_preguntas SET estado = 0 WHERE id_pregunta = ?",
+                    [$id_pregunta]
+                );
+
+                $contador++;
+            }
+
+            DB::commit();
+
+            return [
+                "status"       => "1",
+                "message"      => "Preguntas eliminadas correctamente.",
+                "contador"     => $contador,
+                "noEliminadas" => $arrayPreguntasNoEliminadas
+            ];
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return [
+                "status"  => "0",
+                "message" => "Ocurrió un error al eliminar las preguntas.",
+                "error"   => $e->getMessage()
+            ];
+        }
     }
+
 
     /**
      * Display the specified resource.
@@ -756,7 +804,19 @@ class SallePreguntasController extends Controller
             ];
         });
 
-        return $areas; // Devolvemos el resultado
+       $areas = collect($areas)->map(function ($area) {
+
+            $area['asignaturas'] = collect($area['asignaturas'])
+                ->filter(fn ($a) => collect($a['preguntas'])->isNotEmpty())
+                ->values();
+
+            return $area;
+        })
+        ->filter(fn ($area) => collect($area['asignaturas'])->isNotEmpty())
+        ->values();
+
+        return $areas;
+
     }
 
 
@@ -961,13 +1021,18 @@ class SallePreguntasController extends Controller
     public function transformar_preguntas_salle(Request $request){
         $nuevo_tipo = 1;
         if( $request->id_tipo_pregunta == 1 ){ $nuevo_tipo = 5; }
-        DB::UPDATE("UPDATE `salle_preguntas` SET `id_tipo_preSallePreguntasControllergunta`= ? WHERE `id_pregunta` = ?",[$nuevo_tipo, $request->id_pregunta]);
+        DB::UPDATE("UPDATE `salle_preguntas` SET `id_tipo_pregunta`= ? WHERE `id_pregunta` = ?",[$nuevo_tipo, $request->id_pregunta]);
     }
     public function salle_intento_eval(Request $request){
+        $idusuario = $request->idusuario;
+        if(!$idusuario || $idusuario == "" || $idusuario == null || $idusuario == "undefined"){
+            return ["status" => "0", "message" => "El idusuario es requerido"];
+        }
         DB::UPDATE("UPDATE `salle_evaluaciones` SET `estado` = 3
         WHERE `id_usuario` = '$request->idusuario'
-        AND `estado` = 2
+        AND `estado` in (1,2)
         AND `n_evaluacion` = '$request->n_evaluacion'");
+        return ["status" => "1", "message" => "Intento registrado"];
     }
     //api para finalizar la evaluacion si el usuario se cambia de pestañas
     public function save_finalizar_evalIntentos(Request $request){
@@ -1087,6 +1152,9 @@ class SallePreguntasController extends Controller
                     if($preguntafromProlipa){
                         $preg_sync->preguntafromProlipa   = 1;
                         $preg_sync->id_pregunta_prolipa   = $item->id;
+                    }else{
+                        // ide salle_preguntas de la pregunta movida
+                        $preg_sync->idPreguntaMovida     = $item->id_pregunta;
                     }
                     $preg_sync->save();
 
@@ -1199,11 +1267,13 @@ class SallePreguntasController extends Controller
             AND p.n_evaluacion      = ?
             AND p.id_tipo_pregunta  = ?
             AND p.descripcion       = ?
+            AND p.idPreguntaMovida  = ?
         ", [
             $request->id_asignatura,
             $request->n_evaluacion,
             $item->id_tipo_pregunta,
             $item->descripcion,
+            $item->id_pregunta
         ]);
 
         return $query;
@@ -1368,6 +1438,21 @@ class SallePreguntasController extends Controller
         if($request->getIntentosXEvaluacion){
             // api:get>>metodosGetPreguntasSalle?getIntentosXEvaluacion=1&evaluacion_periodo=1&id_usuario=1
             return $this->salleRepository->getIntentosXEvaluacion($request->evaluacion_periodo, $request->id_usuario);
+        }
+        if($request->getPreguntasXPeriodoTipo){
+            // api:get>>metodosGetPreguntasSalle?getPreguntasXPeriodoTipo=1&periodo=7&tipo=1
+            $preguntas  = $this->salleRepository->getPreguntasXPeriodoTipo($request->periodo);
+            // filtrar por el id_tipo_pregunta con el tipo enviado
+            $preguntas = collect($preguntas)->where('id_tipo_pregunta', $request->tipo)->values()->all();
+            return $preguntas;
+        }
+        if($request->getTiposPreguntas){
+            // api:get>>metodosGetPreguntasSalle?getTiposPreguntas=1
+            return $this->salleRepository->getTiposPreguntas();
+        }
+        if($request->getEvaluacionesDocente){
+            // api:get>>metodosGetPreguntasSalle?getEvaluacionesDocente=1&id_usuario=1&periodo=7
+            return $this->salleRepository->getEvaluacionesDocente($request->id_usuario,$request->periodo);
         }
     }
 }

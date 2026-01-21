@@ -613,13 +613,30 @@ class AbonoController extends Controller
         // AND fv.id_empresa='$request->empresa'
         // AND fv.clientesidPerseo ='$request->cliente'
         // AND fv.est_ven_codigo <> 3");
-        $query = DB::SELECT("SELECT fv.* FROM f_venta fv
-        WHERE fv.periodo_id='$request->periodo'
-        AND fv.id_empresa='$request->empresa'
-        AND fv.ruc_cliente REGEXP '$request->cliente'
-        AND fv.est_ven_codigo <> 3
-        AND fv.idtipodoc <> 16
-        AND fv.idtipodoc <> 17
+        // $query = DB::SELECT("SELECT fv.* FROM f_venta fv
+        // WHERE fv.periodo_id='$request->periodo'
+        // AND fv.id_empresa='$request->empresa'
+        // AND fv.ruc_cliente REGEXP '$request->cliente'
+        // AND fv.est_ven_codigo <> 3
+        // AND fv.idtipodoc <> 16
+        // AND fv.idtipodoc <> 17
+        // ");
+        $whereEstado = "fv.est_ven_codigo <> 3";
+
+        // Solo si reporte != 0 se agrega la excepción
+        if ($request->reporte != 0) {
+            $whereEstado = "(fv.est_ven_codigo <> 3 
+                            OR (fv.idtipodoc = 20 AND fv.est_ven_codigo = 3))";
+        }
+
+        $query = DB::SELECT("
+            SELECT fv.*
+            FROM f_venta fv
+            WHERE fv.periodo_id = '$request->periodo'
+            AND fv.id_empresa = '$request->empresa'
+            AND fv.ruc_cliente REGEXP '$request->cliente'
+            AND $whereEstado
+            AND fv.idtipodoc NOT IN (16, 17)
         ");
         return $query;
     }
