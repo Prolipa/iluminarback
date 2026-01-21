@@ -25,7 +25,7 @@ trait TraitPedidosGeneral
     public $tr_rutaCedulaDominio        = "https://app3902.privynote.net";
     public $tr_rutaCedulaRegistroCivil  = "https://app3902.privynote.net/api/v1/client/find-names";
     public $tr_rutaRucSRI               = "https://srienlinea.sri.gob.ec/sri-catastro-sujeto-servicio-internet/rest/ConsolidadoContribuyente/obtenerPorNumerosRuc";
-    public $tr_periodoPedido            = 26;
+    public $tr_periodoPedido            = 4;
     public function FacturacionGet($endpoint)
     {
         $dato = Http::get($this->ipProlipa.$endpoint);
