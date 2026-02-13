@@ -415,7 +415,7 @@ class CodigosLibrosGenerarController extends Controller
         $codigos_libros = DB::SELECT("SELECT c.factura, c.prueba_diagnostica,c.contador,c.codigo_union,
             IF(c.prueba_diagnostica ='1', 'Prueba de diagnóstico','Código normal') as tipoCodigo,
             c.porcentaje_descuento,
-            c.libro as book,c.serie,c.created_at,
+            c.serie,c.created_at,
             c.codigo,c.bc_estado,c.estado,c.estado_liquidacion,c.bc_fecha_ingreso,
             c.venta_estado,c.bc_periodo,c.bc_institucion,c.idusuario,c.id_periodo,
             c.contrato,c.libro, c.venta_lista_institucion,
@@ -450,7 +450,7 @@ class CodigosLibrosGenerarController extends Controller
             ib.nombreInstitucion as institucionBarra, i.nombreInstitucion,
             p.periodoescolar as periodo,
             pb.periodoescolar as periodo_barras,ivl.nombreInstitucion as InstitucionLista,
-            c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado
+            c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado, l.nombrelibro as book
         from codigoslibros c
         LEFT JOIN usuario u ON c.idusuario = u.idusuario
         LEFT JOIN institucion ib ON c.bc_institucion = ib.idInstitucion
@@ -458,6 +458,7 @@ class CodigosLibrosGenerarController extends Controller
         LEFT JOIN institucion ivl ON c.venta_lista_institucion = ivl.idInstitucion
         LEFT JOIN periodoescolar p ON c.id_periodo = p.idperiodoescolar
         LEFT JOIN periodoescolar pb ON c.bc_periodo = pb.idperiodoescolar
+        LEFT JOIN libro l ON c.libro_idlibro = l.idlibro
         WHERE (c.bc_periodo  = '$periodo' OR c.id_periodo = '$periodo')
         AND (c.bc_institucion = '$id' OR u.institucion_idInstitucion = '$id' OR c.venta_lista_institucion = '$id' )
         AND c.prueba_diagnostica = '0'

@@ -809,6 +809,8 @@ class  CodigosRepository extends BaseRepository
                     'ls.year',
                     'ls.id_libro_plus',
                     'v.idtipodoc',
+                    'ibc.nombreInstitucion as nombre_institucion_bc',
+                    'iventa.nombreInstitucion as nombre_institucion_venta',
                     DB::raw("
                         CASE
                             WHEN c.porcentaje_personalizado_regalado = 0 THEN
@@ -847,6 +849,8 @@ class  CodigosRepository extends BaseRepository
                 ->leftJoin('libros_series as l_plus', 'ls.id_libro_plus', '=', 'l_plus.idLibro') // Join adicional para plus
                 ->leftJoin('libro as lib_plus', 'ls.id_libro_plus', '=', 'lib_plus.idlibro')
                 ->leftJoin('asignatura as a_plus', 'lib_plus.asignatura_idasignatura', '=', 'a_plus.idasignatura')
+                ->leftJoin('institucion as ibc','ibc.idinstitucion','=','c.bc_institucion')
+                ->leftJoin('institucion as iventa','iventa.idinstitucion','=','c.venta_lista_institucion')
                 ->leftJoin('f_venta as v', function ($join) {
                     $join->on('v.ven_codigo', '=', 'c.codigo_proforma')
                          ->on('v.id_empresa', '=', 'c.proforma_empresa');

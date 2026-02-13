@@ -16,6 +16,7 @@ class Libro extends Model
         'titulo',
         'portada',
         'weblibro',
+        'weblibro_guia',
         'exelibro',
         'pdfsinguia',
         'pdfconguia',

@@ -1125,7 +1125,7 @@ class CodigoLibrosController extends Controller
 
         // Obtener los detalles de tipoVenta
         $tipoVenta = DB::SELECT("SELECT
-            c.libro as book, c.serie, c.prueba_diagnostica, c.factura, c.codigo_union,codigo_paquete,
+            c.serie, c.prueba_diagnostica, c.factura, c.codigo_union,codigo_paquete,
             IF(c.prueba_diagnostica ='1', 'Prueba de diagnóstico','Código normal') as tipoCodigo,
             c.contrato, c.porcentaje_descuento, c.codigo, c.bc_estado, c.estado, c.estado_liquidacion, contador,
             c.venta_estado, c.bc_periodo, c.bc_institucion, c.idusuario, c.id_periodo, c.contrato, l.nombrelibro as libro,
@@ -1147,7 +1147,7 @@ class CodigoLibrosController extends Controller
             ib.nombreInstitucion as institucionBarra,
             pb.periodoescolar as periodo_barras, ivl.nombreInstitucion as InstitucionLista,
             c.codigo_proforma, c.proforma_empresa, c.combo, c.codigo_combo, ls.codigo_liquidacion,
-            c.documento_devolucion, c.plus, c.quitar_de_reporte, c.devuelto_proforma,c.documento_devolucion
+            c.documento_devolucion, c.plus, c.quitar_de_reporte, c.devuelto_proforma,c.documento_devolucion, ls.nombre as book
             FROM codigoslibros c
             LEFT JOIN institucion ib ON c.bc_institucion = ib.idInstitucion
             LEFT JOIN institucion ivl ON c.venta_lista_institucion = ivl.idInstitucion

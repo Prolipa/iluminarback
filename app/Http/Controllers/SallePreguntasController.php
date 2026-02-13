@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Models\Evaluaciones;
 use App\Models\SalleAreas;
 use Illuminate\Support\Facades\DB;
 use App\Models\SallePreguntas;
 use App\Models\SalleEvaluaciones;
 use App\Models\SallePreguntasOpcion;
 use App\Models\SallePreguntasEvaluacion;
+use App\Models\Usuario;
 use App\Repositories\Evaluaciones\SalleRepository;
 use Exception;
 use Illuminate\Provider\Image;
@@ -162,7 +164,7 @@ class SallePreguntasController extends Controller
     //API:post/eliminar_pregunta_salle
     public function eliminar_pregunta_salle(Request $request)
     {
-        DB::beginTransaction();
+        // DB::beginTransaction();
 
         try {
             $arrayPreguntas             = json_decode($request->arrayPreguntas);
@@ -193,7 +195,7 @@ class SallePreguntasController extends Controller
                 $contador++;
             }
 
-            DB::commit();
+            // DB::commit();
 
             return [
                 "status"       => "1",
@@ -203,7 +205,7 @@ class SallePreguntasController extends Controller
             ];
 
         } catch (\Exception $e) {
-            DB::rollBack();
+            // DB::rollBack();
 
             return [
                 "status"  => "0",
@@ -228,7 +230,7 @@ class SallePreguntasController extends Controller
         $preguntas = DB::SELECT("SELECT a.nombre_asignatura, p . *, t.nombre_tipo, t.indicaciones,
         t.descripcion_tipo, a.nombre_asignatura, a.cant_preguntas,
         a.estado as estado_asignatura, ar.nombre_area, ar.id_area,
-        ar.estado as estado_area,pe.nombre as periodo
+        ar.estado as estado_area,pe.nombre as periodo, t.puntaje as puntaje_pregunta
         FROM salle_preguntas p
         LEFT JOIN tipos_preguntas t ON p.id_tipo_pregunta = t.id_tipo_pregunta
         LEFT JOIN salle_asignaturas a ON p.id_asignatura = a.id_asignatura
@@ -238,6 +240,41 @@ class SallePreguntasController extends Controller
         AND ar.estado = 1
         AND p.estado = '$tipoFiltro'
         AND p.id_asignatura = '$id'
+        ORDER BY p.id_pregunta DESC
+        ");
+        if(!empty($preguntas)){
+            foreach ($preguntas as $key => $value) {
+                $opciones = DB::SELECT("SELECT * FROM `salle_opciones_preguntas`
+                WHERE `id_pregunta` = ?",[$value->id_pregunta]);
+                $data['items'][$key] = [
+                    'pregunta' => $value,
+                    'opciones' => $opciones,
+                ];
+            }
+        }else{
+            $data = [];
+        }
+        return $data;
+    }
+
+
+    public function Post_traerPreguntaSalle(Request $request){
+        $id_pregunta_send = $request->id_pregunta_send;
+        if($id_pregunta_send == null || $id_pregunta_send == '' ){
+            return ["No se ha enviado un id de pregunta válido."];
+        }
+        $preguntas = DB::SELECT("SELECT a.nombre_asignatura, p . *, t.nombre_tipo, t.indicaciones,
+        t.descripcion_tipo, a.nombre_asignatura, a.cant_preguntas,
+        a.estado as estado_asignatura, ar.nombre_area, ar.id_area,
+        ar.estado as estado_area,pe.nombre as periodo, t.puntaje as puntaje_pregunta
+        FROM salle_preguntas p
+        LEFT JOIN tipos_preguntas t ON p.id_tipo_pregunta = t.id_tipo_pregunta
+        LEFT JOIN salle_asignaturas a ON p.id_asignatura = a.id_asignatura
+        LEFT JOIN salle_areas ar ON a.id_area = ar.id_area
+        LEFT JOIN salle_periodos_evaluacion pe ON ar.n_evaluacion = pe.id
+        WHERE a.estado = 1
+        AND ar.estado = 1
+        AND p.id_pregunta = '$id_pregunta_send'
         ORDER BY p.id_pregunta DESC
         ");
         if(!empty($preguntas)){
@@ -334,7 +371,8 @@ class SallePreguntasController extends Controller
     public function salle_getConfiguracion($institucion,$n_evaluacion)
     {
         $configuracion = DB::SELECT("SELECT i.nombreInstitucion, i.direccionInstitucion,
-        c.fecha_inicio, c.fecha_fin, c.cant_evaluaciones, c.ver_respuestas, c.observaciones,c.n_evaluacion
+        c.fecha_inicio, c.fecha_fin, c.cant_evaluaciones, c.ver_respuestas, c.observaciones,c.n_evaluacion,
+        c.intentos_ventana
         FROM salle_configuracion c
         LEFT JOIN institucion i ON i.idInstitucion = c.institucion_id
         WHERE c.institucion_id = '$institucion'
@@ -352,11 +390,17 @@ class SallePreguntasController extends Controller
 
     public function salle_finalizarEvaluacion(Request $request)
     {
-        DB::beginTransaction(); // Inicia la transacción
+        // DB::beginTransaction(); // Inicia la transacción
 
         try {
+            // tipo_finalizacion: 1 = manual (botón), 3 = tiempo expirado rindiendo, 4 = tiempo expirado fuera
+            $tipo_finalizacion = $request->tipo_finalizacion ?? 1; // Por defecto 1 (manual)
+            $fecha_fin = date('Y-m-d H:i:s');
+
             // Estado 2 = evaluación finalizada
-            DB::UPDATE("UPDATE `salle_evaluaciones` SET `estado` = 2 WHERE `id_evaluacion` = ? AND `id_usuario` = ?", [
+            DB::UPDATE("UPDATE `salle_evaluaciones` SET `estado` = 2, `tipo_finalizacion` = ?, `fecha_fin_evaluacion` = ? WHERE `id_evaluacion` = ? AND `id_usuario` = ?", [
+                $tipo_finalizacion,
+                $fecha_fin,
                 $request->id_evaluacion,
                 $request->id_usuario
             ]);
@@ -364,9 +408,13 @@ class SallePreguntasController extends Controller
             // Actualiza la calificación final
             $this->salleRepository->updateCalificacionFinal($request->id_evaluacion);
 
-            DB::commit(); // Si todo va bien, confirma la transacción
+            // DB::commit(); // Si todo va bien, confirma la transacción
+
+            // Log para debugging
+
+            return ["status" => 1, "message" => 'Evaluación finalizada correctamente', "tipo_finalizacion" => $tipo_finalizacion];
         } catch (\Exception $e) {
-            DB::rollBack(); // Si ocurre un error, revierte la transacción
+            // DB::rollBack(); // Si ocurre un error, revierte la transacción
             // Puedes registrar el error o lanzar una excepción personalizada
             return ["status" => 0, "message" => 'Error al finalizar la evaluación: ', "error" => $e->getMessage()];
         }
@@ -398,31 +446,133 @@ class SallePreguntasController extends Controller
             $configuracion = $this->configuracionXInstitucion($id_institucion, $n_evaluacion);
 
             if (!empty($configuracion)) {
-                if ($fecha_actual < $configuracion[0]->fecha_fin && $fecha_actual > $configuracion[0]->fecha_inicio) {
-                    return DB::transaction(function () use ($id_docente, $n_evaluacion, $configuracion, $admin, $fecha_actual) {
-                        // Limpio la evaluación y cargo las nuevas asignaturas
-                        $eval_doc = DB::SELECT("SELECT * FROM `salle_evaluaciones`
-                        WHERE `id_usuario` = $id_docente
-                        AND `estado` != 3
-                        AND intentos = '0'
-                        AND n_evaluacion = '$n_evaluacion'
-                        ");
+                // if ($fecha_actual < $configuracion[0]->fecha_fin && $fecha_actual > $configuracion[0]->fecha_inicio) { // se quito para el usuario pueda dar la evaluacion siempre y cuando dio click antes de fecha fin
+                if ($fecha_actual > $configuracion[0]->fecha_inicio) {
 
-                        // Elimino la evaluación de previsualización
-                        if (count($eval_doc) > 0) {
+                    // Limpio la evaluación de previsualización (con intentos = 0) - Transacción corta #1
+                    $eval_doc = DB::SELECT("SELECT * FROM `salle_evaluaciones`
+                    WHERE `id_usuario` = $id_docente
+                    AND `estado` != 3
+                    AND intentos = '0'
+                    AND n_evaluacion = '$n_evaluacion'
+                    ");
+
+                    if (count($eval_doc) > 0) {
+                        // Solo las operaciones de DELETE en transacción
+                        DB::transaction(function () use ($eval_doc) {
                             $preIdEvaluacion = $eval_doc[0]->id_evaluacion;
                             DB::DELETE("DELETE FROM salle_evaluaciones WHERE id_evaluacion = '$preIdEvaluacion'");
                             DB::DELETE("DELETE FROM salle_preguntas_evaluacion WHERE id_evaluacion = '$preIdEvaluacion'");
+                        });
+                    }
+
+                    // Buscar evaluaciones activas del docente (cualquier estado excepto eliminadas)
+                    $eval_doc = DB::SELECT("SELECT * FROM `salle_evaluaciones`
+                    WHERE `id_usuario` = $id_docente
+                    AND `estado` != 3
+                    AND n_evaluacion = '$n_evaluacion'
+                    ORDER BY id_evaluacion DESC
+                    ");
+
+                    // Primero verificar si ya existe una evaluación activa (estado = 1)
+                    $evaluacion_activa = null;
+                    $evaluacion_finalizada = null;
+
+                    foreach($eval_doc as $ev){
+                        if($ev->estado == 1){
+                            $evaluacion_activa = $ev;
+                            break;
+                        }
+                        if($ev->estado == 2 && !$evaluacion_finalizada){
+                            $evaluacion_finalizada = $ev;
+                        }
+                    }
+
+                    // Si existe una evaluación activa, usarla
+                    if($evaluacion_activa){
+                        // Validar si el tiempo límite ha expirado
+                        if($evaluacion_activa->fecha_limite_evaluacion){
+                            $fecha_actual_check = date('Y-m-d H:i:s');
+                            if($fecha_actual_check > $evaluacion_activa->fecha_limite_evaluacion){
+                                // Finalizar automáticamente por tiempo expirado - Transacción corta #2
+                                DB::transaction(function () use ($evaluacion_activa, $fecha_actual_check) {
+                                    $evaluacion_update = SalleEvaluaciones::find($evaluacion_activa->id_evaluacion);
+                                    $evaluacion_update->estado = 2;
+                                    $evaluacion_update->tipo_finalizacion = 3; // 3 = finalizado por falta de tiempo
+                                    $evaluacion_update->fecha_fin_evaluacion = $fecha_actual_check;
+                                    $evaluacion_update->save();
+                                });
+                                return ['status' => 'time_expired', 'message' => 'El tiempo límite de la evaluación ha expirado'];
+                            }
                         }
 
-                        // Evaluaciones del docente que no estén eliminadas
-                        $eval_doc = DB::SELECT("SELECT * FROM `salle_evaluaciones`
-                        WHERE `id_usuario` = $id_docente
-                        AND `estado` != 3
-                        AND n_evaluacion = '$n_evaluacion'
+                        // Retornar la evaluación activa existente (sin transacción)
+                        return $this->obtener_evaluacion_salle($evaluacion_activa->id_evaluacion, $id_docente, $n_evaluacion);
+                    }
+
+                    // Si hay una evaluación finalizada y no se puede crear más, retornar status 2
+                    if($evaluacion_finalizada && count($eval_doc) >= $configuracion[0]->cant_evaluaciones){
+                        return 2; // Evaluación ya finalizada, no puede hacer más
+                    }
+
+                    $validarSiEvaluacion = DB::SELECT("SELECT * FROM salle_evaluaciones e
+                    WHERE e.id_usuario = '$id_docente'
+                    AND e.n_evaluacion = '$n_evaluacion'
+                    AND e.estado IN ('1','2')
+                    ");
+
+                    // Solo crear nueva evaluación si no hay ninguna activa Y no se ha excedido el límite
+                    if (count($validarSiEvaluacion) == 0) {
+
+                        // Obtener asignaturas ANTES de la transacción
+                        $asignaturas = DB::SELECT("SELECT sa.id_asignatura, sa.id_area, sa.cant_preguntas
+                            FROM salle_asignaturas_has_docente sd, salle_asignaturas sa
+                            WHERE sd.id_docente = '$id_docente'
+                            AND sd.id_asignatura = sa.id_asignatura
+                            AND sd.n_evaluacion  = '$n_evaluacion'
+                            AND sa.estado = 1
                         ");
 
-                        if (count($eval_doc) < $configuracion[0]->cant_evaluaciones) {
+                        $asignaturas_basicas = DB::SELECT("SELECT sa.id_asignatura, sa.id_area, sa.cant_preguntas
+                            FROM salle_asignaturas sa, salle_areas sar
+                            WHERE sa.id_area = sar.id_area
+                            AND sar.area_basica = '1'
+                            AND sa.estado = 1
+                            AND sar.estado = 1
+                            AND sar.n_evaluacion = '$n_evaluacion'
+                        ");
+
+                        // Obtener preguntas ANTES de la transacción
+                        $preguntas_a_insertar = [];
+
+                        foreach ($asignaturas as $value_asignaturas) {
+                            $preguntas = DB::SELECT("SELECT sp.id_pregunta
+                            FROM salle_preguntas sp
+                            WHERE sp.id_asignatura = $value_asignaturas->id_asignatura
+                            AND sp.estado = 1
+                            ORDER BY RAND()
+                            LIMIT $value_asignaturas->cant_preguntas
+                            ");
+                            foreach ($preguntas as $value_preguntas) {
+                                $preguntas_a_insertar[] = $value_preguntas->id_pregunta;
+                            }
+                        }
+
+                        foreach ($asignaturas_basicas as $value_basicas) {
+                            $preguntas = DB::SELECT("SELECT sp.id_pregunta
+                            FROM salle_preguntas sp
+                            WHERE sp.id_asignatura = $value_basicas->id_asignatura
+                            AND sp.estado = 1
+                            ORDER BY RAND()
+                            LIMIT $value_basicas->cant_preguntas
+                            ");
+                            foreach ($preguntas as $value_preguntas) {
+                                $preguntas_a_insertar[] = $value_preguntas->id_pregunta;
+                            }
+                        }
+
+                        // Ahora sí, transacción corta #3 solo para crear evaluación e insertar preguntas en BULK
+                        $id_evaluacion = DB::transaction(function () use ($id_docente, $n_evaluacion, $preguntas_a_insertar) {
                             $evaluacion = new SalleEvaluaciones();
                             $evaluacion->id_usuario = $id_docente;
                             $evaluacion->n_evaluacion = $n_evaluacion;
@@ -430,65 +580,25 @@ class SallePreguntasController extends Controller
                             $evaluacion->save();
                             $id_evaluacion = $evaluacion->id_evaluacion;
 
-                            // Asignaturas no básicas
-                            $asignaturas = DB::SELECT("SELECT sa.id_asignatura, sa.id_area, sa.cant_preguntas
-                                FROM salle_asignaturas_has_docente sd, salle_asignaturas sa
-                                WHERE sd.id_docente = '$id_docente'
-                                AND sd.id_asignatura = sa.id_asignatura
-                                AND sd.n_evaluacion  = '$n_evaluacion'
-                                AND sa.estado = 1
-                            ");
-
-                            foreach ($asignaturas as $value_asignaturas) {
-                                $preguntas = DB::SELECT("SELECT sp.id_pregunta
-                                FROM salle_preguntas sp
-                                WHERE sp.id_asignatura = $value_asignaturas->id_asignatura
-                                AND sp.estado = 1
-                                ORDER BY RAND()
-                                LIMIT $value_asignaturas->cant_preguntas
-                                ");
-                                foreach ($preguntas as $value_preguntas) {
-                                    DB::INSERT("INSERT INTO `salle_preguntas_evaluacion`(`id_evaluacion`, `id_pregunta`)
-                                    VALUES (?,?)", [$id_evaluacion, $value_preguntas->id_pregunta]);
+                            // INSERT BULK - Una sola query para todas las preguntas (mucho más rápido)
+                            if (!empty($preguntas_a_insertar)) {
+                                $valores = [];
+                                foreach ($preguntas_a_insertar as $id_pregunta) {
+                                    $valores[] = "($id_evaluacion, $id_pregunta)";
                                 }
+                                $valores_string = implode(',', $valores);
+                                DB::INSERT("INSERT INTO `salle_preguntas_evaluacion`(`id_evaluacion`, `id_pregunta`) VALUES $valores_string");
                             }
 
-                            // Asignaturas básicas
-                            $asignaturas_basicas = DB::SELECT("SELECT sa.id_asignatura, sa.id_area, sa.cant_preguntas
-                                FROM salle_asignaturas sa, salle_areas sar
-                                WHERE sa.id_area = sar.id_area
-                                AND sar.area_basica = '1'
-                                AND sa.estado = 1
-                                AND sar.estado = 1
-                                AND sar.n_evaluacion = '$n_evaluacion'
-                            ");
+                            return $id_evaluacion;
+                        });
 
-                            foreach ($asignaturas_basicas as $value_basicas) {
-                                $preguntas = DB::SELECT("SELECT sp.id_pregunta
-                                FROM salle_preguntas sp
-                                WHERE sp.id_asignatura = $value_basicas->id_asignatura
-                                AND sp.estado = 1
-                                ORDER BY RAND()
-                                LIMIT $value_basicas->cant_preguntas
-                                ");
-                                foreach ($preguntas as $value_preguntas) {
-                                    DB::INSERT("INSERT INTO `salle_preguntas_evaluacion`(`id_evaluacion`, `id_pregunta`)
-                                    VALUES (?,?)", [$id_evaluacion, $value_preguntas->id_pregunta]);
-                                }
-                            }
+                        return $this->obtener_evaluacion_salle($id_evaluacion, $id_docente, $n_evaluacion);
+                    } else {
+                        // Si ya se alcanzó el límite de evaluaciones permitidas
+                        return 2; // Límite de evaluaciones alcanzado
+                    }
 
-                            return $this->obtener_evaluacion_salle($id_evaluacion, $id_docente, $n_evaluacion);
-                        } else {
-                            if ($eval_doc[0]->estado === 1) {
-                                return $this->obtener_evaluacion_salle($eval_doc[0]->id_evaluacion, $id_docente, $n_evaluacion);
-                            } else {
-                                if ($admin == 1) {
-                                    return $this->obtener_evaluacion_salle($eval_doc[0]->id_evaluacion, $id_docente, $n_evaluacion);
-                                }
-                                return 2; // Esta evaluación ya fue completada
-                            }
-                        }
-                    });
                 } else {
                     return 0; // Horario no permitido
                 }
@@ -559,7 +669,8 @@ class SallePreguntasController extends Controller
         $cantidadPreguntas = count($query2);
         return [
             "cantidadPreguntasRespondidas"  => $cantidadPreguntasRespondidas,
-            "cantidadPreguntas"             => $cantidadPreguntas
+            "cantidadPreguntas"             => $cantidadPreguntas,
+            "preguntasRespondidas"          => $getRespondidas  // Lista de preguntas respondidas
         ];
     }
     // public function obtener_evaluacion_salle($id_evaluacion, $id_docente,$n_evaluacion){
@@ -624,52 +735,96 @@ class SallePreguntasController extends Controller
     //     return $data;
     // }
 
-    public function salle_guardarSeleccion(Request $request){
-        try{
-            if( $request->tipo_pregunta == 1 ){
-                // pregunta opcion multiple
-                $opcion = DB::SELECT("SELECT * FROM `salle_respuestas_preguntas`
-                WHERE `id_evaluacion`   = $request->id_evaluacion
-                AND `id_pregunta`       = $request->id_pregunta
-                AND `respuesta`         = $request->id_opcion_pregunta
-                AND `id_usuario`        = $request->id_usuario
-                ");
-                if( count($opcion) > 0 ){
-                    DB::DELETE("DELETE FROM `salle_respuestas_preguntas`
-                    WHERE `id_respuesta_pregunta` = ?", [$opcion[0]->id_respuesta_pregunta]
-                    );
-                }else{
-                    DB::INSERT("INSERT INTO `salle_respuestas_preguntas`(`id_evaluacion`, `id_pregunta`, `id_usuario`, `respuesta`, `puntaje`) VALUES (?, ?, ?, ?, ?)", [$request->id_evaluacion, $request->id_pregunta, $request->id_usuario, $request->id_opcion_pregunta, $request->puntaje_seleccion]);
-                }
-                //calificar las preguntas
-                return $this->calificarPreguntaMultiple($request->id_pregunta,$request);
-            }else{
-                DB::DELETE("DELETE FROM `salle_respuestas_preguntas` WHERE `id_evaluacion` = ? AND `id_pregunta` = ? AND `id_usuario` = ?", [$request->id_evaluacion, $request->id_pregunta, $request->id_usuario]);
-                //para que no se duplique la respuesta
-                $opcion = DB::SELECT("SELECT * FROM `salle_respuestas_preguntas`
-                WHERE `id_evaluacion`   = $request->id_evaluacion
-                AND `id_pregunta`       = $request->id_pregunta
-                AND `respuesta`         = $request->id_opcion_pregunta
-                AND `id_usuario`        = $request->id_usuario
-                ");
-                if( count($opcion) > 0 ){
-                    DB::DELETE("DELETE FROM `salle_respuestas_preguntas`
-                    WHERE `id_respuesta_pregunta` = ?", [$opcion[0]->id_respuesta_pregunta]
-                    );
-                }else{
-                    DB::INSERT("INSERT INTO `salle_respuestas_preguntas`(`id_evaluacion`, `id_pregunta`, `id_usuario`, `respuesta`, `puntaje`) VALUES (?, ?, ?, ?, ?)", [$request->id_evaluacion, $request->id_pregunta, $request->id_usuario, $request->id_opcion_pregunta, $request->puntaje_seleccion]);
-                }
-                //calificar las preguntas
-                $this->calificarPreguntaNormal($request->id_pregunta,$request);
-            }
-            //calificar las preguntas
-            return $request;
-        }
-        catch(\Exception $e){
-            return ["status" => "0", "message" => $e->getMessage()] ;
-        }
+    public function salle_guardarSeleccion(Request $request)
+    {
+        try {
+            // DB::beginTransaction();
 
+            $resultado = null;
+            // Tipo de pregunta 1 = múltiple opción
+            if ($request->tipo_pregunta == 1) {
+
+                $opcion = DB::select(
+                    "SELECT * FROM salle_respuestas_preguntas
+                    WHERE id_evaluacion = ?
+                    AND id_pregunta = ?
+                    AND respuesta = ?
+                    AND id_usuario = ?",
+                    [
+                        $request->id_evaluacion,
+                        $request->id_pregunta,
+                        $request->id_opcion_pregunta,
+                        $request->id_usuario
+                    ]
+                );
+
+                if (count($opcion) > 0) {
+                    DB::delete(
+                        "DELETE FROM salle_respuestas_preguntas WHERE id_respuesta_pregunta = ?",
+                        [$opcion[0]->id_respuesta_pregunta]
+                    );
+                } else {
+                    DB::insert(
+                        "INSERT INTO salle_respuestas_preguntas
+                        (id_evaluacion, id_pregunta, id_usuario, respuesta, puntaje)
+                        VALUES (?, ?, ?, ?, ?)",
+                        [
+                            $request->id_evaluacion,
+                            $request->id_pregunta,
+                            $request->id_usuario,
+                            $request->id_opcion_pregunta,
+                            $request->puntaje_seleccion
+                        ]
+                    );
+                }
+
+                $resultado = $this->calificarPreguntaMultiple($request->id_pregunta, $request);
+
+            }
+            // PREGUNTA SIMPLE
+            else {
+
+                DB::delete(
+                    "DELETE FROM salle_respuestas_preguntas
+                    WHERE id_evaluacion = ?
+                    AND id_pregunta = ?
+                    AND id_usuario = ?",
+                    [
+                        $request->id_evaluacion,
+                        $request->id_pregunta,
+                        $request->id_usuario
+                    ]
+                );
+
+                DB::insert(
+                    "INSERT INTO salle_respuestas_preguntas
+                    (id_evaluacion, id_pregunta, id_usuario, respuesta, puntaje)
+                    VALUES (?, ?, ?, ?, ?)",
+                    [
+                        $request->id_evaluacion,
+                        $request->id_pregunta,
+                        $request->id_usuario,
+                        $request->id_opcion_pregunta,
+                        $request->puntaje_seleccion
+                    ]
+                );
+
+                $this->calificarPreguntaNormal($request->id_pregunta, $request);
+            }
+
+            // DB::commit();
+            return $resultado ?? $request;
+
+        } catch (\Exception $e) {
+            // DB::rollBack();
+            return [
+                "status"  => "0",
+                "message" => $e->getMessage()
+            ];
+        }
     }
+
+
     // public function obtener_evaluacion_salle($id_evaluacion, $id_docente,$n_evaluacion){
     //     set_time_limit(600000);
     //     ini_set('max_execution_time', 600000);
@@ -734,6 +889,23 @@ class SallePreguntasController extends Controller
     // }
     public function obtener_evaluacion_salle($id_evaluacion, $id_docente, $n_evaluacion)
     {
+        // Verificar si la evaluación ha excedido el tiempo límite
+        $evaluacion = SalleEvaluaciones::find($id_evaluacion);
+        if($evaluacion){
+            $fecha_actual = date('Y-m-d H:i:s');
+            $fecha_limite = $evaluacion->fecha_limite_evaluacion;
+
+            // Si existe fecha límite y ya se pasó el tiempo
+            if($fecha_limite && $fecha_actual > $fecha_limite && $evaluacion->estado == 1){
+                // Finalizar automáticamente la evaluación
+                $evaluacion->estado = 2;
+                $evaluacion->tipo_finalizacion = 3; // 3 = finalizado por falta de tiempo
+                $evaluacion->fecha_fin_evaluacion = $fecha_actual;
+                $evaluacion->save();
+                return ['status' => 'time_expired', 'message' => 'El tiempo de la evaluación ha expirado'];
+            }
+        }
+
         $areas = SalleAreas::with([
             'asignaturas' => function ($query) {
                 $query->where('estado', '1'); // Filtrar asignaturas con estado = '1'
@@ -786,7 +958,7 @@ class SallePreguntasController extends Controller
                                 'img_pregunta' => $pregunta->img_pregunta,
                                 'nombre_tipo' => $pregunta->tipo->nombre_tipo,
                                 'total_pregunta' => $total_pregunta,
-                                'opciones' => $pregunta->opciones,
+                                'opciones' => $pregunta->opciones->shuffle()->values(),
                                 'n_pregunta' => $pregunta->calificacion_final,
                                 'respuestas' => $pregunta->respuestas->map(function ($respuesta) {
                                     return [
@@ -823,7 +995,7 @@ class SallePreguntasController extends Controller
 
     public function calificarPreguntaMultiple($id_pregunta, $request)
     {
-        DB::beginTransaction(); // Inicia la transacción
+        // DB::beginTransaction(); // Inicia la transacción
         try {
             // Obtener el puntaje total de la pregunta
             $pregunta = DB::table('salle_preguntas')->where('id_pregunta', $id_pregunta)->first();
@@ -892,19 +1064,19 @@ class SallePreguntasController extends Controller
                 ->where('id_pregunta', $id_pregunta)
                 ->update(['calificacion_final' => $totalPuntajeRedondeado]);
 
-            DB::commit(); // Confirmar la transacción
+            // DB::commit(); // Confirmar la transacción
 
             return $totalPuntajeRedondeado;
 
         } catch (Exception $e) {
-            DB::rollBack(); // Revertir la transacción en caso de error
+            // DB::rollBack(); // Revertir la transacción en caso de error
             throw new Exception("Error al calificar la pregunta: " . $e->getMessage());
         }
     }
     public function calificarPreguntaNormal($id_pregunta, $request)
     {
         // Iniciar transacción
-        DB::beginTransaction();
+        // DB::beginTransaction();
 
         try {
             // Obtener el puntaje de la pregunta
@@ -966,13 +1138,13 @@ class SallePreguntasController extends Controller
                 ->update(['calificacion_final' => $totalPuntajeRedondeado]);
 
             // Confirmar la transacción
-            DB::commit();
+            // DB::commit();
 
             return $totalPuntajeRedondeado;
 
         } catch (Exception $e) {
             // Si ocurre un error, hacer rollback y lanzar una excepción
-            DB::rollBack();
+            // DB::rollBack();
             // Lanzar una nueva excepción con el mensaje de error
             throw new Exception("Error al calificar la pregunta: " . $e->getMessage());
         }
@@ -1034,17 +1206,172 @@ class SallePreguntasController extends Controller
         AND `n_evaluacion` = '$request->n_evaluacion'");
         return ["status" => "1", "message" => "Intento registrado"];
     }
+
+    //API:GET/salle_consolidar_evaluacion
+    public function salle_consolidar_evaluacion(Request $request){
+        try {
+            set_time_limit(60000);
+            ini_set('max_execution_time', 60000);
+
+            $id_evaluacion = $request->id_evaluacion;
+            $n_evaluacion = $request->n_evaluacion;
+
+            if(!$n_evaluacion){
+                return ["status" => "0", "message" => "El n_evaluacion es requerido"];
+            }
+
+            $data_evaluacion = SalleEvaluaciones::find($id_evaluacion);
+            if( !$data_evaluacion ){
+                return ["status" => "0", "message" => "La evaluación no existe"];
+            }
+
+            //si la evaluacion ya termino no hacer nada
+            if( $data_evaluacion->estado == 2 ){
+                return ["status" => "0", "message" => "La evaluación ya fue finalizada, no se pueden agregar más preguntas"];
+            }
+
+            //asignaturas del docente
+            $asignaturas = DB::SELECT("SELECT sa.id_asignatura, sa.id_area, sa.cant_preguntas
+                FROM salle_asignaturas_has_docente sd, salle_asignaturas sa
+                WHERE sd.id_docente = ?
+                AND sd.id_asignatura = sa.id_asignatura
+                AND sd.n_evaluacion  = ?
+                AND sa.estado = 1
+            ", [$data_evaluacion->id_usuario, $n_evaluacion]);
+
+            $asignaturas_agregadas = [];
+            $contador_preguntas_agregadas = 0;
+
+            foreach($asignaturas as $key => $item){
+                // Verificar si esta asignatura ya tiene preguntas en la evaluación
+                $asignaturas_Preguntas = DB::SELECT("
+                    SELECT e.*, p.id_asignatura FROM salle_preguntas_evaluacion e
+                    LEFT JOIN salle_preguntas p ON p.id_pregunta = e.id_pregunta
+                    WHERE e.id_evaluacion = ?
+                    AND p.id_asignatura = ?
+                ", [$id_evaluacion, $item->id_asignatura]);
+
+                // Si no tiene preguntas, agregar preguntas para esta asignatura
+                if(count($asignaturas_Preguntas) == 0){
+                    // Obtener preguntas aleatorias de la asignatura
+                    $preguntas = DB::SELECT("SELECT id_pregunta, puntaje_pregunta
+                        FROM salle_preguntas
+                        WHERE id_asignatura = ?
+                        AND n_evaluacion = ?
+                        AND estado = 1
+                        ORDER BY RAND()
+                        LIMIT ?",
+                        [$item->id_asignatura, $n_evaluacion, $item->cant_preguntas]
+                    );
+
+                    if(!empty($preguntas)){
+                        foreach($preguntas as $pregunta){
+                            // Insertar en salle_preguntas_evaluacion
+                            DB::INSERT("INSERT INTO salle_preguntas_evaluacion
+                                (id_evaluacion, id_pregunta, puntaje_pregunta, calificacion_final, intentos)
+                                VALUES (?, ?, ?, 0, 0)",
+                                [$id_evaluacion, $pregunta->id_pregunta, $pregunta->puntaje_pregunta]
+                            );
+                            $contador_preguntas_agregadas++;
+                        }
+
+                        $asignaturas_agregadas[] = [
+                            'id_asignatura' => $item->id_asignatura,
+                            'preguntas_agregadas' => count($preguntas)
+                        ];
+                    }
+                }
+            }
+
+            if(count($asignaturas_agregadas) > 0){
+                return [
+                    "status" => "1",
+                    "message" => "Preguntas agregadas correctamente",
+                    "asignaturas_agregadas" => $asignaturas_agregadas,
+                    "total_preguntas_agregadas" => $contador_preguntas_agregadas
+                ];
+            } else {
+                return [
+                    "status" => "1",
+                    "message" => "La evaluación ya tiene todas las preguntas de las asignaturas asignadas",
+                    "asignaturas_agregadas" => [],
+                    "total_preguntas_agregadas" => 0
+                ];
+            }
+
+        } catch (\Exception $e) {
+            return [
+                "status" => "0",
+                "message" => "Error al consolidar la evaluación",
+                "error" => $e->getMessage()
+            ];
+        }
+    }
+
     //api para finalizar la evaluacion si el usuario se cambia de pestañas
     public function save_finalizar_evalIntentos(Request $request){
-        //si el intento sube a 3 se finaliza la prueba
-        $evaluacion     = SalleEvaluaciones::findOrFail($request->id_evaluacion);
-        if($request->intentosEval == 2){
-            $evaluacion->estado = '2';
-        }else{
-        }
+        /* tipo_finalizacion:
+         * 0 = sin finalizar (en progreso)
+         * 1 = finalizado manualmente por el usuario (botón finalizar)
+         * 2 = finalizado por exceso de intentos (cambio de pestañas)
+         * 3 = tiempo expirado mientras rendía la evaluación
+         * 4 = tiempo expirado estando fuera de la evaluación
+         */
+        $evaluacion              = SalleEvaluaciones::findOrFail($request->id_evaluacion);
+        $fecha_inicio_evaluacion = $evaluacion->fecha_inicio_evaluacion;
+        $userDocente             = $evaluacion->id_usuario;
+        $dataUser                = Usuario::find($userDocente);
+        $institucion_id          = $dataUser->institucion_idInstitucion;
+        // Obtener la configuración para validar intentos_ventana (igual que salle_getConfiguracion)
+        $configuracion = DB::SELECT("SELECT c.intentos_ventana
+            FROM salle_configuracion c
+            WHERE c.institucion_id = ?
+            AND c.n_evaluacion = ?
+            LIMIT 1", [$institucion_id, $evaluacion->n_evaluacion]);
+
+        $intentos_ventana = isset($configuracion[0]) ? intval($configuracion[0]->intentos_ventana) : 4;
+
+        // Incrementar intentos
         $getIntentos    = $evaluacion->intentos;
         $intentos       = 1 + $getIntentos;
         $evaluacion->intentos = $intentos;
+
+        // Validar si se excedió el límite de intentos
+        if($intentos > $intentos_ventana){
+            $evaluacion->estado = '2';
+            $evaluacion->tipo_finalizacion = '2'; // Finalizado por intentos
+            $evaluacion->fecha_fin_evaluacion = date('Y-m-d H:i:s');
+        }
+        // si es la primera vez que se guarda la fecha de inicio
+        if( $fecha_inicio_evaluacion == null || $fecha_inicio_evaluacion == "" ){
+            $fecha_inicio = date('Y-m-d H:i:s');
+            $evaluacion->fecha_inicio_evaluacion = $fecha_inicio;
+
+            // Calcular fecha_limite_evaluacion basado en el tiempo de la evaluación
+            $minutos_evaluacion = 0;
+
+            // Si se envía tiempo_evaluacion desde el frontend, usarlo (viene en segundos)
+            if(isset($request->tiempo_evaluacion) && $request->tiempo_evaluacion > 0){
+                $minutos_evaluacion = intval($request->tiempo_evaluacion / 60); // Convertir segundos a minutos
+            } else {
+                // Calcular tiempo basado en cantidad de preguntas (3 minutos por pregunta)
+                $cant_preguntas = DB::SELECT(
+                    "SELECT COUNT(*) as total
+                    FROM salle_preguntas_evaluacion
+                    WHERE id_evaluacion = ?",
+                    [$request->id_evaluacion]
+                );
+                $minutos_evaluacion = intval(($cant_preguntas[0]->total ?? 0) * 3);
+            }
+
+            // Sumar los minutos a la fecha de inicio para obtener fecha límite
+            // Usar DateTime para mayor precisión
+            $fecha_inicio_obj = new \DateTime($fecha_inicio);
+            $fecha_inicio_obj->modify("+{$minutos_evaluacion} minutes");
+            $fecha_limite = $fecha_inicio_obj->format('Y-m-d H:i:s');
+
+            $evaluacion->fecha_limite_evaluacion = $fecha_limite;
+        }
         $evaluacion->save();
         return $evaluacion;
         //finalizar evaluacion
@@ -1415,6 +1742,13 @@ class SallePreguntasController extends Controller
     //api:post/obtenerCalificacionSalle
     public function obtenerCalificacionSalle(Request $request){
         try{
+            // Si solo se solicita la fecha del servidor
+            if($request->has('obtener_fecha_servidor') && $request->obtener_fecha_servidor == 1){
+                return response()->json([
+                    'fecha_servidor' => date('Y-m-d H:i:s')
+                ]);
+            }
+
             $totalPuntaje     = 0;
             $id_evaluacion    = $request->id_evaluacion;
             $id_area          = $request->id_area;
@@ -1440,10 +1774,10 @@ class SallePreguntasController extends Controller
             return $this->salleRepository->getIntentosXEvaluacion($request->evaluacion_periodo, $request->id_usuario);
         }
         if($request->getPreguntasXPeriodoTipo){
-            // api:get>>metodosGetPreguntasSalle?getPreguntasXPeriodoTipo=1&periodo=7&tipo=1
+            // api:get>>metodosGetPreguntasSalle?getPreguntasXPeriodoTipo=1&periodo=7
             $preguntas  = $this->salleRepository->getPreguntasXPeriodoTipo($request->periodo);
             // filtrar por el id_tipo_pregunta con el tipo enviado
-            $preguntas = collect($preguntas)->where('id_tipo_pregunta', $request->tipo)->values()->all();
+            // $preguntas = collect($preguntas)->where('id_tipo_pregunta', $request->tipo)->values()->all();
             return $preguntas;
         }
         if($request->getTiposPreguntas){

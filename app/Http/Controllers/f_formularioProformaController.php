@@ -12,9 +12,9 @@ class f_formularioProformaController extends Controller
     public function GetTablaComentarioformularioProforma()
     {
         $commentQuery = DB::select("
-            SELECT table_comment 
-            FROM information_schema.tables 
-            WHERE table_schema = DATABASE() 
+            SELECT table_comment
+            FROM information_schema.tables
+            WHERE table_schema = DATABASE()
             AND table_name = ?
         ", ['f_formulario_proforma']);
 
@@ -32,7 +32,7 @@ class f_formularioProformaController extends Controller
             return response()->json(['mensaje' => 'data_igual', 'conteo' => $conteogeneral]);
         }
     }
-    
+
     public function Get_formularioProforma(Request $request){
         $query = DB::SELECT("SELECT ffp.* , pe.descripcion, CONCAT(u.nombres, ' ', u.apellidos) AS usercreador , i.nombreInstitucion, c.nombre as ciudad
         FROM f_formulario_proforma ffp
@@ -47,7 +47,7 @@ class f_formularioProformaController extends Controller
 
     public function GetformularioProforma_xfiltro(Request $request){
         if ($request->busqueda == 'undefined' || $request->busqueda == 'codigoagrupado' || $request->busqueda == '' || $request->busqueda == null) {
-            $query = DB::SELECT("SELECT fca.ca_descripcion, fca.ca_codigo_agrupado, CONCAT(u.nombres, ' ', u.apellidos) AS usuariolibreria ,fc.*, u.cedula FROM f_formulario_proforma fc 
+            $query = DB::SELECT("SELECT fca.ca_descripcion, fca.ca_codigo_agrupado, CONCAT(u.nombres, ' ', u.apellidos) AS usuariolibreria ,fc.*, u.cedula FROM f_formulario_proforma fc
             INNER JOIN f_contratos_agrupados fca ON fc.ca_id = fca.ca_id
             INNER JOIN usuario u ON fc.idusuario = u.idusuario
             WHERE fc.ffp_id LIKE '%$request->razonbusqueda%'
@@ -56,7 +56,7 @@ class f_formularioProformaController extends Controller
             return $query;
         }
         if ($request->busqueda == 'nombreusuario') {
-            $query = DB::SELECT("SELECT fca.ca_descripcion, fca.ca_codigo_agrupado, CONCAT(u.nombres, ' ', u.apellidos) AS usuariolibreria ,fc.*, u.cedula FROM f_formulario_proforma fc 
+            $query = DB::SELECT("SELECT fca.ca_descripcion, fca.ca_codigo_agrupado, CONCAT(u.nombres, ' ', u.apellidos) AS usuariolibreria ,fc.*, u.cedula FROM f_formulario_proforma fc
             INNER JOIN f_contratos_agrupados fca ON fc.ca_id = fca.ca_id
             INNER JOIN usuario u ON fc.idusuario = u.idusuario
             WHERE fc.idusuario LIKE '%$request->razonbusqueda%'
@@ -65,8 +65,8 @@ class f_formularioProformaController extends Controller
             return $query;
         }
         if ($request->busqueda == 'infocontratoagrupado') {
-            $query = DB::SELECT("SELECT fca.ca_descripcion, fca.ca_codigo_agrupado, CONCAT(u.nombres, ' ', u.apellidos) AS usuariolibreria ,fc.*, u.cedula 
-            FROM f_formulario_proforma fc 
+            $query = DB::SELECT("SELECT fca.ca_descripcion, fca.ca_codigo_agrupado, CONCAT(u.nombres, ' ', u.apellidos) AS usuariolibreria ,fc.*, u.cedula
+            FROM f_formulario_proforma fc
             INNER JOIN f_contratos_agrupados fca ON fc.ca_id = fca.ca_id
             INNER JOIN usuario u ON fc.idusuario = u.idusuario
             WHERE fc.ca_id LIKE '%$request->razonbusqueda%'
@@ -144,7 +144,7 @@ class f_formularioProformaController extends Controller
             if (!$formularioProforma) {
                 return "El tdo_id no existe en la base de datos";
             }
-           
+
             $formularioProforma->delete();
 
             $this->ActualizarAutoIncrementable();
@@ -157,30 +157,25 @@ class f_formularioProformaController extends Controller
 
     public function ActualizarComentarioFormularioProforma(Request $request)
     {
-        DB::beginTransaction();
         try {
             // Obtener el comentario de la solicitud
             $comentario = $request->Actualizar_comentario;
-            $tabla = 'f_formulario_proforma';
 
             // Escapar el comentario para evitar problemas de inyección SQL
             $comentarioEscapado = DB::getPdo()->quote($comentario);
 
             // Actualizar el comentario de la tabla
-            // DB::statement('ALTER TABLE ' . $tabla . ' COMMENT = ?', [$comentario]);
-            DB::statement("ALTER TABLE {$tabla} COMMENT = {$comentarioEscapado}");
+            DB::statement("ALTER TABLE f_formulario_proforma COMMENT = {$comentarioEscapado}");
 
-            DB::commit();
             return response()->json(["status" => "1", 'message' => 'Comentario actualizado correctamente'], 200);
         } catch (\Exception $e) {
-            DB::rollback();
             return response()->json(["status" => "0", 'message' => 'Error al actualizar el comentario: ' . $e->getMessage()], 500);
         }
     }
 
     public function ActualizarAutoIncrementable()
     {
-        // Reajustar el autoincremento - estas 2 lineas permite reajustar el autoincrementable por defecto 
+        // Reajustar el autoincremento - estas 2 lineas permite reajustar el autoincrementable por defecto
         $ultimoId  = f_formulario_proforma::max('ffp_id') + 1;
         DB::statement('ALTER TABLE f_formulario_proforma AUTO_INCREMENT = ' . $ultimoId);
     }

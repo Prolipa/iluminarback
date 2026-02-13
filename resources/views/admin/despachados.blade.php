@@ -8,25 +8,104 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
+        body {
+            background-color: #f5f5f5;
+            min-height: 100vh;
+            font-family: Arial, Helvetica, sans-serif;
+        }
         .container {
-            max-width: 700px;
-            margin-top: 50px;
+            max-width: 800px;
+            margin-top: 40px;
+            margin-bottom: 40px;
         }
         .card {
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .card-header {
+            background-color: #0d6efd;
+            color: white;
+            padding: 15px 20px;
+            border-bottom: 1px solid #0d6efd;
+        }
+        .card-header h4 {
+            font-weight: normal;
+            font-size: 20px;
+        }
+        .form-label {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+        .form-select {
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            padding: 8px 12px;
+        }
+        .form-select:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
         }
         .btn-download {
             background-color: #28a745;
             border-color: #28a745;
-            padding: 12px 30px;
-            font-size: 16px;
+            padding: 10px 25px;
+            font-size: 14px;
         }
         .btn-download:hover {
             background-color: #218838;
             border-color: #1e7e34;
         }
+        .btn-download-excel {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            padding: 10px 25px;
+            font-size: 14px;
+            color: white;
+        }
+        .btn-download-excel:hover {
+            background-color: #0b5ed7;
+            border-color: #0a58ca;
+        }
         .loading {
             display: none;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            border: 1px solid #dee2e6;
+        }
+        .region-checkboxes {
+            display: flex;
+            gap: 20px;
+            margin-top: 8px;
+        }
+        .form-check-label {
+            font-weight: normal;
+            margin-left: 5px;
+        }
+        .year-range-container {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .year-range-container .form-group {
+            flex: 1;
+        }
+        .comparativa-options {
+            display: none;
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            border: 1px solid #dee2e6;
+        }
+        .comparativa-options h6 {
+            color: #333;
+            font-weight: bold;
+            font-size: 14px;
         }
     </style>
 </head>
@@ -48,67 +127,161 @@
 
     <div class="container">
         <div class="row justify-content-center">
-            <div class="col-md-8">
+            <div class="col-md-12">
                 <div class="card">
                     <div class="card-header text-center">
-                        <h4 class="mb-0">📊 Descargar Reportes del Sistema</h4>
+                        <h4 class="mb-0">Descargar Reportes del Sistema</h4>
                     </div>
                     <div class="card-body">
                         <form id="downloadForm">
+                            <!-- Tipo de Reporte -->
                             <div class="mb-3">
                                 <label for="tipo_reporte" class="form-label">
                                     <strong>Tipo de Reporte:</strong>
                                 </label>
-                                <select class="form-select" id="tipo_reporte" name="tipo_reporte" required onchange="actualizarPeriodos()">
+                                <select class="form-select" id="tipo_reporte" name="tipo_reporte" required onchange="actualizarOpciones()">
                                     <option value="">Seleccione un tipo de reporte...</option>
-                                    <option value="pedidos_alcances">📋 Pedidos</option>
-                                    <option value="ventas">🛒 Ventas</option>
-                                    <option value="despachados">📦 Códigos Despachados</option>
-                                    <option value="devoluciones">↩️ Devoluciones</option>
-                                    <option value="liquidados">💰 Liquidados</option>
-                                    <option value="facturado">🧾 Facturado</option>
+                                    <option value="comparativa_ventas">Comparativa de Ventas por Años</option>
+                                    <option value="comparativa_liquidados">Comparativa de Liquidados por Años</option>
+                                    <option value="pedidos_alcances">Pedidos + Alcances</option>
+                                    <option value="ventas">Ventas</option>
+                                    <option value="despachados">Códigos Despachados</option>
+                                    <option value="devoluciones">Devoluciones</option>
+                                    <option value="facturado">Facturado</option>
+                                    <option value="liquidados">Liquidados</option>
                                 </select>
-                                <small class="text-muted">Si experimenta problemas, use el botón "Probar Conexión" primero</small>
                             </div>
 
-                            <div class="mb-3">
+                            <!-- Opciones para Comparativa de Ventas -->
+                            <div id="comparativaOptions" class="comparativa-options">
+                                <h6 class="mb-3">CONFIGURACIÓN DE COMPARATIVA</h6>
+                                
+                                <!-- Rango de Años -->
+                                <div class="year-range-container mb-3">
+                                    <div class="form-group">
+                                        <label for="anio_inicio" class="form-label">Año Inicio</label>
+                                        <select class="form-select" id="anio_inicio" name="anio_inicio">
+                                            <option value="2024">2024</option>
+                                            <option value="2025">2025</option>
+                                            <option value="2026" selected>2026</option>
+                                        </select>
+                                    </div>
+                                    <div style="padding-top: 30px;">
+                                        <strong>-</strong>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="anio_fin" class="form-label">Año Fin</label>
+                                        <select class="form-select" id="anio_fin" name="anio_fin">
+                                            <option value="2024">2024</option>
+                                            <option value="2025">2025</option>
+                                            <option value="2026" selected>2026</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Selección de Regiones -->
+                                <div class="mb-3">
+                                    <label class="form-label">Regiones a Incluir</label>
+                                    <div class="region-checkboxes">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="region_sierra" name="regiones[]" value="1" checked>
+                                            <label class="form-check-label" for="region_sierra">
+                                                Sierra
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="region_costa" name="regiones[]" value="2" checked>
+                                            <label class="form-check-label" for="region_costa">
+                                                Costa
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">Por defecto se incluyen ambas regiones</small>
+                                </div>
+                            </div>
+
+                            <!-- Opciones para Comparativa de Liquidados -->
+                            <div id="comparativaLiquidadosOptions" class="comparativa-options">
+                                <h6 class="mb-3">CONFIGURACIÓN DE COMPARATIVA LIQUIDADOS</h6>
+                                
+                                <!-- Rango de Años -->
+                                <div class="year-range-container mb-3">
+                                    <div class="form-group">
+                                        <label for="anio_inicio_liq" class="form-label">Año Inicio</label>
+                                        <select class="form-select" id="anio_inicio_liq" name="anio_inicio_liq">
+                                            <option value="2023">2023</option>
+                                            <option value="2024">2024</option>
+                                            <option value="2025">2025</option>
+                                            <option value="2026" selected>2026</option>
+                                        </select>
+                                    </div>
+                                    <div style="padding-top: 30px;">
+                                        <strong>-</strong>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="anio_fin_liq" class="form-label">Año Fin</label>
+                                        <select class="form-select" id="anio_fin_liq" name="anio_fin_liq">
+                                            <option value="2023">2023</option>
+                                            <option value="2024">2024</option>
+                                            <option value="2025">2025</option>
+                                            <option value="2026" selected>2026</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Selección de Regiones -->
+                                <div class="mb-3">
+                                    <label class="form-label">Regiones a Incluir</label>
+                                    <div class="region-checkboxes">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="region_sierra_liq" name="regiones_liq[]" value="1" checked>
+                                            <label class="form-check-label" for="region_sierra_liq">
+                                                Sierra
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="region_costa_liq" name="regiones_liq[]" value="2" checked>
+                                            <label class="form-check-label" for="region_costa_liq">
+                                                Costa
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <small class="text-muted">Por defecto se incluyen ambas regiones</small>
+                                </div>
+                            </div>
+
+                            <!-- Periodo Escolar (para reportes tradicionales) -->
+                            <div id="periodoContainer" class="mb-3">
                                 <label for="id_periodo" class="form-label">
                                     <strong>Período Escolar:</strong>
                                 </label>
                                 <select class="form-select" id="id_periodo" name="id_periodo" required>
                                     <option value="">Seleccione un período...</option>
-                                    @if(isset($periodos))
-                                        @foreach($periodos as $periodo)
-                                            <option value="{{ $periodo->idperiodoescolar }}">{{ $periodo->periodoescolar }}</option>
-                                        @endforeach
-                                    @else
-                                        <option value="26">2024-2025</option>
-                                        <option value="25">2023-2024</option>
-                                        <option value="24">2022-2023</option>
-                                        <option value="23">2021-2022</option>
-                                    @endif
+                                    @foreach($periodos as $periodo)
+                                        <option value="{{ $periodo->idperiodoescolar }}">
+                                            {{ $periodo->descripcion }}
+                                        </option>
+                                    @endforeach
                                 </select>
-                                <!-- <div id="periodo_warning" class="mt-2" style="display: none;">
-                                    <small class="text-warning">
-                                        ⚠️ <span id="warning_text"></span>
-                                    </small>
-                                </div> -->
+                                <small class="text-muted">Si experimenta problemas, use el botón "Probar Conexión" primero</small>
                             </div>
 
+                            <!-- Indicador de Carga -->
+                            <div class="loading text-center">
+                                <div class="spinner-border text-success" role="status">
+                                    <span class="visually-hidden">Cargando...</span>
+                                </div>
+                                <p class="mt-2 mb-0">Generando archivo CSV, por favor espere...</p>
+                            </div>
+
+                            <!-- Botones de Acción -->
                             <div class="text-center">
-                                <button type="submit" class="btn btn-success btn-download" data-format="csv">
+                                <button type="submit" class="btn btn-success btn-download">
                                     📥 Descargar CSV (Recomendado)
                                 </button>
-                                <button type="button" class="mt-2 btn btn-primary ms-2 btn-download-excel" id="btnExcelFacturado" onclick="descargarExcel()" style="display: none;">
-                                    📊 Reporte contabilidad 
+                                <button type="button" class="btn btn-primary ms-2 btn-download-excel" id="btnExcelFacturado" style="display: none;" onclick="descargarExcel()">
+                                    📊 Reporte Contabilidad
                                 </button>
-                                <br><br>
-                                <div class="loading mt-3">
-                                    <div class="spinner-border text-success" role="status">
-                                        <span class="visually-hidden">Procesando...</span>
-                                    </div>
-                                    <p class="mt-2">Generando archivo CSV, por favor espere...</p>
-                                </div>
                             </div>
                         </form>
                     </div>
@@ -132,33 +305,78 @@
         </div>
     </div>
 
+    <!-- Modal de Progreso de Períodos -->
+    <div class="modal fade" id="progressModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title">📊 Procesando Comparativa de Liquidados</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <p class="mb-2"><strong>Progreso general:</strong></p>
+                        <div class="progress" style="height: 25px;">
+                            <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                 role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                <span id="progressText">0%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="mb-2"><strong>Períodos procesados:</strong></p>
+                        <div id="periodosLista" style="max-height: 200px; overflow-y: auto; background: #f8f9fa; padding: 10px; border-radius: 4px; border: 1px solid #dee2e6;">
+                            <p class="text-muted mb-0">Iniciando...</p>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <p id="statusText" class="text-muted mb-0">Preparando consulta...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Función para actualizar los períodos disponibles según el tipo de reporte
-        function actualizarPeriodos() {
+        // Función para actualizar opciones según el tipo de reporte
+        function actualizarOpciones() {
             const tipoReporte = document.getElementById('tipo_reporte').value;
-            const periodoSelect = document.getElementById('id_periodo');
+            const comparativaOptions = document.getElementById('comparativaOptions');
+            const comparativaLiquidadosOptions = document.getElementById('comparativaLiquidadosOptions');
+            const periodoContainer = document.getElementById('periodoContainer');
             const btnExcelFacturado = document.getElementById('btnExcelFacturado');
-            // const warningDiv = document.getElementById('periodo_warning');
-            const warningText = document.getElementById('warning_text');
+            const periodoSelect = document.getElementById('id_periodo');
 
-            // Limpiar warning
-            // warningDiv.style.display = 'none';
-
-            // Si hay un mensaje de error visible, ocultarlo al cambiar el tipo de reporte
+            // Limpiar mensajes de error
             limpiarMensajeError();
 
-            // Mostrar botón de Excel solo para Facturado y Ventas
-            if (tipoReporte === 'facturado' || tipoReporte === 'ventas') {
-                btnExcelFacturado.style.display = 'inline-block';
-            } else {
+            if (tipoReporte === 'comparativa_ventas') {
+                // Mostrar opciones de comparativa ventas
+                comparativaOptions.style.display = 'block';
+                comparativaLiquidadosOptions.style.display = 'none';
+                periodoContainer.style.display = 'none';
+                periodoSelect.required = false;
                 btnExcelFacturado.style.display = 'none';
-            }
+            } else if (tipoReporte === 'comparativa_liquidados') {
+                // Mostrar opciones de comparativa liquidados
+                comparativaOptions.style.display = 'none';
+                comparativaLiquidadosOptions.style.display = 'block';
+                periodoContainer.style.display = 'none';
+                periodoSelect.required = false;
+                btnExcelFacturado.style.display = 'none';
+            } else {
+                // Mostrar selector de período tradicional
+                comparativaOptions.style.display = 'none';
+                comparativaLiquidadosOptions.style.display = 'none';
+                periodoContainer.style.display = 'block';
+                periodoSelect.required = true;
 
-            if (tipoReporte === 'pedidos_alcances') {
-                // Mostrar warning para pedidos_alcances
-                // warningDiv.style.display = 'block';
-                // warningText.innerHTML = 'Para períodos > 27 se usa sp_pedidos_alcances_new, para períodos ≤ 26 se usa sp_pedidos_alcances_old';
+                // Mostrar botón de Excel solo para Facturado y Ventas
+                if (tipoReporte === 'facturado' || tipoReporte === 'ventas') {
+                    btnExcelFacturado.style.display = 'block';
+                } else {
+                    btnExcelFacturado.style.display = 'none';
+                }
             }
         }
 
@@ -203,8 +421,112 @@
 
         document.getElementById('downloadForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            descargarArchivo('csv');
+            
+            const tipoReporte = document.getElementById('tipo_reporte').value;
+            
+            if (tipoReporte === 'comparativa_ventas') {
+                descargarComparativa();
+            } else if (tipoReporte === 'comparativa_liquidados') {
+                descargarComparativaLiquidados();
+            } else {
+                descargarArchivo('csv');
+            }
         });
+
+        // Función para descargar comparativa de ventas
+        function descargarComparativa() {
+            const anioInicio = document.getElementById('anio_inicio').value;
+            const anioFin = document.getElementById('anio_fin').value;
+            const regionSierra = document.getElementById('region_sierra').checked;
+            const regionCosta = document.getElementById('region_costa').checked;
+
+            // Validaciones
+            if (!regionSierra && !regionCosta) {
+                alert('Debe seleccionar al menos una región (Sierra o Costa)');
+                return;
+            }
+
+            if (parseInt(anioInicio) > parseInt(anioFin)) {
+                alert('El año de inicio no puede ser mayor al año final');
+                return;
+            }
+
+            // Construir regiones
+            let regiones = [];
+            if (regionSierra) regiones.push('1');
+            if (regionCosta) regiones.push('2');
+
+            // Preparar UI
+            const btnDownload = document.querySelector('.btn-download');
+            const loadingDiv = document.querySelector('.loading');
+            const loadingText = loadingDiv.querySelector('p');
+            const spinner = loadingDiv.querySelector('.spinner-border');
+
+            btnDownload.disabled = true;
+            btnDownload.innerHTML = '⏳ Procesando...';
+            loadingDiv.style.display = 'block';
+            loadingText.innerHTML = `Generando comparativa de ventas ${anioInicio}-${anioFin}...<br><small>Esto puede tomar varios minutos</small>`;
+            spinner.style.display = 'block';
+
+            // Construir URL (siempre CSV para comparativa)
+            const downloadUrl = `/admin/reportes/comparativa-ventas?anio_inicio=${anioInicio}&anio_fin=${anioFin}&regiones=${regiones.join(',')}&formato=csv`;
+
+            // Descargar
+            fetch(downloadUrl)
+            .then(response => {
+                if (!response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        return response.json().then(errorData => {
+                            throw new Error(errorData.message || `Error HTTP: ${response.status}`);
+                        });
+                    }
+                    throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+                }
+
+                // Extraer nombre del archivo (comparativa siempre es CSV)
+                let filename = `comparativa_ventas_${anioInicio}_${anioFin}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.csv`;
+                const contentDisposition = response.headers.get('content-disposition');
+                if (contentDisposition && contentDisposition.includes('filename=')) {
+                    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                    if (matches && matches[1]) {
+                        filename = matches[1].replace(/['"]/g, '');
+                    }
+                }
+
+                return response.blob().then(blob => ({ blob, filename }));
+            })
+            .then(({ blob, filename }) => {
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+
+                loadingText.innerHTML = `✅ Descarga completada exitosamente!<br><small>Revise su carpeta de descargas</small>`;
+                spinner.style.display = 'none';
+                
+                setTimeout(() => {
+                    btnDownload.disabled = false;
+                    btnDownload.innerHTML = '📥 DESCARGAR CSV (Recomendado)';
+                    loadingDiv.style.display = 'none';
+                    loadingText.innerHTML = 'Generando archivo CSV, por favor espere...';
+                    spinner.style.display = 'block';
+                }, 3000);
+            })
+            .catch(error => {
+                console.error('Error técnico:', error);
+                spinner.style.display = 'none';
+                loadingText.innerHTML = `<span style="color: red;">❌ ${error.message}</span><br><small>Por favor intente nuevamente</small>`;
+                
+                btnDownload.disabled = false;
+                btnDownload.innerHTML = '📥 DESCARGAR CSV (Recomendado)';
+            });
+        }
 
         // Función para descargar Excel
         function descargarExcel() {
@@ -222,12 +544,19 @@
         // Función unificada para descargar archivos
         function descargarArchivo(formato) {
             const tipoReporte = document.getElementById('tipo_reporte').value;
-            const idPeriodo = document.getElementById('id_periodo').value;
             
             if (!tipoReporte) {
                 alert('Por favor seleccione un tipo de reporte');
                 return;
             }
+
+            // Si es comparativa, usar función específica
+            if (tipoReporte === 'comparativa_ventas') {
+                descargarComparativa();
+                return;
+            }
+            
+            const idPeriodo = document.getElementById('id_periodo').value;
             
             if (!idPeriodo) {
                 alert('Por favor seleccione un período escolar');
@@ -647,6 +976,196 @@
             document.body.removeChild(link);
             
             URL.revokeObjectURL(url);
+        }
+
+        // Función para descargar comparativa de liquidados con modal de progreso
+        async function descargarComparativaLiquidados() {
+            const anioInicio = document.getElementById('anio_inicio_liq').value;
+            const anioFin = document.getElementById('anio_fin_liq').value;
+            const regionSierra = document.getElementById('region_sierra_liq').checked;
+            const regionCosta = document.getElementById('region_costa_liq').checked;
+
+            // Validaciones
+            if (!regionSierra && !regionCosta) {
+                alert('Debe seleccionar al menos una región (Sierra o Costa)');
+                return;
+            }
+
+            if (parseInt(anioInicio) > parseInt(anioFin)) {
+                alert('El año de inicio no puede ser mayor al año final');
+                return;
+            }
+
+            // Construir regiones
+            let regiones = [];
+            if (regionSierra) regiones.push('1');
+            if (regionCosta) regiones.push('2');
+
+            // Preparar UI
+            const btnDownload = document.querySelector('.btn-download');
+            btnDownload.disabled = true;
+            btnDownload.innerHTML = '⏳ Procesando...';
+
+            // Mostrar modal de progreso
+            const progressModal = new bootstrap.Modal(document.getElementById('progressModal'));
+            progressModal.show();
+
+            // Elementos del modal
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const periodosLista = document.getElementById('periodosLista');
+            const statusText = document.getElementById('statusText');
+
+            periodosLista.innerHTML = '';
+            statusText.innerHTML = 'Obteniendo períodos disponibles...';
+
+            try {
+                // Construir URL para la comparativa
+                const downloadUrl = `/admin/reportes/comparativa-liquidados?anio_inicio=${anioInicio}&anio_fin=${anioFin}&regiones=${regiones.join(',')}&formato=csv`;
+
+                // Realizar la petición con fetch para recibir el stream
+                const response = await fetch(downloadUrl);
+
+                if (!response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || `Error HTTP: ${response.status}`);
+                    }
+                    throw new Error(`Error HTTP: ${response.status} - ${response.statusText}`);
+                }
+
+                // Leer el stream para actualizar el progreso
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullBuffer = ''; 
+                const csvChunks = [];
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    // Decodificar el nuevo chunk y añadirlo al buffer acumulado
+                    fullBuffer += decoder.decode(value, { stream: true });
+
+                    // Procesar todos los mensajes de progreso completos que haya en el buffer
+                    let progressStartIndex;
+                    while ((progressStartIndex = fullBuffer.indexOf("<!-- PROGRESS: ")) !== -1) {
+                        const progressEndIndex = fullBuffer.indexOf(" -->", progressStartIndex);
+                        
+                        // Si no encontramos el final del mensaje, rompemos el ciclo para esperar más datos
+                        if (progressEndIndex === -1) break;
+
+                        // Todo lo que está ANTES del mensaje de progreso es datos del CSV
+                        if (progressStartIndex > 0) {
+                            const csvPart = fullBuffer.substring(0, progressStartIndex);
+                            if (csvPart.length > 0) {
+                                csvChunks.push(new TextEncoder().encode(csvPart));
+                            }
+                        }
+
+                        // Extraer y procesar el JSON del progreso
+                        const progressJSON = fullBuffer.substring(progressStartIndex + 15, progressEndIndex);
+                        try {
+                            const progress = JSON.parse(progressJSON);
+                            
+                            // Actualizar barra de progreso
+                            const percent = Math.round((progress.current / progress.total) * 100);
+                            progressBar.style.width = percent + '%';
+                            progressBar.setAttribute('aria-valuenow', percent);
+                            progressText.textContent = percent + '%';
+
+                            // Agregar período procesado a la lista
+                            const periodoItem = document.createElement('div');
+                            periodoItem.className = 'mb-1';
+                            periodoItem.innerHTML = `<small>✅ <strong>${progress.periodo}</strong> - ${progress.registros} registros</small>`;
+                            periodosLista.appendChild(periodoItem);
+                            periodosLista.scrollTop = periodosLista.scrollHeight;
+
+                            // Actualizar status
+                            statusText.innerHTML = `Procesando período ${progress.current} de ${progress.total}...`;
+                            if (progress.error) {
+                                console.error(`Error en periodo ${progress.periodo}:`, progress.error);
+                            }
+                        } catch (e) {
+                            console.warn('Error parseando JSON de progreso:', e, progressJSON);
+                        }
+
+                        // Cortar el buffer: descartar lo que ya procesamos (el mensaje de progreso)
+                        fullBuffer = fullBuffer.substring(progressEndIndex + 4);
+                    }
+
+                    // IMPORTANTE: No podemos limpiar el buffer completamente aquí porque 
+                    // podría contener el inicio de un mensaje de progreso.
+                    // Solo podemos limpiar lo que estamos SEGUROS que es CSV y no tiene inicios de tags.
+                    const lastTagStart = fullBuffer.lastIndexOf("<!--");
+                    if (lastTagStart > 0) {
+                        // Guardamos como CSV todo lo que está antes del último tag potencial
+                        const csvPart = fullBuffer.substring(0, lastTagStart);
+                        csvChunks.push(new TextEncoder().encode(csvPart));
+                        fullBuffer = fullBuffer.substring(lastTagStart);
+                    } else if (lastTagStart === -1 && fullBuffer.length > 500) {
+                        // Si no hay tags en un buffer grande, podemos enviarlo casi todo
+                        // dejamos un poco por si el tag se partió justo al final
+                        const safeLength = fullBuffer.length - 20; 
+                        const csvPart = fullBuffer.substring(0, safeLength);
+                        csvChunks.push(new TextEncoder().encode(csvPart));
+                        fullBuffer = fullBuffer.substring(safeLength);
+                    }
+                }
+
+                // Al terminar todo el stream, lo que quede en el buffer es el resto del CSV
+                if (fullBuffer.length > 0) {
+                    csvChunks.push(new TextEncoder().encode(fullBuffer));
+                }
+
+                // Crear blob solo con chunks limpios del CSV
+                const blob = new Blob(csvChunks, { type: 'text/csv' });
+                
+                // Extraer nombre del archivo
+                let filename = `comparativa_liquidados_${anioInicio}_${anioFin}_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.csv`;
+                const contentDisposition = response.headers.get('content-disposition');
+                if (contentDisposition && contentDisposition.includes('filename=')) {
+                    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition);
+                    if (matches && matches[1]) {
+                        filename = matches[1].replace(/["']/g, '');
+                    }
+                }
+
+                // Descargar el archivo
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(url);
+
+                // Actualizar UI de éxito
+                progressBar.style.width = '100%';
+                progressBar.setAttribute('aria-valuenow', 100);
+                progressText.textContent = '100%';
+                statusText.innerHTML = '✅ <strong>Descarga completada exitosamente!</strong>';
+
+                // Cerrar modal después de 3 segundos
+                setTimeout(() => {
+                    progressModal.hide();
+                    btnDownload.disabled = false;
+                    btnDownload.innerHTML = '📥 Descargar CSV (Recomendado)';
+                }, 3000);
+
+            } catch (error) {
+                console.error('Error técnico:', error);
+                statusText.innerHTML = `<span style="color: red;">❌ ${error.message}</span>`;
+                
+                setTimeout(() => {
+                    progressModal.hide();
+                    btnDownload.disabled = false;
+                    btnDownload.innerHTML = '📥 Descargar CSV (Recomendado)';
+                }, 5000);
+            }
         }
 
         // Función para generar Excel de Ventas con XLSX.js (con rowspan)

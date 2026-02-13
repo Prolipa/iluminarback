@@ -1646,4 +1646,163 @@ class CodigosLibrosController extends Controller
         ]);
     }
     //FIN METODOS JEYSON
+    public function codigosLibrosBuscarBtn(Request $request)
+    {
+        try {
+            $exacto = filter_var($request->input('exacto', false), FILTER_VALIDATE_BOOLEAN);
+
+            $mapCampos = [
+                'codigos'         => 'codigo',
+                'paquete'         => 'codigo_paquete',
+                'combo'           => 'combo',
+                'etiquetaCombo'   => 'codigo_combo',
+                'documentoVenta'  => 'codigo_proforma'
+            ];
+
+            foreach ($mapCampos as $param => $campo) {
+                if ($request->filled($param)) {
+
+                    $valor = $request->input($param);
+
+                    // 🔹 Construir filtro SOLO sobre codigoslibros
+                    $filtro = DB::table('codigoslibros');
+
+                    if (is_array($valor)) {
+                        $filtro->whereIn($campo, $valor);
+                    } else {
+                        if ($exacto) {
+                            $filtro->where($campo, $valor);
+                        } else {
+                            // LIKE optimizado
+                            $filtro->where($campo, 'like', $valor . '%');
+                        }
+                    }
+
+                    // 🔹 Limitar búsquedas individuales
+                    if (!is_array($valor)) {
+                        $filtro->limit(100);
+                    }
+
+                    // 🔹 Obtener solo los códigos filtrados
+                    $codigos = $filtro->pluck($campo);
+
+                    if ($codigos->isEmpty()) {
+                        return response()->json([]);
+                    }
+
+                    // 🔹 Ahora sí: query grande con JOINs
+                    $resultado = $this->construirConsultaBase()
+                        ->whereIn("c.$campo", $codigos)
+                        ->get();
+
+                    return response()->json($resultado);
+                }
+            }
+
+            return response()->json([]);
+
+        } catch (\Throwable $e) {
+            \Log::error('Error en búsqueda', [
+                'mensaje' => $e->getMessage(),
+                'linea'   => $e->getLine(),
+                'archivo' => $e->getFile()
+            ]);
+
+            return response()->json([
+                'error' => 'Error al buscar'
+            ], 500);
+        }
+    }
+
+
+
+/**
+ * Construye la consulta base con todos los joins y selects
+ */
+    private function construirConsultaBase()
+    {
+        return DB::table('codigoslibros as c')
+            ->selectRaw("
+                c.venta_lista_institucion,
+                c.anio,
+                c.serie,
+                c.codigo,
+                c.estado,
+                c.estado_liquidacion,
+                c.contador,
+                c.venta_estado,
+                c.bc_periodo,
+                c.idusuario,
+                c.id_periodo,
+                c.contrato,
+                c.libro_idlibro,
+                c.id_institucion,
+                c.bc_estado,
+                CONCAT(u.nombres, ' ', u.apellidos) as estudiante,
+                CONCAT(ucr.nombres, ' ', ucr.apellidos) as creador,
+                u.email,
+                u.cedula,
+                ib.nombreInstitucion as institucion_barras,
+                ivl.nombreInstitucion as institucion_lista,
+                ei.nombreInstitucion as institucion_estudiante,
+                c.created_at,
+                p.periodoescolar as periodo_estudiante,
+                pb.periodoescolar as periodo_barras,
+                c.bc_fecha_ingreso,
+                c.verif1,
+                c.verif2,
+                c.verif3,
+                c.verif4,
+                c.verif5,
+                IF(c.estado = '2', 'bloqueado', 'activo') as codigoEstado,
+                CASE
+                    WHEN c.estado_liquidacion = '0' THEN 'liquidado'
+                    WHEN c.estado_liquidacion = '1' THEN 'sin liquidar'
+                    WHEN c.estado_liquidacion = '2' AND c.liquidado_regalado = '0' THEN 'Regalado sin liquidar'
+                    WHEN c.estado_liquidacion = '2' AND c.liquidado_regalado = '1' THEN 'Regalado liquidado'
+                    WHEN c.estado_liquidacion = '3' THEN 'codigo devuelto'
+                    WHEN c.estado_liquidacion = '4' THEN 'guia'
+                END as liquidacion,
+                CASE
+                    WHEN c.bc_estado = '2' THEN 'codigo leido'
+                    WHEN c.bc_estado = '1' THEN 'codigo sin leer'
+                END as barrasEstado,
+                CASE
+                    WHEN c.venta_estado = '0' THEN ''
+                    WHEN c.venta_estado = '1' THEN 'Venta directa'
+                    WHEN c.venta_estado = '2' THEN 'Venta por lista'
+                END as ventaEstado,
+                c.factura,
+                c.prueba_diagnostica,
+                c.codigo_union,
+                IF(c.prueba_diagnostica = '1', 'Prueba de diagnóstico', 'Código normal') as tipoCodigo,
+                c.prueba_diagnostica,
+                c.porcentaje_descuento,
+                c.codigo_paquete,
+                c.fecha_registro_paquete,
+                c.liquidado_regalado,
+                c.codigo_proforma,
+                c.proforma_empresa,
+                c.devuelto_proforma,
+                ls.codigo_liquidacion,
+                CONCAT(ase.nombres, ' ', ase.apellidos) as asesor,
+                c.combo,
+                c.codigo_combo,
+                c.documento_devolucion,
+                c.plus,
+                c.quitar_de_reporte,
+                em.nombre as empresa,
+                ls.nombre as book
+            ")
+            ->leftJoin('usuario as u', 'c.idusuario', '=', 'u.idusuario')
+            ->leftJoin('usuario as ucr', 'c.idusuario_creador_codigo', '=', 'ucr.idusuario')
+            ->leftJoin('institucion as ei', 'c.id_institucion', '=', 'ei.idInstitucion')
+            ->leftJoin('institucion as ib', 'c.bc_institucion', '=', 'ib.idInstitucion')
+            ->leftJoin('institucion as ivl', 'c.venta_lista_institucion', '=', 'ivl.idInstitucion')
+            ->leftJoin('periodoescolar as p', 'c.id_periodo', '=', 'p.idperiodoescolar')
+            ->leftJoin('periodoescolar as pb', 'c.bc_periodo', '=', 'pb.idperiodoescolar')
+            ->leftJoin('libros_series as ls', 'ls.idLibro', '=', 'c.libro_idlibro')
+            ->leftJoin('usuario as ase', 'c.asesor_id', '=', 'ase.idusuario')
+            ->leftJoin('empresas as em', 'c.proforma_empresa', '=', 'em.id');
+    }
 }

@@ -48,7 +48,7 @@ class FacturaOperativaController extends Controller
             $venta->ven_observacion = $data['observacion']; // Incluye 'Destino: Notas/Prefacturas' si se concatena o usar campo destino si existe
             
             // Concatenar destino a observacion si no hay campo destino en tabla
-            $destinoTexto = ($data['destino'] == 1) ? 'Destino: Notas' : 'Destino: PreFacturas';
+            $venta->destino = $data['destino'] ;
             $venta->ven_observacion = $venta->ven_observacion;
             // . " - " . $destinoTexto;
             $venta->idtipodoc = 20; // Factura Operativa

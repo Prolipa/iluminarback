@@ -68,18 +68,42 @@ class UnidadController extends Controller
         }else{
             $dato = new unidad();
         }
+        // Normalizar valores "null" string a null real
+        $pag_inicio_guia = $request->pag_inicio_guia;
+        if ($pag_inicio_guia == '' || $pag_inicio_guia == 'null' || $pag_inicio_guia == 0 || $pag_inicio_guia == '0') {
+            $pag_inicio_guia = null;
+        }
+        $pag_fin_guia = $request->pag_fin_guia;
+        if ($pag_fin_guia == '' || $pag_fin_guia == 'null' || $pag_fin_guia == 0 || $pag_fin_guia == '0') {
+            $pag_fin_guia = null;
+        }
+        // VALIDACIÓN CONTRA TABLA LIBRO
+        if ($pag_inicio_guia !== null || $pag_fin_guia !== null) {
+            $libro = libro::where('idlibro', $request->id_libro)->first();
+            if (!$libro || $libro->weblibro_guia === null || trim($libro->weblibro_guia) === '') {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Para registrar páginas de guía primero debe registrar un libro web con guía.'
+                ], 422);
+            }
+        }
         $dato->id_libro = $request->id_libro;
         $dato->unidad = $request->unidad;
         $dato->nombre_unidad = $request->nombre_unidad;
         $dato->pag_inicio = $request->pag_inicio;
         $dato->pag_fin = $request->pag_fin;
+        $dato->pag_inicio_guia = $pag_inicio_guia;
+        $dato->pag_fin_guia = $pag_fin_guia;
         $dato->txt_nombre_unidad = $request->txt_nombre_unidad;
         $dato->user_created = $request->user_created;
         $dato->estado = '1';
         $dato->save();
         // $datos = DB::UPDATE("UPDATE unidades_libros SET id_libro = $request->id_libro, unidad = $request->unidad, nombre_unidad = '$request->nombre_unidad', pag_inicio = $request->pag_inicio, pag_fin = $request->pag_fin, estado = $request->estado WHERE id_unidad_libro =  $request->id_unidad_libro");
 
-        return $dato;
+        return response()->json([
+            'ok' => true,
+            'data' => $dato
+        ]);
 
     }
     //api:postupdateUnidades?porImportacionUnidades=1

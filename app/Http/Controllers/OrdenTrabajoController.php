@@ -137,8 +137,7 @@ ORDER BY or_fecha DESC LIMIT 1");
     public function PostOrden_Registrar_modificar(Request $request)
     {
         try {
-            set_time_limit(6000000);
-            ini_set('max_execution_time', 6000000);
+
 
             DB::beginTransaction();
 
@@ -298,6 +297,15 @@ ORDER BY or_fecha DESC LIMIT 1");
 
 
     }
+
+    //METODOS JEYSON INICIO
+    public function Get_Detallexprocodigo(Request $request){
+        $query = DB::SELECT("SELECT DISTINCT pro_codigo, det_or_acabados
+            FROM 1_1_detalle_orden_trabajo
+            WHERE pro_codigo = '$request->pro_codigo'");
+        return $query;
+    }
+    //METODOS JEYSON FIN
 
 
 

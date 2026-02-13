@@ -54,8 +54,8 @@ class PerseoFacturacionController extends Controller
         try{
             $url        = "facturas_consulta";
             $formData   = [
-                "facturaid" => "1", //3162
-                "dias"      => "100"
+                "facturaid" => "", //3162
+                "dias"      => "10"
             ];
             // $formData   = [
             //     "facturaid" => $request->facturaid,

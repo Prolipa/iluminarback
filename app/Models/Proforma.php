@@ -30,5 +30,11 @@ class Proforma extends Model
         'prof_tipo_proforma',
         'created_at',
         'updated_at',
+        'ven_cliente',
+        'ruc_cliente',
+        'clientesidPerseo',
+        'id_ins_depacho',
+        'contrato',
+        'id_periodo',
     ];
 }

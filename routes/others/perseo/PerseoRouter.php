@@ -41,6 +41,8 @@ Route::group(['prefix' => 'perseo/productos'], function () {
     Route::post('productos_eliminar','Perseo\PerseoProductoController@productos_eliminar');
     //consultar producto
     Route::post('productos_consulta','Perseo\PerseoProductoController@productos_consulta');
+    //consultar producto x id
+    Route::post('productos_consulta_x_id','Perseo\PerseoProductoController@productos_consulta_x_id');
     //consultar imagenes de producto
     Route::post('productos_imagenes_consulta','Perseo\PerseoProductoController@productos_imagenes_consulta');
     //consulta de lineas de producto

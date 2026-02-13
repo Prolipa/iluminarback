@@ -2028,6 +2028,167 @@ class PedidosController extends Controller
         $pedidos = $this->getPedido(4,$periodo);
         return $pedidos;
     }
+     public function get_pedidos_periodoAgrupado_new($periodo){
+        $pedidos = $this->getPedidoContrato(4,$periodo);
+        return $pedidos;
+    }
+    public function get_libros_pedidosAlcancesXContrato(Request $request){
+        if($request->periodo==20){
+            $libros = DB::SELECT("SELECT
+                p.contrato_generado,
+                pe.descripcion AS periodo,
+                i.idInstitucion,
+                i.nombreInstitucion,
+                p.descuento,
+                ls.codigo_liquidacion AS pro_codigo,
+                l.nombrelibro AS nombre_libro,
+                pfp.pfn_pvp AS precio,
+                SUM(pv.valor) AS cantidad
+            FROM pedidos_val_area pv
+            LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
+            LEFT JOIN libro l ON l.idlibro = pv.id_libro
+            LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+            LEFT JOIN institucion i ON i.idInstitucion = p.id_institucion
+            LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
+            LEFT JOIN pedidos_formato_new pfp
+                ON pfp.idlibro = pv.id_libro
+                AND pfp.idperiodoescolar = p.id_periodo
+            WHERE p.contrato_generado IS NOT NULL
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.id_periodo = $request->periodo
+            AND p.contrato_generado = '$request->contrato'
+            AND pv.alcance = 0
+            GROUP BY
+                p.contrato_generado,
+                pe.descripcion,
+                i.idInstitucion,
+                i.nombreInstitucion,
+                p.descuento,
+                ls.codigo_liquidacion,
+                l.nombrelibro,
+                pfp.pfn_pvp
+
+            UNION ALL
+
+            SELECT
+                p.contrato_generado,
+                pe.descripcion AS periodo,
+                i.idInstitucion,
+                i.nombreInstitucion,
+                p.descuento,
+                ls.codigo_liquidacion AS pro_codigo,
+                l.nombrelibro AS nombre_libro,
+                pfp.pfn_pvp AS precio,
+                SUM(pv.valor) AS cantidad
+            FROM pedidos_val_area pv
+            LEFT JOIN pedidos_alcance a ON a.id = pv.alcance
+            LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
+            LEFT JOIN libro l ON l.idlibro = pv.id_libro
+            LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+            LEFT JOIN institucion i ON i.idInstitucion = p.id_institucion
+            LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
+            LEFT JOIN pedidos_formato_new pfp
+                ON pfp.idlibro = pv.id_libro
+                AND pfp.idperiodoescolar = p.id_periodo
+            WHERE p.contrato_generado IS NOT NULL
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.id_periodo = $request->periodo
+            AND p.contrato_generado = '$request->contrato'
+            AND pv.alcance <> 0
+            AND a.estado_alcance = '1'
+            GROUP BY
+                p.contrato_generado,
+                pe.descripcion,
+                i.idInstitucion,
+                i.nombreInstitucion,
+                p.descuento,
+                ls.codigo_liquidacion,
+                l.nombrelibro,
+                pfp.pfn_pvp
+            ");
+            return $libros;
+        }else{
+            $libros = DB::SELECT("SELECT
+                p.contrato_generado,
+                pe.descripcion AS periodo,
+                i.idInstitucion,
+                i.nombreInstitucion,
+                p.descuento,
+                ls.codigo_liquidacion AS pro_codigo,
+                l.nombrelibro AS nombre_libro,
+                pfp.pfn_pvp AS precio,
+                SUM(pv.pvn_cantidad) AS cantidad
+            FROM pedidos_val_area_new pv
+            LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
+            LEFT JOIN libro l ON l.idlibro = pv.idlibro
+            LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+            LEFT JOIN institucion i ON i.idInstitucion = p.id_institucion
+            LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
+            LEFT JOIN pedidos_formato_new pfp ON pfp.idlibro = pv.idlibro
+            LEFT JOIN 1_4_cal_producto prod ON prod.pro_codigo = ls.codigo_liquidacion
+            WHERE p.contrato_generado IS NOT NULL
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.id_periodo = $request->periodo
+            AND pfp.idperiodoescolar = $request->periodo
+            AND p.contrato_generado = '$request->contrato'
+            AND pv.pvn_tipo = '0'
+            GROUP BY
+                p.contrato_generado,
+                pe.descripcion,
+                i.idInstitucion,
+                i.nombreInstitucion,
+                p.descuento,
+                ls.codigo_liquidacion,
+                l.nombrelibro,
+                pfp.pfn_pvp
+
+            UNION ALL
+
+            SELECT
+                p.contrato_generado,
+                pe.descripcion AS periodo,
+                i.idInstitucion,
+                i.nombreInstitucion,
+                p.descuento,
+                ls.codigo_liquidacion AS pro_codigo,
+                l.nombrelibro AS nombre_libro,
+                pfp.pfn_pvp AS precio,
+                SUM(pv.pvn_cantidad) AS cantidad
+            FROM pedidos_val_area_new pv
+            LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
+            LEFT JOIN pedidos_alcance a ON a.id = pv.pvn_tipo
+            LEFT JOIN libro l ON l.idlibro = pv.idlibro
+            LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+            LEFT JOIN institucion i ON i.idInstitucion = p.id_institucion
+            LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
+            LEFT JOIN pedidos_formato_new pfp ON pfp.idlibro = pv.idlibro
+            LEFT JOIN 1_4_cal_producto prod ON prod.pro_codigo = ls.codigo_liquidacion
+            WHERE p.contrato_generado IS NOT NULL
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.id_periodo = $request->periodo
+            AND pfp.idperiodoescolar = $request->periodo
+            AND pv.pvn_tipo <> '0'
+            AND a.estado_alcance = '1'
+            AND p.contrato_generado = '$request->contrato'
+            GROUP BY
+                p.contrato_generado,
+                pe.descripcion,
+                i.idInstitucion,
+                i.nombreInstitucion,
+                p.descuento,
+                ls.codigo_liquidacion,
+                l.nombrelibro,
+                pfp.pfn_pvp;
+
+            ");
+            return $libros;
+        }
+
+    }
     public function get_pedidos_periodo($periodo,$rol,$idusuario)
     {
         // $clave = "get_pedidos_periodo".$periodo.$idusuario;

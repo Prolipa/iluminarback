@@ -26,7 +26,7 @@ class HomeController extends Controller
         Auth::user();
          $user = Auth::user()->load([
             'grupo',
-            'institucion:idInstitucion,nombreInstitucion'
+            'institucion:idInstitucion,nombreInstitucion,tipo_institucion',
         ]);
         return $user;
     }

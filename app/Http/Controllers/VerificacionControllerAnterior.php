@@ -15,6 +15,7 @@ use App\Models\VerificacionHasInstitucion;
 use App\Models\VerificacionHistoricoCambios;
 use App\Models\NotificacionGeneral;
 use App\Models\Usuario;
+use App\Models\VerificacionCodigos;
 use App\Models\VerificacionComboLiquidado;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\pedidos\NotificacionRepository;
@@ -114,7 +115,8 @@ class VerificacionControllerAnterior extends Controller
     }
     public function getCodigosIndividualLiquidar($institucion,$periodo){
         $traerCodigosIndividual = DB::SELECT("SELECT c.codigo, ls.codigo_liquidacion,   c.serie,
-            c.libro_idlibro,c.libro as nombrelibro, c.codigo_combo
+            c.libro_idlibro,c.libro as nombrelibro, c.codigo_combo, c.combo, c.codigo_paquete, c.plus, c.codigo_proforma, c.proforma_empresa,
+            c.estado_liquidacion, c.prueba_diagnostica, c.codigo_union
         FROM codigoslibros c
         LEFT JOIN usuario u ON c.idusuario = u.idusuario
         LEFT JOIN  libros_series ls ON ls.idLibro = c.libro_idlibro
@@ -139,7 +141,13 @@ class VerificacionControllerAnterior extends Controller
                 c.libro as nombrelibro,
                 c.codigo_combo,
                 c.combo,
-                c.prueba_diagnostica
+                c.prueba_diagnostica,
+                c.codigo_paquete,
+                c.plus,
+                c.codigo_proforma,
+                c.proforma_empresa,
+                c.estado_liquidacion,
+                c.codigo_union
             FROM codigoslibros c
             LEFT JOIN usuario u ON c.idusuario = u.idusuario
             LEFT JOIN libros_series ls ON ls.idLibro = c.libro_idlibro
@@ -172,7 +180,9 @@ class VerificacionControllerAnterior extends Controller
         return $traerCodigosIndividual;
     }
     public function getRegaladosXLiquidar($institucion,$periodo){
-        $query = DB::SELECT("SELECT c.codigo, c.codigo_combo
+        $query = DB::SELECT("SELECT c.codigo, c.codigo_combo, c.combo, c.codigo_paquete, c.plus,
+        c.libro as nombrelibro, c.libro_idlibro, c.serie, c.codigo_proforma, c.proforma_empresa, c.estado_liquidacion,
+        c.prueba_diagnostica, c.codigo_union
         FROM codigoslibros c
         WHERE  c.estado_liquidacion = '2'
         AND (c.bc_institucion       = '$institucion' OR c.venta_lista_institucion = '$institucion')
@@ -544,6 +554,120 @@ class VerificacionControllerAnterior extends Controller
         //obtener el historico changes de verificaciones
         if($request->getHistoricoVerificacionesCambios){
             return $this->getHistoricoVerificacionesCambios($request);
+        }
+     }
+     //api:get/n_verificacion?getAllCodigosXContrato=1&periodo_id=25&institucion_id=1611&porInstitucion=1&sinPrecio=1
+     public function getAllCodigosXContrato($request){
+        try{
+            //limpiar cache
+            Cache::flush();
+            $institucion_id         = $request->institucion_id;
+            $periodo                = $request->periodo_id;
+            $IdVerificacion         = $request->IdVerificacion;
+            $contrato               = $request->contrato;
+            $detalles               = $this->codigoRepository->getCodigosIndividuales($request);
+            $getCombos              = $this->codigoRepository->getCombos();
+            $sinPrecio              = $request->sinPrecio;
+            //formData filtrar del detalles los codigos que tenga combo diferente de null y codigo_combo diferente de null
+            $formData               = collect($detalles)->filter(function ($item) {
+                return $item->combo != null && $item->codigo_combo != null && ($item->quitar_de_reporte == 0 || $item->quitar_de_reporte == null);
+            })->values();
+            $getAgrupadoCombos      = $this->codigoRepository->getAgrupadoCombos($formData,$getCombos);
+            //unir $detalles con $getAgrupadoCombos
+            $detalles               = collect($detalles)->merge($getAgrupadoCombos);
+            if($sinPrecio){
+                $id_pedido = 0;
+                $getPedigo = DB::SELECT("SELECT * FROM pedidos p
+                WHERE p.id_institucion = '$institucion_id'
+                AND p.id_periodo = '$periodo'
+                AND p.estado = '1'");
+                if(count($getPedigo) > 0){
+                    $id_pedido = $getPedigo[0]->id_pedido;
+                }
+                foreach($detalles as $item){
+                    $item->id_pedido = $id_pedido;
+                }
+                return $detalles;
+            }
+            $datos                  = [];
+            $contador = 0;
+            foreach($detalles as $key => $item){
+                //plan lector
+                $precio = 0;
+                $query = [];
+                if($item->id_serie == 6){
+                    $query = DB::SELECT("SELECT f.pvp AS precio
+                    FROM pedidos_formato f
+                    WHERE f.id_serie    = '6'
+                    AND f.id_area       = '69'
+                    AND f.id_libro      = '$item->libro_idReal'
+                    AND f.id_periodo    = '$periodo'");
+                }else{
+                    $query = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,
+                    (
+                        SELECT f.pvp AS precio
+                        FROM pedidos_formato f
+                        WHERE f.id_serie = ls.id_serie
+                        AND f.id_area = a.area_idarea
+                        AND f.id_periodo = '$periodo'
+                    )as precio
+                    FROM libros_series ls
+                    LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                    LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+                    WHERE ls.id_serie = '$item->id_serie'
+                    AND a.area_idarea  = '$item->area_idarea'
+                    AND l.Estado_idEstado = '1'
+                    AND a.estado = '1'
+                    AND ls.year = '$item->year'
+                    LIMIT 1
+                    ");
+                }
+                if(count($query) > 0){
+                    $precio = $query[0]->precio;
+                }
+                $datos[$contador] = [
+                    "codigo_libro"              => $item->codigo_libro,
+                    "IdVerificacion"            => $IdVerificacion,
+                    "verificacion_id"           => $request->verificacion_id,
+                    "contrato"                  => $contrato,
+                    "codigo"                    => $item->codigo,
+                    "nombre_libro"              => $item->nombrelibro,
+                    "libro_id"                  => $item->libro_idlibro,
+                    "libro_idlibro"             => $item->libro_idlibro,
+                    "id_serie"                  => $item->id_serie,
+                    "id_periodo"                => $periodo,
+                    "precio"                    => $precio,
+                    "estado_liquidacion"        => $item->estado_liquidacion ?? null,
+                    "estado"                    => $item->estado ?? null,
+                    "bc_estado"                 => $item->bc_estado?? null,
+                    "venta_estado"              => $item->venta_estado?? null,
+                    "liquidado_regalado"        => $item->liquidado_regalado?? null,
+                    "bc_institucion"            => $item->bc_institucion?? null,
+                    "contrato"                  => $item->contrato?? null,
+                    "venta_lista_institucion"   => $item->venta_lista_institucion?? null,
+                    "plus"                      => $item->plus?? null,
+                    'quitar_de_reporte'         => $item->quitar_de_reporte?? null,
+                    'combo'                     => $item->combo?? null,
+                    'codigo_combo'              => $item->codigo_combo?? null,
+                    'tipo_codigo'               => $item->tipo_codigo,
+                    'codigos_combos'            => $item->codigos_combos?? null,
+                    'cantidad_combos'           => $item->cantidad_combos?? null,
+                    'hijos'                     => $item->hijos?? null,
+                    'cantidad_items'            => $item->cantidad_items?? null,
+                    'cantidad_subitems'         => $item->cantidad_subitems?? null,
+                    'verificacion'              => $item->verificacion?? null,
+                    'idtipodocumento'           => $item->idtipodocumento?? null,
+                    'descuento'                 => $item->descuento?? null,
+                    'porcentaje_personalizado_regalado' => $item->porcentaje_personalizado_regalado?? null,
+                    'codigo_proforma'           => $item->codigo_proforma?? null,
+                    'proforma_empresa'          => $item->proforma_empresa?? null,
+                ];
+                $contador++;
+            }
+            return $datos;
+        }
+        catch(\Exception $e){
+            return ["status"=>"0","message"=> $e->getMessage(), "error" => $e->getLine() ];
         }
      }
 
@@ -2379,6 +2503,7 @@ class VerificacionControllerAnterior extends Controller
                 } else {
                     //OBTENER LA CANTIDAD DE LA VERIFICACION ACTUAL
                     $consultarGuardado[] =  $this->updateCodigoIndividualInicial($traeridVerificacion, $traerCodigosIndividual, $contrato, $traerNumeroVerificacion, $periodo, $institucion, "liquidacion", $user_created, $searchComboEtiquetas);
+
                     //ACTUALIZAR EN LOS CODIGOS REGALADOS LOS DATOS DE VERIFICACION
                     if (count($arregloRegalados) > 0) {
                         $consultarGuardado[] =  $this->updateCodigoIndividualInicial($traeridVerificacion, $arregloRegalados, $contrato, $traerNumeroVerificacion, $periodo, $institucion, "regalado", $user_created, $searchComboEtiquetas);
@@ -2533,14 +2658,14 @@ class VerificacionControllerAnterior extends Controller
                     $buscarComboIndividual = DB::SELECT("CALL obtener_verificacion_minima_por_combo('$codigo_combo');");
                     if(count($buscarComboIndividual) > 0){
                         // Validar si existe algun combo liquidado en otra escuela
-                        foreach ($buscarComboIndividual as $item) {
-                            if ($item->contrato != $contrato) {
+                        foreach ($buscarComboIndividual as $itemCombo) {
+                            if ($itemCombo->contrato != $contrato) {
                                 $this->verificacionRepository->saveComboLiquidado($periodo, $codigo_combo, $contrato, collect($buscarComboIndividual));
                                 // throw new \Exception("El contrato {$item->contrato} del combo $codigo_combo no coincide con el contrato $contrato");
                                 $arrayErroresCombo[] =
                                 [
                                     'codigo' => $codigo_combo,
-                                    'error'  => "El contrato {$item->contrato} del combo $codigo_combo no coincide con el contrato $contrato"
+                                    'error'  => "El contrato {$itemCombo->contrato} del combo $codigo_combo no coincide con el contrato $contrato"
                                 ];
                                 $errorCombo = 1;
                                 continue;
@@ -2562,6 +2687,7 @@ class VerificacionControllerAnterior extends Controller
             $ingresar = DB::table('codigoslibros')
                 ->where('codigo', $item->codigo)
                 ->update($datosCodigo);
+            $this->save_verificacionCodigosGuardar($item,$contrato,$idVerificacionLocal,$institucion,$periodo);
 
             if ($ingresar) {
                 HistoricoCodigos::create([
@@ -2576,6 +2702,40 @@ class VerificacionControllerAnterior extends Controller
             }
         }
         return $arrayErroresCombo; // o cualquier dato relevante
+    }
+
+    public function save_verificacionCodigosGuardar($item,$contrato,$idVerificacionLocal,$institucion,$periodo){
+        //validar si codigo prueba diagnostica 1 no guardar
+        if($item->prueba_diagnostica == '1'){
+            return;
+        }
+        // aplica para los combos
+        if(!isset($item->prueba_diagnostica) ){
+            return;
+        }
+        // VALIDAR QUE SI EXISTE NO CREAR
+        if(VerificacionCodigos::where('contrato',$contrato)
+            ->where('id_verificacion',$idVerificacionLocal)
+            ->where('codigo',$item->codigo)
+            ->exists()){
+            return;
+        }
+        $verifCodigo                        = new VerificacionCodigos();
+        $verifCodigo->contrato              = $contrato;
+        $verifCodigo->id_verificacion       = $idVerificacionLocal;
+        $verifCodigo->codigo                = $item->codigo;
+        $verifCodigo->codigo_combo          = $item->codigo_combo;
+        $verifCodigo->combo                 = $item->combo;
+        $verifCodigo->plus                  = $item->plus == null || $item->plus ==  "" ? '0' : $item->plus;
+        $verifCodigo->codigo_paquete        = $item->codigo_paquete;
+        $verifCodigo->id_libro              = $item->libro_idlibro;
+        $verifCodigo->bc_periodo            = $periodo;
+        $verifCodigo->bc_institucion        = $institucion;
+        $verifCodigo->documento_venta       = $item->codigo_proforma;
+        $verifCodigo->empresa_documento     = $item->proforma_empresa;
+        $verifCodigo->estado_liquidacion    = $item->estado_liquidacion;
+        $verifCodigo->codigo_union          = $item->codigo_union;
+        $verifCodigo->save();
     }
 
     //api:get/getcodigosLiquidar/{contrato}
@@ -2628,7 +2788,7 @@ class VerificacionControllerAnterior extends Controller
             })->values();
             $getAgrupadoCombos      = $this->codigoRepository->getAgrupadoCombos($formData,$getCombos);
             //unir $detalles con $getAgrupadoCombos
-            $detalles               = collect($detalles)->merge($getAgrupadoCombos);
+            $detalles               = collect($detalles)->where('estado_liquidacion','<>',3)->merge($getAgrupadoCombos);
             if($sinPrecio){
                 $id_pedido = 0;
                 $getPedigo = DB::SELECT("SELECT * FROM pedidos p
@@ -2756,6 +2916,8 @@ class VerificacionControllerAnterior extends Controller
                     'codigo_proforma'           => $item->codigo_proforma?? null,
                     'proforma_empresa'          => $item->proforma_empresa?? null,
                     'CombosTotalDevolucionSueltosPorcentaje' => $item->CombosTotalDevolucionSueltosPorcentaje ?? null,
+                    'nombre_institucion_bc'     => $item->nombre_institucion_bc ?? null,
+                    'nombre_institucion_venta'  => $item->nombre_institucion_venta ?? null,
                 ];
                 $contador++;
             }
@@ -2809,6 +2971,9 @@ class VerificacionControllerAnterior extends Controller
        }
        if($request->getCodigosIndividualesReporte){
             return $this->getCodigosIndividualesReporte($request);
+       }
+       if($request->getVerificacionesHistorico){
+            return $this->getVerificacionesHistorico($request);
        }
     }
     // api:get/metodosGetVerificaciones?getVerificaciones=1&id_asesor=4179&pendientesNot=1&soloLongitud=1
@@ -3742,6 +3907,49 @@ class VerificacionControllerAnterior extends Controller
         return $query;
     }
 
+    //api:get/metodosGetVerificaciones?getVerificacionesHistorico=1&contrato=C-S25-0000042-CHL&verificacion_id=3913
+    public function getVerificacionesHistorico($request)
+    {
+        $contrato          = $request->input("contrato", "");
+        $verificacion_id   = $request->input("verificacion_id", 0);
+
+      $query = DB::select("
+        SELECT
+            vc.*,
+            l.nombrelibro,
+            ls.codigo_liquidacion,
+
+            CASE
+                WHEN vc.empresa_documento = 1 THEN 'Prolipa'
+                WHEN vc.empresa_documento = 3 THEN 'Calmed'
+                WHEN vc.empresa_documento IS NULL THEN 'Sin Empresa'
+                ELSE 'Otra'
+            END AS empresa_documento_descr,
+
+            CONCAT('verif', v.num_verificacion) AS codigo_verificacion,
+
+            CASE
+                WHEN v.num_verificacion = 1 AND cl.verif1 = vc.id_verificacion THEN 1
+                WHEN v.num_verificacion = 2 AND cl.verif2 = vc.id_verificacion THEN 1
+                WHEN v.num_verificacion = 3 AND cl.verif3 = vc.id_verificacion THEN 1
+                WHEN v.num_verificacion = 4 AND cl.verif4 = vc.id_verificacion THEN 1
+                WHEN v.num_verificacion = 5 AND cl.verif5 = vc.id_verificacion THEN 1
+                ELSE 0
+            END AS existe_en_codigoslibros
+
+        FROM verificaciones_codigos vc
+        LEFT JOIN libro l ON l.idlibro = vc.id_libro
+        LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+        LEFT JOIN verificaciones v ON v.id = vc.id_verificacion
+        LEFT JOIN codigoslibros cl ON cl.codigo = vc.codigo
+
+        WHERE vc.contrato = ?
+        AND vc.id_verificacion = ?
+    ", [$contrato, $verificacion_id]);
+
+
+        return $query;
+    }
 
     //api:post/metodosPostVerificaciones
     public function metodosPostVerificaciones(Request $request){

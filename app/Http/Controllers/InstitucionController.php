@@ -26,36 +26,40 @@ class InstitucionController extends Controller
     public function index(Request $request)
     {
         if($request->listaInstitucionesActivaXRegion){
-            return $this->listaInstitucionesActivaXRegion($request->region);
+            return $this->listaInstitucionesActivaXRegion($request->periodo);
         }
         $institucion = DB::select("CALL `listar_instituciones_periodo_activo` ();");
         return $institucion;
 
     }
-    //API:GET/institucion?listaInstitucionesActivaXRegion=yes&region=2
-    public function listaInstitucionesActivaXRegion($region){
-        $key = "listaInstitucionesActivaXRegion".$region;
-        if (Cache::has($key)) {
-           $institucion = Cache::get($key);
-        } else {
-            $institucion = DB::SELECT("SELECT inst.idInstitucion,
-            UPPER(inst.nombreInstitucion) as nombreInstitucion,
-            UPPER(ciu.nombre) as ciudad,
-            UPPER(reg.nombreregion) as nombreregion,
-            inst.solicitudInstitucion,
-            -- inst.vendedorInstitucion as asesor
-            concat_ws(' ', usu.nombres, usu.apellidos) as asesor,
-            inst.region_idregion
-            FROM institucion inst, ciudad ciu, region reg, usuario usu
-            where inst.ciudad_id = ciu.idciudad
-            AND inst.region_idregion = reg.idregion
-            AND inst.vendedorInstitucion = usu.cedula
-            AND inst.estado_idEstado = 1
-            AND inst.region_idregion = ?
-            ",[$region]);
-            Cache::put($key,$institucion);
-        }
-        return $institucion;
+    //API:GET/institucion?listaInstitucionesActivaXRegion=yes&periodo=26
+    public function listaInstitucionesActivaXRegion($periodo){
+
+        // $institucion = DB::SELECT("SELECT inst.idInstitucion,
+        // UPPER(CONCAT(inst.nombreInstitucion, ' - ', ciu.nombre)) AS nombreInstitucion,
+        // UPPER(ciu.nombre) as ciudad,
+        // UPPER(reg.nombreregion) as nombreregion,
+        // inst.region_idregion
+        // FROM institucion inst, ciudad ciu, region reg, usuario usu
+        // where inst.ciudad_id = ciu.idciudad
+        // AND inst.region_idregion = reg.idregion
+        // AND inst.vendedorInstitucion = usu.cedula
+        // AND inst.estado_idEstado = 1
+        // AND inst.region_idregion = ?
+        // ",[$region]);
+        // return $institucion;
+        $getInstitucionesPeriodoPedido = DB::SELECT("SELECT DISTINCT i.idInstitucion,
+        UPPER(CONCAT(i.nombreInstitucion, ' - ', c.nombre)) AS nombreInstitucion,
+        c.nombre AS ciudad, i.region_idregion, r.nombreregion
+        FROM pedidos p
+        LEFT JOIN institucion i ON i.idInstitucion =  p.id_institucion
+        LEFT JOIN ciudad c ON c.idciudad = i.ciudad_id
+        LEFT JOIN region r ON r.idregion = i.region_idregion
+        WHERE p.id_periodo = ?
+        AND p.estado = '1'
+        AND p.tipo = '0'
+        ",[$periodo]);
+        return $getInstitucionesPeriodoPedido;
     }
     public function traerInstitucion(Request $request){
         $institucion = DB::select("SELECT * FROM institucion WHERE  idInstitucion = $request->institucion_idInstitucion
@@ -185,6 +189,7 @@ class InstitucionController extends Controller
             }
         }
         $cambio->idcreadorinstitucion           = $request->idcreadorinstitucion;
+        $cambio->codigo_amie                    = $request->codigo_amie == null || $request->codigo_amie == "null" ? null : $request->codigo_amie;
         $cambio->nombreInstitucion              = $request->nombreInstitucion;
         $cambio->direccionInstitucion           = $request->direccionInstitucion;
         $cambio->telefonoInstitucion            = $request->telefonoInstitucion;
@@ -323,49 +328,22 @@ class InstitucionController extends Controller
         return $cambio;
 
     }
-    public function institucionesSalle()
+    public function institucionesSalle(Request $request)
     {
         // $institucion = DB::select("SELECT nombreInstitucion, idInstitucion FROM  institucion  WHERE tipo_institucion = 2 and estado_idEstado = 1 ");
         // return $institucion;
 
-        $institucion = DB::select("SELECT i.nombreInstitucion, i.idInstitucion, concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad
+        $institucion = DB::select("SELECT i.nombreInstitucion, i.idInstitucion,
+         concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad, iti.descripcion as tipo_institucion_descripcion
         FROM  institucion i
         INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
-        WHERE i.tipo_institucion = 2 and i.estado_idEstado = 1 ");
+        LEFT JOIN institucion_tipo_institucion iti ON i.tipo_institucion = iti.id
+        WHERE i.tipo_institucion = ? and i.estado_idEstado = 1 ",[$request->tipo_institucion]);
         return $institucion;
     }
 
-    public function instituciones_salle(){
-        $instituciones = DB::SELECT("SELECT i.*, c.nombre as nombre_ciudad,
-        concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad,
-         sc.fecha_inicio, sc.fecha_fin, sc.ver_respuestas, sc.observaciones,
-         sc.cant_evaluaciones
-         FROM institucion i
-         INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
-         LEFT JOIN salle_configuracion sc ON i.id_configuracion = sc.id_configuracion
-         WHERE i.tipo_institucion = 2
-         ");
-        if(!empty($instituciones)){
-            foreach ($instituciones as $key => $value) {
-                $periodo = DB::SELECT("SELECT p.idperiodoescolar, p.fecha_inicial, p.fecha_final,
-                p.periodoescolar, p.estado FROM periodoescolar_has_institucion pi,
-                periodoescolar p
-                WHERE pi.institucion_idInstitucion = ?
-                AND pi.periodoescolar_idperiodoescolar = p.idperiodoescolar
-                ORDER BY p.idperiodoescolar
-                DESC LIMIT 1",[$value->idInstitucion]);
-                $data['items'][$key] = [
-                    'institucion' => $value,
-                    'periodo' => $periodo,
-                ];
-            }
-        }else{
-            $data = [];
-        }
-        return $data;
-    }
     //API:GET/instituciones_salle/{n_evaluacion}
-    public function instituciones_salleXEvaluacion($n_evaluacion){
+    public function instituciones_salleXEvaluacion($n_evaluacion,$tipo_institucion){
         $instituciones = DB::SELECT("SELECT i.*, c.nombre as nombre_ciudad,
         concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad,
          sc.fecha_inicio, sc.fecha_fin, sc.ver_respuestas, sc.observaciones,
@@ -373,8 +351,7 @@ class InstitucionController extends Controller
          FROM institucion i
          INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
          LEFT JOIN salle_configuracion sc ON i.id_configuracion = sc.id_configuracion
-         WHERE i.tipo_institucion = 2
-         ");
+         WHERE i.tipo_institucion = ? AND i.estado_idEstado = 1",[$tipo_institucion]);
          //get configuracion x institucion
         $datos = [];
         $contador = 0;
@@ -435,9 +412,14 @@ class InstitucionController extends Controller
         }
         return $data;
     }
-    public function instituciones_salle_select(){
-        $instituciones = DB::SELECT("SELECT i.*, c.nombre as nombre_ciudad, concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad, sc.fecha_inicio, sc.fecha_fin, sc.ver_respuestas, sc.observaciones, sc.cant_evaluaciones FROM institucion i INNER JOIN ciudad c ON i.ciudad_id = c.idciudad LEFT JOIN salle_configuracion sc ON i.id_configuracion = sc.id_configuracion WHERE i.tipo_institucion = 2");
-
+    public function instituciones_salle_select(Request $request){
+        $instituciones = DB::SELECT("SELECT i.*, c.nombre as nombre_ciudad,
+        concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad, sc.fecha_inicio,
+        sc.fecha_fin, sc.ver_respuestas, sc.observaciones, sc.cant_evaluaciones
+        FROM institucion i
+        INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
+        LEFT JOIN salle_configuracion sc ON i.id_configuracion = sc.id_configuracion
+        WHERE i.tipo_institucion = ? AND i.estado_idEstado = 1",[$request->tipo_institucion]);
         return $instituciones;
     }
     public function configuracionXInstitucion($institucion_id,$n_evaluacion){
@@ -543,7 +525,7 @@ class InstitucionController extends Controller
                 'r.nombreregion', 'i.codigo_institucion_milton', 'i.vendedorInstitucion', 'u.iniciales',
                 'i.cantidad_cambio_ventana_evaluacion', 'i.punto_venta', 'i.maximo_porcentaje_autorizado',
                 'i.ruc', 'i.ifcodigoEvaluacion', 'tp.descripcion as tipoInstitucion',
-                'i.telefonoInstitucion',
+                'i.telefonoInstitucion', 'i.codigo_amie', 'i.tipo_descripcion',
                 // Último periodo activo por región
                 'ic.periodo_configurado',
                 'pec.periodoescolar as periodoNombreConfigurado',
@@ -609,6 +591,8 @@ class InstitucionController extends Controller
 
                 'tipoInstitucion' => $item->tipoInstitucion,
                 "telefonoInstitucion" => $item->telefonoInstitucion,
+                "codigo_amie" => $item->codigo_amie,
+                "tipo_descripcion" => $item->tipo_descripcion,
             ];
         });
         // Si el parámetro "todas" está presente, retornar todos los datos
@@ -1025,24 +1009,29 @@ class InstitucionController extends Controller
     public function MoverInstitucionxAsesor(Request $request)
     {
         // return $request;
-        DB::beginTransaction();
         $Id_Asesor_Seleccionado = $request->input('Id_Asesor_Seleccionado');
         $Cedula_Asesor_Seleccionado = $request->input('Cedula_Asesor_Seleccionado');
         $InstitucionesAMover = $request->input('InstitucionesAMover', []);
+
         try {
-            // Si hay instituciones, moverlas
-            foreach ($InstitucionesAMover as $institucionmover) {
-                //Producto
-                $actualizarasesorde_institucion = Institucion::find($institucionmover['id_institucion']);
-                $actualizarasesorde_institucion->asesor_id = $Id_Asesor_Seleccionado;
-                $actualizarasesorde_institucion->vendedorInstitucion = $Cedula_Asesor_Seleccionado;
-                $actualizarasesorde_institucion->save();
+            // Validar que existan instituciones a mover
+            if (empty($InstitucionesAMover)) {
+                return response()->json(["status" => "0", 'message' => 'No hay instituciones para mover'], 400);
             }
-            DB::commit();
-            return response()->json(["status" => "1", 'message' => 'Compra Finalizada correctamente'], 200);
+
+            // Actualizar instituciones sin transacción (operación simple)
+            foreach ($InstitucionesAMover as $institucionmover) {
+                $actualizarasesorde_institucion = Institucion::find($institucionmover['id_institucion']);
+                if ($actualizarasesorde_institucion) {
+                    $actualizarasesorde_institucion->asesor_id = $Id_Asesor_Seleccionado;
+                    $actualizarasesorde_institucion->vendedorInstitucion = $Cedula_Asesor_Seleccionado;
+                    $actualizarasesorde_institucion->save();
+                }
+            }
+
+            return response()->json(["status" => "1", 'message' => 'Instituciones movidas correctamente'], 200);
         } catch (\Exception $e) {
-            DB::rollback();
-            return response()->json(["status" => "0", 'message' => 'Error al finalizar la compra: ' . $e->getMessage()], 500);
+            return response()->json(["status" => "0", 'message' => 'Error al mover instituciones: ' . $e->getMessage()], 500);
         }
     }
 
@@ -1328,9 +1317,24 @@ class InstitucionController extends Controller
     //api:get>>metodosGetInstitucion?action=Get_ListarTiposInstitucion
     public function Get_ListarTiposInstitucion($request) {
         try {
+            $todasPeriodosEvaluaciones = $request->todasPeriodosEvaluaciones ?? 0;
             // Obtener todos los tipos de institución ordenados por fecha de creación descendente
             $tiposInstitucion = InstitucionTipo::orderBy('created_at', 'desc')->get();
+            // traer las evaluaciones de la salle por tipo institucion
+            foreach($tiposInstitucion as $tipo) {
+                if($todasPeriodosEvaluaciones == 1){
+                    $evaluaciones = DB::SELECT("SELECT * FROM salle_periodos_evaluacion sp
+                    WHERE sp.tipo_institucion_id = ?
+                    ", [$tipo->id]);
+                    $tipo->evaluaciones = $evaluaciones;
+                }else{
+                    $evaluaciones = DB::SELECT("SELECT * FROM salle_periodos_evaluacion sp
+                    WHERE sp.estado = 1 AND sp.tipo_institucion_id = ?
+                    ", [$tipo->id]);
+                    $tipo->evaluaciones = $evaluaciones;
+                }
 
+            }
             return response()->json([
                 'status' => 1,
                 'message' => 'Tipos de institución obtenidos correctamente',

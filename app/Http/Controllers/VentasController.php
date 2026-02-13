@@ -2838,7 +2838,7 @@ class VentasController extends Controller
                         WHERE a.abono_estado = 0
                         AND a.abono_periodo = '$item->idperiodoescolar'
                         ) AS totalCobrado,
-                         
+
                         (SELECT SUM(a.abono_facturas + a.abono_notas)
                         FROM abono a
                         WHERE a.abono_estado = 0
@@ -4500,10 +4500,22 @@ class VentasController extends Controller
             AND v.id_empresa =  '$request->id_empresa'
             ");
             if(count($validateDevuelto) > 0){
+                $devolucionesDevueltas = DB::SELECT("SELECT DISTINCT  h.codigo_devolucion
+                FROM codigoslibros_devolucion_son s
+                LEFT JOIN codigoslibros_devolucion_header h ON h.id = s.codigoslibros_devolucion_id
+                WHERE s.documento = '$request->ven_codigo'
+                AND s.id_empresa = '$request->id_empresa'
+                AND h.estado <> '3'
+                ");
+                // SPLIT PARA SEPARAR LOS CODIGOS DE DEVOLUCION
+                $devolucionesArray = [];
+                foreach($devolucionesDevueltas as $devolucion){
+                    $devolucionesArray[] = $devolucion->codigo_devolucion;
+                }
                 // Si ya se ha devuelto, devolver error
                 DB::rollBack();
                 return response()->json([
-                    'error' => "El documento $request->ven_codigo tiene devoluciones registradas, no se puede volver a pendiente"
+                    'error' => "El documento $request->ven_codigo tiene devoluciones registradas, no se puede volver a pendiente como los documentos : " . implode(', ', $devolucionesArray)
                 ], 404);
             }
             // Actualizar los campos requeridos
@@ -4528,6 +4540,24 @@ class VentasController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function f_venta_anuladas_revision(){
+        $query = DB::SELECT("SELECT ven_codigo, est_ven_codigo  FROM f_venta WHERE est_ven_codigo = 3");
+
+        return response()->json([
+            'total_registros' => count($query),
+            'registros' => $query
+        ]);
+    }
+
+    public function f_venta_audits_revision(){
+        $query = DB::SELECT("SELECT * FROM f_venta_audit");
+
+        return response()->json([
+            'total_registros' => count($query),
+            'registros' => $query
+        ]);
     }
 
     // METODOS JEYSON FIN
@@ -5408,41 +5438,41 @@ public function ReporteContratos23_24(){
         try {
             // Validar que se envíen los códigos
             $codigos = $request->input('codigos', []);
-            
+
             if (empty($codigos)) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'No se proporcionaron códigos de productos'
                 ], 400);
             }
-            
+
             // Si viene como string separado por comas, convertir a array
             if (is_string($codigos)) {
                 $codigos = explode(',', $codigos);
             }
-            
+
             // Limpiar y normalizar los códigos
             $codigos = array_map('trim', $codigos);
             $codigos = array_filter($codigos); // Eliminar valores vacíos
-            
+
             if (empty($codigos)) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'No se proporcionaron códigos válidos'
                 ], 400);
             }
-            
+
             // Consultar stock de los productos
             $productos = DB::table('1_4_cal_producto')
                 ->whereIn('pro_codigo', $codigos)
                 ->select('pro_codigo', 'pro_reservar', 'pro_stock', 'pro_nombre', 'pro_estado')
                 ->get();
-            
+
             return response()->json([
                 'status' => 'success',
                 'data' => $productos
             ], 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',

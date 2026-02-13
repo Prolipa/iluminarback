@@ -250,6 +250,181 @@ trait TraitPedidosGeneral
         $consulta = $resultado->get();
         return $consulta;
     }
+
+    public function getPedidoContrato($filtro,$parametro1=null,$parametro2=null){
+        $resultado = DB::table('pedidos as p')
+        ->select(DB::RAW('p.*,
+        i.nombreInstitucion,i.zona_id,i.codigo_institucion_milton, c.nombre AS nombre_ciudad,
+        CONCAT(u.nombres," ",u.apellidos) as responsable, CONCAT(u.nombres," ",u.apellidos) as asesor, u.cedula as cedula_asesor,u.iniciales,
+        ph.estado as historicoEstado,ph.evidencia_cheque,ph.evidencia_pagare,
+        IF(p.estado = 2,"Anulado","Activo") AS estadoPedido,
+        (SELECT f.id_facturador from pedidos_asesores_facturador
+        f where f.id_asesor = p.id_asesor  LIMIT 1) as id_facturador,
+        i.ruc,i.nivel,i.tipo_descripcion,i.direccionInstitucion,i.telefonoInstitucion,
+        (
+            SELECT SUM(pa.venta_bruta) AS contador_alcance
+            FROM pedidos_alcance pa
+            WHERE pa.id_pedido = p.id_pedido
+            AND pa.estado_alcance = "1"
+            AND pa.venta_bruta > 0
+        ) AS contador_alcance,
+        (
+            SELECT SUM(pa.total_unidades)  AS alcanceUnidades
+            FROM pedidos_alcance pa
+            WHERE pa.id_pedido = p.id_pedido
+            AND pa.estado_alcance = "1"
+            AND pa.venta_bruta > 0
+        ) AS alcanceUnidades,
+        (SELECT COUNT(*) FROM verificaciones v WHERE v.contrato = p.contrato_generado AND v.nuevo = "1" AND v.estado = "0") as verificaciones,
+        (
+            SELECT COUNT(a.id) AS contadorAlcanceAbierto
+            FROM pedidos_alcance a
+            LEFT JOIN pedidos ped ON ped.id_pedido = a.id_pedido
+            WHERE  a.id_pedido = p.id_pedido
+            AND a.estado_alcance  = "0"
+            AND ped.estado = "1"
+        ) as contadorAlcanceAbierto,
+        (
+            SELECT COUNT(a.id) AS contadorAlcanceCerrado
+            FROM pedidos_alcance a
+            LEFT JOIN pedidos ped ON ped.id_pedido = a.id_pedido
+            WHERE  a.id_pedido = p.id_pedido
+            AND a.estado_alcance  = "1"
+            AND ped.estado = "1"
+        ) as contadorAlcanceCerrado,
+        (
+            SELECT  COUNT(o.id) FROM p_libros_obsequios o
+            WHERE o.id_pedido = p.id_pedido
+            AND (
+            o.estado_libros_obsequios = "0"
+            OR o.estado_libros_obsequios  = "3"
+            OR o.estado_libros_obsequios  = "4"
+            OR o.estado_libros_obsequios  = "6"
+            OR o.estado_libros_obsequios  = "7"
+            )
+        ) as contadorHijosDocentesAbiertosEnviados,
+        (
+            SELECT  COUNT(o.id) FROM p_libros_obsequios o
+            WHERE o.id_pedido = p.id_pedido
+            AND o.estado_libros_obsequios = "5"
+        ) as contadorHijosDocentesAbiertosAprobados,
+        (
+            SELECT  COUNT(o.id) FROM p_libros_obsequios o
+            WHERE o.id_pedido = p.id_pedido
+            AND o.estado_libros_obsequios = "8"
+        ) as contadorObsequiosAbiertosEnviados,
+
+        (
+            SELECT COUNT(l.doc_codigo) AS contadorPendientesConvenio
+            FROM 1_4_documento_liq l
+            WHERE l.tipo_pago_id = "4"
+            AND l.estado ="0"
+            AND l.id_pedido = p.id_pedido
+        ) AS contadorPendientesConvenio,
+        (
+            SELECT COUNT(l.doc_codigo) AS contadorPendientesConvenio
+            FROM 1_4_documento_liq l
+            WHERE l.tipo_pago_id = "4"
+            AND l.estado ="1"
+            AND l.id_pedido = p.id_pedido
+        ) AS contadorAprobadosConvenio,
+        (
+            SELECT COUNT(l.doc_codigo) AS contadorPendientesAnticipos
+            FROM 1_4_documento_liq l
+            WHERE l.tipo_pago_id = "1"
+            AND l.estado ="0"
+            AND l.ifAntAprobado = "1"
+            AND l.id_pedido = p.id_pedido
+        ) AS contadorPendientesAnticipos,
+        (
+        SELECT COUNT(c.id) FROM  pedidos_convenios  c
+            where  c.id = p.pedidos_convenios_id
+            AND c.estado <> 2
+            AND c.convenio_aprobado = 0
+         ) AS contadorConvenioPendientes,
+        (
+           SELECT COUNT(c.id) FROM  pedidos_convenios  c
+            where  c.id = p.pedidos_convenios_id
+            AND c.estado <> 2
+            AND c.convenio_aprobado = 1
+        ) AS contadorConvenioSolicitadoGerencia,
+        (
+           SELECT COUNT(c.id) FROM  pedidos_convenios  c
+            where  c.id = p.pedidos_convenios_id
+            AND c.estado <> 2
+            AND c.convenio_aprobado = 3
+        ) AS contadorConvenioAprobadoGerencia,
+        (
+           SELECT COUNT(c.id) FROM  pedidos_convenios  c
+            where  c.id = p.pedidos_convenios_id
+            AND c.estado <> 2
+            AND c.convenio_aprobado = 4
+        ) AS contadorConvenioAprobadoFacturador,
+       (
+            SELECT COUNT(pc.id)
+            FROM pedidos_convenios pc
+            WHERE pc.id = p.pedidos_convenios_id
+            AND pc.estado = 2
+        ) AS convenioAnulado,
+        (
+            SELECT COUNT(pc.id)
+            FROM pedidos_convenios pc
+            WHERE pc.id = p.pedidos_convenios_id
+            AND pc.estado = 0
+        ) AS convenioFinalizados,
+        (
+            SELECT con.anticipo_global FROM pedidos_convenios con
+            WHERE con.id = p.pedidos_convenios_id
+        ) AS anticipo_global,
+        pe.periodoescolar as periodo,pe.codigo_contrato, pe.regaladosReporteNuevo,
+        CONCAT(uf.apellidos, " ",uf.nombres) as facturador,
+        i.region_idregion as region,uf.iniciales as iniciales_facturador,
+        ph.fecha_generar_contrato,
+        (p.TotalVentaReal - ((p.TotalVentaReal * p.descuento)/100)) AS ven_neta,
+        (p.TotalVentaReal * p.descuento)/100 as valorDescuento,
+        ps.id_grupo_finaliza, des.ca_descripcion as despacho,
+        CONCAT(editComsion.nombres, " ", editComsion.apellidos) AS asesor_editComision
+        '))
+        ->leftjoin('usuario as u',          'p.id_asesor',          'u.idusuario')
+        ->leftjoin('usuario as uf',         'p.id_usuario_verif',   'uf.idusuario')
+        ->leftjoin('institucion as i',      'p.id_institucion',     'i.idInstitucion')
+        ->leftjoin('ciudad as c',           'i.ciudad_id',          'c.idciudad')
+        ->leftjoin('periodoescolar as pe',  'pe.idperiodoescolar',  'p.id_periodo')
+        ->leftjoin('pedidos_historico as ph','p.id_pedido',         'ph.id_pedido')
+        ->leftjoin('pedidos_solicitudes_gerencia as ps','p.id_solicitud_gerencia_comision','ps.id')
+        ->leftJoin('usuario as editComsion',   'ps.user_finaliza',     'editComsion.idusuario')
+        // ->leftjoin('f_contratos_agrupados as des','p.ca_codigo_agrupado','des.ca_codigo_agrupado')
+        ->leftJoin('f_contratos_agrupados as des', function($join) {
+            $join->on('p.ca_codigo_agrupado', '=', 'des.ca_codigo_agrupado')
+                ->where('des.ca_estado', '=', 1);
+        })
+        ->where('p.tipo','=','0')
+        ->whereNotNull('p.contrato_generado');
+        //filtro por x id
+        if($filtro == 0) { $resultado->where('p.id_pedido', '=', $parametro1); }
+        //filtro x periodo
+        if($filtro == 1) { $resultado->where('p.id_periodo','=',$parametro1)->where('p.estado','<>','0')->OrderBy('p.id_pedido','DESC'); }
+        //filtro por asesor
+        if($filtro == 2) { $resultado->where('p.id_periodo','=', $parametro1)->where('p.id_asesor','=',$parametro2)->OrderBy('p.id_pedido','DESC'); }
+        //filtro facturador no admin
+        if($filtro == 3) { $resultado->where('p.id_periodo','=', $parametro1)->where('p.id_asesor','=',$parametro2)->where('p.estado','<>','0')
+            ->where(function ($query) {
+                $query->where('p.solicitud_gerencia_estado', '0')
+                ->orWhere('p.solicitud_gerencia_estado', '2');
+            })
+            ->where(function ($query) {
+                $query->where('p.estado_aprobado_convenio_cerrado', '0')
+                ->orWhere('p.estado_aprobado_convenio_cerrado', '2');
+            })
+            ->OrderBy('p.id_pedido','DESC');
+        }
+        //filtro x periodo pero el ca_codigo_agrupado es nulo
+        if($filtro == 4) { $resultado->where('p.id_periodo','=',$parametro1)->where('p.estado','<>','0')->whereNull('p.ca_codigo_agrupado')->OrderBy('p.id_pedido','DESC'); }
+        //filtro x periodo root
+        if($filtro == 5) { $resultado->where('p.id_periodo','=',$parametro1)->OrderBy('p.id_pedido','DESC'); }
+        $consulta = $resultado->get();
+        return $consulta;
+    }
     public function getVerificaciones($contrato){
         $query = DB::SELECT("SELECT * FROM verificaciones
             WHERE contrato =  '$contrato'

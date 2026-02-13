@@ -101,16 +101,16 @@ class SalleReportesController extends Controller
 
     // REPORTES
 
-    public function reporte_evaluaciones_institucion($n_evaluacion)
+    public function reporte_evaluaciones_institucion($n_evaluacion,$tipo_institucion)
     {
         //si es menor a 4 return reporte anterior
         if($n_evaluacion < 4){
-            return $this->reporte_anterior($n_evaluacion);
+            return $this->reporte_anterior($n_evaluacion,$tipo_institucion);
         }else{
-            return $this->reporte_evaluaciones_institucionNueva($n_evaluacion);
+            return $this->reporte_evaluaciones_institucionNueva($n_evaluacion,$tipo_institucion);
         }
     }
-    public function reporte_anterior($n_evaluacion){
+    public function reporte_anterior($n_evaluacion,$tipo_institucion){
         $evaluaciones = DB::SELECT("SELECT
         GROUP_CONCAT(CONCAT (se.id_evaluacion) ORDER BY se.id_evaluacion) AS evaluaciones,
         se.created_at AS fecha_evaluacion, i.idInstitucion, i.nombreInstitucion, i.ciudad_id
@@ -120,7 +120,7 @@ class SalleReportesController extends Controller
         WHERE se.estado = 2
         AND i.idInstitucion != 1036
         AND se.n_evaluacion = '$n_evaluacion'
-        AND i.tipo_institucion = 2
+        AND i.tipo_institucion = '$tipo_institucion'
         GROUP BY i.idInstitucion
       ");
       // dump($evaluaciones);
@@ -161,7 +161,7 @@ class SalleReportesController extends Controller
       }
       return $data;
     }
-    public function reporte_evaluaciones_institucionNueva($n_evaluacion)
+    public function reporte_evaluaciones_institucionNueva($n_evaluacion,$tipo_institucion)
     {
 
         $instituciones = DB::SELECT("SELECT
@@ -173,7 +173,7 @@ class SalleReportesController extends Controller
             WHERE se.estado = 2
             AND i.idInstitucion != 1036
             AND se.n_evaluacion = '$n_evaluacion'
-            AND i.tipo_institucion = 2
+            AND i.tipo_institucion = '$tipo_institucion'
             GROUP BY i.idInstitucion
         ");
 
@@ -394,7 +394,10 @@ class SalleReportesController extends Controller
             //obtener las areas de cada evaluacion
             $areas = DB::select("CALL salle_areas_evaluacion(?);", [$value->id_evaluacion]);
             $data_areas = [];
-            $all_subject_puntajes = [];
+
+            // Variables para el cálculo global real
+            $total_puntaje_obtenido_evaluacion = 0;
+            $total_puntaje_maximo_evaluacion = 0;
 
             foreach ($areas as $keyR => $valueR) {
                 // Fetch subjects within this area
@@ -412,27 +415,45 @@ class SalleReportesController extends Controller
                     [$value->id_evaluacion, $valueR->id_area]
                 );
 
+                // Variables para el cálculo real por área
+                $total_puntaje_obtenido_area = 0;
+                $total_puntaje_maximo_area = 0;
+
                 $subject_puntajes = [];
                 foreach ($asignaturas as $asig) {
                     $calif_asig_eval = $asig->puntaje_maximo ?: 0;
                     $calif_asig_doc = $asig->puntaje_obtenido ?: 0;
+
+                    // Acumular para cálculo real del área
+                    $total_puntaje_obtenido_area += $calif_asig_doc;
+                    $total_puntaje_maximo_area += $calif_asig_eval;
+
+                    // Acumular para cálculo real de la evaluación
+                    $total_puntaje_obtenido_evaluacion += $calif_asig_doc;
+                    $total_puntaje_maximo_evaluacion += $calif_asig_eval;
+
                     $promedio_asig = ($calif_asig_eval > 0) ? ($calif_asig_doc * 100) / $calif_asig_eval : 0;
                     $promedio_asig = min($promedio_asig, 100);
                     $subject_puntajes[] = round($promedio_asig, 2);
                 }
 
-                $promediox_area = !empty($subject_puntajes) ? array_sum($subject_puntajes) / count($subject_puntajes) : 0;
+                // Calcular promedio real del área (no promedio de promedios)
+                $promediox_area = ($total_puntaje_maximo_area > 0) ?
+                    ($total_puntaje_obtenido_area * 100) / $total_puntaje_maximo_area : 0;
+                $promediox_area = min($promediox_area, 100);
+
                 $data_areas[] = [
                     'id_area'     => $valueR->id_area,
                     'nombre_area' => $valueR->nombre_area,
                     'puntaje'     => round($promediox_area, 2),
                     'subjects'    => $subject_puntajes,
                 ];
-
-                $all_subject_puntajes = array_merge($all_subject_puntajes, $subject_puntajes);
             }
 
-            $promedio_eval_area = !empty($all_subject_puntajes) ? array_sum($all_subject_puntajes) / count($all_subject_puntajes) : 0;
+            // Calcular promedio real de la evaluación (no promedio de promedios)
+            $promedio_eval_area = ($total_puntaje_maximo_evaluacion > 0) ?
+                ($total_puntaje_obtenido_evaluacion * 100) / $total_puntaje_maximo_evaluacion : 0;
+            $promedio_eval_area = min($promedio_eval_area, 100);
 
             $data_evaluaciones[] = [
                 'id_evaluacion'      => $value->id_evaluacion,

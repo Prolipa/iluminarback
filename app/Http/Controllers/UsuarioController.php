@@ -945,9 +945,15 @@ class UsuarioController extends Controller
     public function usuarioSalle(Request $request)
     {
         if($request->tipoUsuario == "admin"){
-            $admins = DB::select("SELECT u.*, i.nombreInstitucion, concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad
-            FROM usuario u, institucion i INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
-            WHERE u.id_group = 12 and u.institucion_idInstitucion = i.idInstitucion ");
+            $admins = DB::select("SELECT u.*, i.nombreInstitucion, concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad,
+            iti.descripcion AS tipo_institucionDescripcion
+            FROM usuario u, institucion i
+            INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
+            LEFT JOIN institucion_tipo_institucion iti ON i.tipo_institucion = iti.id
+            WHERE u.id_group = 12
+            and u.institucion_idInstitucion = i.idInstitucion
+            AND i.tipo_institucion = '$request->tipo_institucion'
+            ");
             return array('admins'=>$admins,);
         }
         if($request->tipoUsuario == "docentes"){
@@ -962,7 +968,7 @@ class UsuarioController extends Controller
                 u.id_group = '13'
                 OR u.id_group = '6'
             )
-            AND i.tipo_institucion = '2'
+            AND i.tipo_institucion = '$request->tipo_institucion'
             GROUP BY u.idusuario
             ");
             return array('docentes'=>$docentes);
@@ -970,50 +976,35 @@ class UsuarioController extends Controller
         if ($request->has('contarUsuarios') && $request->contarUsuarios == true) {
             $counts = DB::select("
                 SELECT
-                    (SELECT COUNT(*) FROM usuario WHERE id_group = 12) AS contarAdmin,
-                    (SELECT COUNT(*) FROM usuario WHERE id_group = 13) AS contarDocentes,
-                    (SELECT COUNT(*) FROM institucion WHERE tipo_institucion = 2 AND estado_idEstado = 1) AS contarInstituciones,
-                    (SELECT COUNT(*) FROM salle_areas) AS contarAreas,
-                    (SELECT COUNT(*) FROM salle_asignaturas) AS contarAsignaturas
-            ")[0];
+                    (SELECT COUNT(*) FROM usuario
+                     LEFT JOIN institucion i ON usuario.institucion_idInstitucion = i.idInstitucion
+                     WHERE usuario.id_group = 12 AND i.tipo_institucion = ?) AS contarAdmin,
+
+                    (SELECT COUNT(*) FROM usuario
+                     LEFT JOIN institucion i ON usuario.institucion_idInstitucion = i.idInstitucion
+                     WHERE usuario.id_group = 13 AND i.tipo_institucion = ?) AS contarDocentes,
+
+                    (SELECT COUNT(*) FROM institucion
+                     WHERE tipo_institucion = ? AND estado_idEstado = 1) AS contarInstituciones,
+
+                    (
+                     SELECT COUNT(*)
+                    FROM salle_areas a
+                    LEFT JOIN salle_periodos_evaluacion p
+                        ON p.id = a.n_evaluacion
+                    WHERE p.tipo_institucion_id = ?
+                    ) AS contarAreas,
+
+                    (SELECT COUNT(*)
+                    FROM salle_asignaturas asig
+                    LEFT JOIN salle_areas a ON a.id_area = asig.id_area
+                    LEFT JOIN salle_periodos_evaluacion p ON p.id = a.n_evaluacion
+                    WHERE p.tipo_institucion_id = ?
+                    ) AS contarAsignaturas
+            ", [$request->tipo_institucion, $request->tipo_institucion, $request->tipo_institucion, $request->tipo_institucion, $request->tipo_institucion])[0];
 
             return (array) $counts;
         }
-    }
-    //API:GET/usuarioSalle/{n_evaluacion}
-    public function usuarioSallexEvaluacion($n_evaluacion){
-        // $docentes = DB::select("SELECT u.*, i.nombreInstitucion,
-        // concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad, MAX(se.id_evaluacion) AS id_evaluacion
-        // FROM usuario u
-        // INNER JOIN institucion i ON u.institucion_idInstitucion = i.idInstitucion
-        // INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
-        // LEFT JOIN salle_evaluaciones se ON u.idusuario = se.id_usuario
-        // WHERE u.id_group = 13
-        // GROUP BY u.idusuario
-        // ");
-        $docentes = DB::select("SELECT u.idusuario, u.nombres,u.apellidos,u.cedula,u.email,u.estado_idEstado,
-        u.id_group,u.institucion_idInstitucion,u.telefono,
-        i.idInstitucion, i.nombreInstitucion,
-        concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad,
-        (SELECT   MAX(se.id_evaluacion)
-        FROM salle_evaluaciones se
-            WHERE se.id_usuario = u.idusuario
-            AND se.n_evaluacion = '$n_evaluacion'
-            AND intentos <> '0'
-        ) AS id_evaluacion
-        FROM usuario u
-        INNER JOIN institucion i ON u.institucion_idInstitucion = i.idInstitucion
-        INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
-        LEFT JOIN salle_evaluaciones se ON u.idusuario = se.id_usuario
-        WHERE (
-            u.id_group = '13'
-            OR u.id_group = '6'
-        )
-        AND i.tipo_institucion = '2'
-        GROUP BY u.idusuario
-        ");
-       $admins = DB::select("SELECT u.*, i.nombreInstitucion, concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad FROM usuario u, institucion i INNER JOIN ciudad c ON i.ciudad_id = c.idciudad WHERE u.id_group = 12 and u.institucion_idInstitucion = i.idInstitucion ");
-       return array('docentes'=>$docentes , 'admins'=>$admins,);
     }
     public function add_edit_user_salle(Request $request)
     {
@@ -1051,7 +1042,7 @@ class UsuarioController extends Controller
         $usuario->apellidos = $request->apellido;
         $usuario->name_usuario = $request->email;
         $usuario->email = $request->email;
-        $usuario->telefono = $request->telefono;
+        $usuario->telefono = $request->telefono??null;
         $usuario->id_group = $request->grupo;
         $usuario->p_ingreso=0;
         $usuario->institucion_idInstitucion = $request->idInstitucion;

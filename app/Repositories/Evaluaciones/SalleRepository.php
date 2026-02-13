@@ -129,22 +129,37 @@ class  SalleRepository extends BaseRepository
         $query = DB::SELECT("SELECT
             o.id_pregunta,
             COUNT(CASE WHEN o.tipo = 1 THEN 1 END) AS total_opciones_correctas,
+            COUNT(CASE WHEN o.tipo = 0 THEN 1 END) AS total_opciones_incorrectas,
+            p.descripcion,
+            a.nombre_asignatura,
+            ar.nombre_area,
+            tp.nombre_tipo,
+            p.id_tipo_pregunta,
+            ar.id_area,
+            p.id_asignatura,
+            tp.puntaje as puntaje_pregunta,
+            p.img_pregunta
+        FROM salle_opciones_preguntas o
+        LEFT JOIN salle_preguntas p
+            ON p.id_pregunta = o.id_pregunta
+        LEFT JOIN salle_asignaturas a
+            ON a.id_asignatura = p.id_asignatura
+        LEFT JOIN salle_areas ar
+            ON ar.id_area = a.id_area
+        LEFT JOIN tipos_preguntas tp
+            ON tp.id_tipo_pregunta = p.id_tipo_pregunta
+        WHERE p.n_evaluacion = ?
+        AND p.estado = '1'
+        GROUP BY
+            o.id_pregunta,
             p.descripcion,
             a.nombre_asignatura,
             ar.nombre_area,
             tp.nombre_tipo,
             p.id_tipo_pregunta
-        FROM salle_opciones_preguntas o
-        LEFT JOIN salle_preguntas p
-            ON p.id_pregunta = o.id_pregunta
-        LEFT JOIN salle_asignaturas a ON a.id_asignatura = p.id_asignatura
-        LEFT JOIN salle_areas ar ON ar.id_area = a.id_area
-        LEFT JOIN tipos_preguntas tp ON tp.id_tipo_pregunta = p.id_tipo_pregunta
-        WHERE p.n_evaluacion = ?
-        AND p.estado = '1'
-        GROUP BY o.id_pregunta, p.descripcion, a.nombre_asignatura, ar.nombre_area, tp.nombre_tipo, p.id_tipo_pregunta;
-;
-        ",[$periodo]);
+        ORDER BY o.id_pregunta DESC
+                ",[$periodo]);
+
         return $query;
     }
     public function getTiposPreguntas(){

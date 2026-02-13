@@ -20,6 +20,15 @@ class _14ProductoController extends Controller {
         return $query;
     }
 
+    public function GetProducto_ParaCaracteristicas() {
+        //TRAE LOS LIBROS
+        $query = DB::SELECT("SELECT pro.pro_codigo, pro.pro_nombre FROM `1_4_cal_producto` pro
+            WHERE pro.gru_pro_codigo <> 12
+            AND pro.gru_pro_codigo <> 8
+            AND pro.ifcombo <> 1");
+        return $query;
+    }
+
     //api:get/GetProductoXGrupo?grupo_codigo=1&sinCombos=1
     public function GetProductoXGrupo(Request $request){
         $grupo_codigo = $request->grupo_codigo;
@@ -520,7 +529,7 @@ class _14ProductoController extends Controller {
     }
 
     public function GetProducto_ComienzaconG() {
-        $query = DB:: SELECT("SELECT * FROM 1_4_cal_producto
+        $query = DB:: SELECT("SELECT pro_codigo, pro_nombre FROM 1_4_cal_producto
         WHERE pro_codigo
         LIKE 'G%'
         ORDER BY pro_codigo ASC");
@@ -676,6 +685,7 @@ class _14ProductoController extends Controller {
                     'titulo' => $request->titulo,
                     'portada' => $request->portada,
                     'weblibro' => $request->weblibro,
+                    'weblibro_guia' => $request->weblibro_guia,
                     'exelibro' => $request->exelibro,
                     'pdfsinguia' => $request->pdfsinguia,
                     'pdfconguia' => $request->pdfconguia,
@@ -1274,7 +1284,7 @@ class _14ProductoController extends Controller {
     }
 
     public function GetSeriesL() {
-        $query = DB:: SELECT("SELECT * FROM series ORDER BY id_serie ASC");
+        $query = DB:: SELECT("SELECT s.id_serie, s.nombre_serie FROM series s ORDER BY s.id_serie ASC");
         return $query;
     }
 

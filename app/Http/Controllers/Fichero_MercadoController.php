@@ -988,155 +988,210 @@ class Fichero_MercadoController extends Controller
     }
    public function GuardarDatos_EnviarParaAprobacion($request)
     {
+        // Obtener datos del request
+        $fm_id = $request->input('fm_id');
+        $user_envia_para_aprobacion = $request->input('user_envia_para_aprobacion');
+        // Validar datos obligatorios antes de iniciar transacción
+        if (!$fm_id || !$user_envia_para_aprobacion) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Faltan datos requeridos.'
+            ]);
+        }
+        // Buscar el fichero
+        $fichero = Fichero_Mercado::find($fm_id);
+        // Validar existencia del fichero
+        if (!$fichero) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'El fichero no existe.'
+            ]);
+        }
+        // Validar que el fichero no esté ya pendiente de aprobación
+        if ($fichero->fm_estado == '2') {
+            return response()->json([
+                'status' => 0,
+                'message' => 'El fichero ya se encuentra en estado pendiente de aprobación.'
+            ]);
+        }
+        /*
+         |------------------------------------------------------------
+         | TRANSACCIÓN DE BASE DE DATOS
+         | Solo se modifica información persistente del fichero
+         |------------------------------------------------------------
+         */
         DB::beginTransaction();
         try {
-            $fm_id = $request->input('fm_id');
-            $user_envia_para_aprobacion = $request->input('user_envia_para_aprobacion');
-            if (!$fm_id || !$user_envia_para_aprobacion) {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'Faltan datos requeridos.'
-                ]);
-            }
-            // Buscar el fichero
-            $fichero = Fichero_Mercado::find($fm_id);
-            if (!$fichero) {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'El fichero no existe.'
-                ]);
-            }
-            // ✅ Verificar que esté pendiente de aprobación (estado = 2)
-            if ($fichero->fm_estado == '2') {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'El fichero ya se encuentra en estado pendiente de aprobación.'
-                ]);
-            }
-            // Buscar el fichero
-            $fichero = Fichero_Mercado::findOrFail($fm_id);
-            // Cambiar el estado a 2 (enviado para aprobación)
+            // Cambiar el estado a "pendiente de aprobación"
             $fichero->fm_estado = '2';
-            // Guardar info de aprobación como JSON
+            // Guardar información del envío a aprobación
             $fichero->info_enviar_para_aprobacion = json_encode([
                 'user_envia_para_aprobacion' => $user_envia_para_aprobacion,
                 'fecha_envia_para_aprobacion' => now()->toDateTimeString()
             ]);
+            // Registrar usuario que realizó la acción
             $fichero->user_edit = $user_envia_para_aprobacion;
-            // Actualizar timestamp de edición
+            // Actualizar timestamp
             $fichero->updated_at = now();
+            // Guardar cambios en base de datos
             $fichero->save();
-            //NOTIFICACION
-             // Registrar notificación
-            $formData = (Object)[
-                'nombre'        => 'Fichero Pendiente de aprobación',
-                'descripcion'   => '',
-                'tipo'          => '6',
-                'user_created'  => $user_envia_para_aprobacion,
-                'id_periodo'    => $fichero->idperiodoescolar,
-                'id_padre'      => $fm_id,
-            ];
-            $notificacion = $this->verificacionRepository->save_notificacion($formData);
-            $channel = 'admin.notifications_verificaciones';
-            $event = 'NewNotification';
-            $data = [
-                'message' => 'Nueva notificación',
-            ];
-            // notificacion en pusher
-            $this->NotificacionRepository->notificacionVerificaciones($channel, $event, $data);
+            // Confirmar transacción
             DB::commit();
-            return response()->json([
-                'status' => 1,
-                'message' => 'Fichero enviado para aprobación correctamente.'
-            ]);
         } catch (\Exception $e) {
+            // Revertir cambios si ocurre error en la transacción
+            DB::rollBack();
+
+            return response()->json([
+                'status' => 0,
+                'message' => $e->getMessage()
+            ]);
+        }
+        /*
+         |------------------------------------------------------------
+         | NOTIFICACIONES
+         | Se ejecutan fuera de la transacción para no afectar
+         | el guardado del fichero en caso de fallo externo
+         |------------------------------------------------------------
+         */
+        // Preparar datos de la notificación
+        $formData = (Object)[
+            'nombre'        => 'Fichero Pendiente de aprobación',
+            'descripcion'   => '',
+            'tipo'          => '6',
+            'user_created'  => $user_envia_para_aprobacion,
+            'id_periodo'    => $fichero->idperiodoescolar,
+            'id_padre'      => $fm_id,
+        ];
+        // Registrar notificación en base de datos
+        $this->verificacionRepository->save_notificacion($formData);
+        // Enviar notificación en tiempo real (Pusher)
+        $this->NotificacionRepository->notificacionVerificaciones(
+            'admin.notifications_verificaciones',
+            'NewNotification',
+            ['message' => 'Nueva notificación']
+        );
+        // Respuesta exitosa
+        return response()->json([
+            'status' => 1,
+            'message' => 'Fichero enviado para aprobación correctamente.'
+        ]);
+    }
+
+    public function GuardarDatos_GuardarComoActivo_Fichero($request)
+    {
+        // Obtener datos del request
+        $fm_id = $request->input('fm_id');
+        $user_edit = $request->input('user_edit');
+        // Validar datos obligatorios antes de iniciar transacción
+        if (!$fm_id || !$user_edit) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Faltan datos requeridos.'
+            ]);
+        }
+        // Buscar el fichero
+        $fichero = Fichero_Mercado::find($fm_id);
+        // Validar existencia del fichero
+        if (!$fichero) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'El fichero no existe.'
+            ]);
+        }
+        /*
+         |------------------------------------------------------------
+         | TRANSACCIÓN DE BASE DE DATOS
+         | Solo se modifica información persistente del fichero
+         |------------------------------------------------------------
+         */
+        DB::beginTransaction();
+        try {
+            // Cambiar el estado a "activo"
+            $fichero->fm_estado = '1';
+            // Registrar usuario que realizó la acción
+            $fichero->user_edit = $user_edit;
+            // Actualizar timestamp
+            $fichero->updated_at = now();
+            // Guardar cambios en base de datos
+            $fichero->save();
+            // Confirmar transacción
+            DB::commit();
+        } catch (\Exception $e) {
+            // Revertir cambios si ocurre error en la transacción
             DB::rollBack();
             return response()->json([
                 'status' => 0,
                 'message' => $e->getMessage()
             ]);
         }
-    }
-
-    public function GuardarDatos_GuardarComoActivo_Fichero($request)
-    {
-        DB::beginTransaction();
-        try {
-            $fm_id = $request->input('fm_id');
-            $user_edit = $request->input('user_edit');
-            if (!$fm_id || !$user_edit) {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'Faltan datos requeridos.'
-                ]);
-            }
-            // Buscar el fichero
-            $fichero = Fichero_Mercado::findOrFail($fm_id);
-            // Cambiar el estado a 2 (enviado para aprobación)
-            $fichero->fm_estado = '1';
-            $fichero->user_edit = $user_edit;
-            $fichero->updated_at = now();
-            $fichero->save();
-            //NOTIFICACION
-             // Registrar notificación
-            $formData = (Object)[
-                'nombre'        => 'Fichero Activado',
-                'descripcion'   => '',
-                'tipo'          => '9',
-                'user_created'  => $user_edit,
-                'id_periodo'    => $fichero->idperiodoescolar,
-                'id_padre'      => $fm_id,
-            ];
-            $notificacion = $this->verificacionRepository->save_notificacion($formData);
-            $channel = 'admin.notifications_verificaciones';
-            $event = 'NewNotification';
-            $data = [
-                'message' => 'Nueva notificación',
-            ];
-            // notificacion en pusher
-            $this->NotificacionRepository->notificacionVerificaciones($channel, $event, $data);
-            DB::commit();
-            return response()->json([
-                'status' => 1,
-                'message' => 'Fichero activado correctamente.'
-            ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'status' => 'error',
-                'message' => $e->getMessage()
-            ]);
-        }
+        /*
+         |------------------------------------------------------------
+         | NOTIFICACIONES
+         | Se ejecutan fuera de la transacción para no afectar
+         | el guardado del fichero en caso de fallo externo
+         |------------------------------------------------------------
+         */
+        // Preparar datos de la notificación
+        $formData = (Object)[
+            'nombre'        => 'Fichero Activado',
+            'descripcion'   => '',
+            'tipo'          => '9',
+            'user_created'  => $user_edit,
+            'id_periodo'    => $fichero->idperiodoescolar,
+            'id_padre'      => $fm_id,
+        ];
+        // Registrar notificación en base de datos
+        $this->verificacionRepository->save_notificacion($formData);
+        // Enviar notificación en tiempo real (Pusher)
+        $this->NotificacionRepository->notificacionVerificaciones(
+            'admin.notifications_verificaciones',
+            'NewNotification',
+            ['message' => 'Nueva notificación']
+        );
+        // Respuesta exitosa
+        return response()->json([
+            'status' => 1,
+            'message' => 'Fichero activado correctamente.'
+        ]);
     }
 
     public function GuardarDatos_FicheroAprobado($request)
     {
+        // Obtener datos del request
+        $fm_id = $request->input('fm_id');
+        $user_aprobacion = $request->input('user_aprobacion');
+        // Validar datos obligatorios antes de iniciar transacción
+        if (!$fm_id || !$user_aprobacion) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Faltan datos requeridos.'
+            ]);
+        }
+        // Buscar el fichero
+        $fichero = Fichero_Mercado::find($fm_id);
+        // Validar existencia del fichero
+        if (!$fichero) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'El fichero no existe.'
+            ]);
+        }
+        // Verificar que esté pendiente de aprobación (estado = 2)
+        if ($fichero->fm_estado != '2') {
+            return response()->json([
+                'status' => 0,
+                'message' => 'El fichero no se encuentra pendiente de aprobación.'
+            ]);
+        }
+        /*
+         |------------------------------------------------------------
+         | TRANSACCIÓN DE BASE DE DATOS
+         | Actualiza el fichero y la notificación previa
+         |------------------------------------------------------------
+         */
         DB::beginTransaction();
         try {
-            $fm_id = $request->input('fm_id');
-            $user_aprobacion = $request->input('user_aprobacion');
-            if (!$fm_id || !$user_aprobacion) {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'Faltan datos requeridos.'
-                ]);
-            }
-            // Buscar el fichero
-            $fichero = Fichero_Mercado::find($fm_id);
-            if (!$fichero) {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'El fichero no existe.'
-                ]);
-            }
-            // ✅ Verificar que esté pendiente de aprobación (estado = 2)
-            if ($fichero->fm_estado != '2') {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'El fichero no se encuentra pendiente de aprobación.'
-                ]);
-            }
-            /** ACTUALIZAR NOTIFICACIÓN SI EXISTE */
+            // Actualizar notificación previa si existe
             DB::table('notificaciones_general')
                 ->where('tipo', 6)
                 ->where('id_padre', $fm_id)
@@ -1147,77 +1202,98 @@ class Fichero_MercadoController extends Controller
                     'fecha_finaliza' => now(),
                     'user_finaliza' => $user_aprobacion
                 ]);
-            // Cambiar el estado a 2 (enviado para aprobación)
+            // Cambiar el estado a "aprobado"
             $fichero->fm_estado = '3';
-            // Guardar info de aprobación como JSON
+            // Guardar información de aprobación
             $fichero->info_aprobacion = json_encode([
                 'user_aprobacion' => $user_aprobacion,
                 'fecha_aprobacion' => now()->toDateTimeString()
             ]);
+            // Registrar usuario que realizó la acción
             $fichero->user_edit = $user_aprobacion;
+            // Actualizar timestamp
             $fichero->updated_at = now();
+            // Guardar cambios en base de datos
             $fichero->save();
-            //NOTIFICACION
-             // Registrar notificación
-            $formData = (Object)[
-                'nombre'        => 'Fichero Aprobado',
-                'descripcion'   => '',
-                'tipo'          => '7',
-                'user_created'  => $user_aprobacion,
-                'id_periodo'    => $fichero->idperiodoescolar,
-                'id_padre'      => $fm_id,
-            ];
-            $notificacion = $this->verificacionRepository->save_notificacion($formData);
-            $channel = 'admin.notifications_verificaciones';
-            $event = 'NewNotification';
-            $data = [
-                'message' => 'Nueva notificación',
-            ];
-            // notificacion en pusher
-            $this->NotificacionRepository->notificacionVerificaciones($channel, $event, $data);
+            // Confirmar transacción
             DB::commit();
-            return response()->json([
-                'status' => 1,
-                'message' => 'Fichero aprobado correctamente.'
-            ]);
         } catch (\Exception $e) {
+            // Revertir cambios si ocurre error en la transacción
             DB::rollBack();
             return response()->json([
-                'status' => 'error',
+                'status' => 0,
                 'message' => $e->getMessage()
             ]);
         }
+        /*
+         |------------------------------------------------------------
+         | NOTIFICACIONES
+         | Se ejecutan fuera de la transacción para no afectar
+         | el guardado del fichero en caso de fallo externo
+         |------------------------------------------------------------
+         */
+        // Preparar datos de la notificación
+        $formData = (Object)[
+            'nombre'        => 'Fichero Aprobado',
+            'descripcion'   => '',
+            'tipo'          => '7',
+            'user_created'  => $user_aprobacion,
+            'id_periodo'    => $fichero->idperiodoescolar,
+            'id_padre'      => $fm_id,
+        ];
+        // Registrar notificación en base de datos
+        $this->verificacionRepository->save_notificacion($formData);
+        // Enviar notificación en tiempo real (Pusher)
+        $this->NotificacionRepository->notificacionVerificaciones(
+            'admin.notifications_verificaciones',
+            'NewNotification',
+            ['message' => 'Nueva notificación']
+        );
+        // Respuesta exitosa
+        return response()->json([
+            'status' => 1,
+            'message' => 'Fichero aprobado correctamente.'
+        ]);
     }
 
     public function GuardarDatos_FicheroRechazado($request)
     {
+        // Obtener datos del request
+        $fm_id = $request->input('fm_id');
+        $user_aprobacion = $request->input('user_aprobacion');
+        $comentario_rechazo = $request->input('comentario_rechazo');
+        // Validar datos obligatorios antes de iniciar transacción
+        if (!$fm_id || !$user_aprobacion || !$comentario_rechazo) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Faltan datos requeridos.'
+            ]);
+        }
+        // Buscar el fichero
+        $fichero = Fichero_Mercado::find($fm_id);
+        // Validar existencia del fichero
+        if (!$fichero) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'El fichero no existe.'
+            ]);
+        }
+        // Verificar que esté pendiente de aprobación (estado = 2) o aprobado (estado = 3)
+        if ($fichero->fm_estado != '2' && $fichero->fm_estado != '3') {
+            return response()->json([
+                'status' => 0,
+                'message' => 'El fichero no se encuentra pendiente de aprobación ni aprobado.'
+            ]);
+        }
+        /*
+         |------------------------------------------------------------
+         | TRANSACCIÓN DE BASE DE DATOS
+         | Actualiza el fichero y la notificación previa
+         |------------------------------------------------------------
+         */
         DB::beginTransaction();
         try {
-            $fm_id = $request->input('fm_id');
-            $user_aprobacion = $request->input('user_aprobacion');
-            $comentario_rechazo = $request->input('comentario_rechazo');
-            if (!$fm_id || !$user_aprobacion || !$comentario_rechazo) {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'Faltan datos requeridos.'
-                ]);
-            }
-            // Buscar el fichero
-            $fichero = Fichero_Mercado::find($fm_id);
-            if (!$fichero) {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'El fichero no existe.'
-                ]);
-            }
-            // ✅ Verificar que esté pendiente de aprobación (estado = 2) o aprobado (estado = 3)
-            if ($fichero->fm_estado != '2' && $fichero->fm_estado != '3') {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'El fichero no se encuentra pendiente de aprobación ni aprobado.'
-                ]);
-            }
-            /** ACTUALIZAR NOTIFICACIÓN SI EXISTE */
+            // Actualizar notificación previa si existe
             DB::table('notificaciones_general')
                 ->where('tipo', 6)
                 ->where('id_padre', $fm_id)
@@ -1228,47 +1304,59 @@ class Fichero_MercadoController extends Controller
                     'fecha_finaliza' => now(),
                     'user_finaliza' => $user_aprobacion
                 ]);
-            // Cambiar el estado a 2 (enviado para aprobación)
+            // Cambiar el estado a "devuelto/rechazado"
             $fichero->fm_estado = '4';
-            // Guardar info de aprobación como JSON
+            // Guardar información de rechazo
             $fichero->info_rechazo = json_encode([
                 'user_rechazo' => $user_aprobacion,
                 'fecha_rechazo' => now()->toDateTimeString(),
                 'comentario_rechazo' => $comentario_rechazo
             ]);
+            // Registrar usuario que realizó la acción
             $fichero->user_edit = $user_aprobacion;
+            // Actualizar timestamp
             $fichero->updated_at = now();
+            // Guardar cambios en base de datos
             $fichero->save();
-            //NOTIFICACION
-             // Registrar notificación
-            $formData = (Object)[
-                'nombre'        => 'Fichero Devuelto',
-                'descripcion'   => '',
-                'tipo'          => '8',
-                'user_created'  => $user_aprobacion,
-                'id_periodo'    => $fichero->idperiodoescolar,
-                'id_padre'      => $fm_id,
-            ];
-            $notificacion = $this->verificacionRepository->save_notificacion($formData);
-            $channel = 'admin.notifications_verificaciones';
-            $event = 'NewNotification';
-            $data = [
-                'message' => 'Nueva notificación',
-            ];
-            // notificacion en pusher
-            $this->NotificacionRepository->notificacionVerificaciones($channel, $event, $data);
+            // Confirmar transacción
             DB::commit();
-            return response()->json([
-                'status' => 1,
-                'message' => 'Fichero rechazado correctamente.'
-            ]);
         } catch (\Exception $e) {
+            // Revertir cambios si ocurre error en la transacción
             DB::rollBack();
             return response()->json([
-                'status' => 'error',
+                'status' => 0,
                 'message' => $e->getMessage()
             ]);
         }
+        /*
+         |------------------------------------------------------------
+         | NOTIFICACIONES
+         | Se ejecutan fuera de la transacción para no afectar
+         | el guardado del fichero en caso de fallo externo
+         |------------------------------------------------------------
+         */
+        // Preparar datos de la notificación
+        $formData = (Object)[
+            'nombre'        => 'Fichero Devuelto',
+            'descripcion'   => '',
+            'tipo'          => '8',
+            'user_created'  => $user_aprobacion,
+            'id_periodo'    => $fichero->idperiodoescolar,
+            'id_padre'      => $fm_id,
+        ];
+        // Registrar notificación en base de datos
+        $this->verificacionRepository->save_notificacion($formData);
+        // Enviar notificación en tiempo real (Pusher)
+        $this->NotificacionRepository->notificacionVerificaciones(
+            'admin.notifications_verificaciones',
+            'NewNotification',
+            ['message' => 'Nueva notificación']
+        );
+        // Respuesta exitosa
+        return response()->json([
+            'status' => 1,
+            'message' => 'Fichero rechazado correctamente.'
+        ]);
     }
 
     public function Copiar_Informacion_Fichero_Nuevo(Request $request)

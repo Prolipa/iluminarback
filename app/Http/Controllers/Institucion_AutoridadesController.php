@@ -136,23 +136,18 @@ class Institucion_AutoridadesController extends Controller
 
     public function ActualizarComentarioInstitucion_Autoridades(Request $request)
     {
-        DB::beginTransaction();
         try {
             // Obtener el comentario de la solicitud
             $comentario = $request->Actualizar_comentario;
-            $tabla = 'institucion_autoridades';
 
             // Escapar el comentario para evitar problemas de inyección SQL
             $comentarioEscapado = DB::getPdo()->quote($comentario);
 
             // Actualizar el comentario de la tabla
-            // DB::statement('ALTER TABLE ' . $tabla . ' COMMENT = ?', [$comentario]);
-            DB::statement("ALTER TABLE {$tabla} COMMENT = {$comentarioEscapado}");
+            DB::statement("ALTER TABLE institucion_autoridades COMMENT = {$comentarioEscapado}");
 
-            DB::commit();
             return response()->json(["status" => "1", 'message' => 'Comentario actualizado correctamente'], 200);
         } catch (\Exception $e) {
-            DB::rollback();
             return response()->json(["status" => "0", 'message' => 'Error al actualizar el comentario: ' . $e->getMessage()], 500);
         }
     }
@@ -196,28 +191,20 @@ class Institucion_AutoridadesController extends Controller
 
     public function Post_Eliminar_Institucion_Autoridades(Request $request)
     {
+        DB::beginTransaction();
         try {
-            // Inicia la transacción
-            DB::beginTransaction();
-            // Buscar el registro
             $const_institucion_autoridades = Institucion_Autoridades::findOrFail($request->ina_id);
-            // Eliminar el registro
             $const_institucion_autoridades->delete();
-            // Reajustar el autoincrementable
             $this->ActualizarAutoIncrementableje();
-            // Confirmar la transacción
             DB::commit();
-            // Respuesta de éxito
+
             return response()->json([
                 'status' => 1,
                 'message' => 'Cargo de autoridades eliminado correctamente.',
                 'data' => $const_institucion_autoridades
             ]);
-
         } catch (\Exception $e) {
-            // Revertir la transacción en caso de error
             DB::rollBack();
-            // Respuesta de error
             return response()->json([
                 'status' => 0,
                 'message' => 'Error al eliminar el cargo de autoridades: ' . $e->getMessage()

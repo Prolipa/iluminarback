@@ -26,6 +26,7 @@ use App\Models\PedidoDocumentoDocente;
 use App\Models\Pedidos;
 use App\Models\RepresentanteEconomico;
 use App\Models\RepresentanteLegal;
+use App\Models\SallePreguntasEvaluacion;
 use App\Models\SeminarioCapacitador;
 use App\Models\Temporada;
 use App\Models\User;
@@ -941,6 +942,427 @@ class AdminController extends Controller
         return $result;
     }
     public function pruebaData(Request $request){
+        $ids = [
+            "3138",
+            "3173",
+            "3364",
+            "3250",
+            "3569",
+            "2909",
+            "2947",
+            "2966",
+            "3184",
+            "3192",
+            "3216",
+            "3240",
+            "3472",
+            "3096",
+            "2946",
+            "2957",
+            "3000",
+            "3003",
+            "3461",
+
+            "3237",
+            "2916",
+            "2956",
+            "3186",
+            "2999",
+            "3078",
+            "2954",
+            "2968",
+            "2973",
+            "3205",
+
+
+
+
+            "3047",
+            "3122",
+            "3157",
+            "3170",
+            "3214",
+            "3228",
+            "3231",
+            "3267",
+            "3278",
+            "3283",
+            "3296",
+            "3298",
+            "3301",
+            "3307",
+            "3315",
+            "3319",
+            "3323",
+            "3355",
+            "3370",
+            "3389",
+            "3402",
+            "3414",
+            "3418",
+            "3440",
+            "3503",
+            "3504",
+            "3509",
+            "3573",
+            "3593",
+            "3624",
+            "3628",
+            "3631",
+            "3650",
+            "3722",
+            "3732",
+            "3813",
+            "3854",
+            "3924",
+            "3994",
+            "3054",
+            "3136",
+            "3243",
+            "3303",
+            "3309",
+            "3310",
+            "3316",
+            "3324",
+            "3327",
+            "3331",
+            "3341",
+            "3343",
+            "3396",
+            "3469",
+            "3502",
+            "3522",
+            "3536",
+            "3552",
+            "3553",
+            "3600",
+            "3610",
+            "3640",
+            "2937",
+            "2945",
+            "3079",
+            "3120",
+            "3142",
+            "3191",
+            "3232",
+            "3286",
+            "3466",
+            "3497",
+            "3654",
+            "2978",
+            "3027",
+            "3071",
+            "3153",
+            "3268",
+            "3302",
+            "3328",
+            "3347",
+            "3377",
+            "2888",
+            "2901",
+            "2912",
+            "2922",
+            "3008",
+            "3051",
+            "3052",
+            "3056",
+            "3111",
+            "3131",
+            "3185",
+            "3208",
+            "3221",
+            "3318",
+            "3424",
+            "3591",
+            "3756",
+            "2913",
+            "2928",
+            "3105",
+            "3155",
+            "3190",
+            "3304",
+            "3574",
+            "2926",
+            "2970",
+            "3224",
+            "3257",
+            "3258",
+            "3382",
+            "2884",
+            "2911",
+            "2938",
+            "2953",
+            "2997",
+            "3132",
+            "3133",
+            "3144",
+            "3161",
+            "3384",
+            "3432",
+            "3601",
+            "3029",
+            "2944",
+            "3171",
+            "2918",
+            "2930",
+            "2940",
+            "2975",
+            "3140",
+            "3194",
+            "2914",
+            "2931",
+            "2941",
+            "2965",
+            "3135",
+            "3015",
+            "3147",
+            "3193",
+            "3577",
+            "4038",
+            "2962",
+            "3130",
+            "3145",
+            "3104",
+            "3368",
+            "3374",
+            "3210",
+            "3321",
+            "3353",
+            "3360",
+            "3409",
+            "3435",
+            "3451",
+            "3463",
+            "3492",
+            "3517",
+            "3603",
+            "3735",
+            "3808",
+            "3867",
+            "3868",
+            "3970",
+            "3993",
+            "3340",
+            "3398",
+            "3471",
+            "3519",
+            "3530",
+            "3533",
+            "3747",
+            "2948",
+            "3086",
+            "3256",
+            "3271",
+            "3400",
+            "3420",
+            "2920",
+            "2955",
+            "3036",
+            "3460",
+            "3555",
+            "3176",
+            "3211",
+            "3273",
+            "3381",
+            "3465",
+            "3506",
+            "2951",
+            "3035",
+            "3511",
+            "2919",
+            "3038",
+            "3123",
+            "3207",
+            "3242",
+            "3540",
+            "3188",
+            "3212",
+            "2917",
+            "3953",
+            "3493",
+            "3662",
+            "2963",
+            "3247",
+            "3390",
+            "3410",
+            "3562",
+            "3234",
+            "3539",
+            "3549",
+            "3633",
+            "3001",
+            "3262",
+            "3069",
+            "3274",
+            "3388",
+            "3404",
+            "3408",
+            "3338",
+            "3076",
+            "3066",
+            "3363",
+            "3149",
+            "3124",
+            "3089",
+            "3564",
+            "3169",
+            "3178",
+            "3084",
+            "3039"
+        ];
+        $query = DB::SELECT("SELECT *
+            FROM (
+                SELECT
+                    CONCAT(u.nombres,' ', u.apellidos) AS docente,
+                    u.cedula,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM salle_preguntas_evaluacion p
+                        WHERE p.id_evaluacion = e.id_evaluacion
+                    ) AS total_preguntas,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM salle_respuestas_preguntas r
+                        WHERE r.id_evaluacion = e.id_evaluacion
+                    ) AS total_respuestas,
+
+                    e.*
+                FROM salle_evaluaciones e
+                LEFT JOIN usuario u ON u.idusuario = e.id_usuario
+                WHERE e.n_evaluacion = '7'
+                AND e.estado = '2'
+            ) t
+            WHERE t.total_preguntas <> t.total_respuestas
+            AND t.id_evaluacion in (" . implode(',', $ids) .  ")
+            ");
+        $dataResultados = [];
+        foreach($query as $key => $item){
+            $preguntasFaltantes = DB::SELECT("SELECT p.*, pe.puntaje_pregunta
+            FROM salle_preguntas_evaluacion p
+            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = p.id_pregunta
+            LEFT JOIN salle_respuestas_preguntas r
+                ON r.id_pregunta = p.id_pregunta
+            AND r.id_evaluacion = p.id_evaluacion
+            WHERE p.id_evaluacion = ?
+            AND r.id_pregunta IS NULL
+            AND pe.id_tipo_pregunta <> '1'
+            ", [$item->id_evaluacion]);
+            $contador = 0;
+            // por cada pregunta buscar una opcion aleatoria
+            foreach($preguntasFaltantes as $k => $tr){
+                $respuestaPregunta = null;
+                //
+                // $opcionAleatoria = DB::SELECT("SELECT t.id_opcion_pregunta
+                // FROM (
+                //     SELECT sor.id_opcion_pregunta
+                //     FROM salle_opciones_preguntas sor
+                //     WHERE sor.id_pregunta = ?
+                //     ORDER BY sor.id_opcion_pregunta ASC
+                //     LIMIT 2
+                // ) t
+                // ORDER BY RAND()
+                // LIMIT 1;
+                // ", [$tr->id_pregunta]);
+                //cambiar a opcion correcta
+                $opcionAleatoria = DB::SELECT("SELECT sor.id_opcion_pregunta
+                    FROM salle_opciones_preguntas sor
+                    WHERE sor.id_pregunta = ?
+                    AND sor.tipo = '1'
+                ", [$tr->id_pregunta]);
+                if($opcionAleatoria){
+                    $respuestaPregunta = $opcionAleatoria[0]->id_opcion_pregunta;
+                    $puntajeSet = 0;
+                    //evaluacion si es correcta o no
+                    $evaluateRespuesta = DB::SELECT("SELECT * FROM salle_opciones_preguntas sor
+                        WHERE sor.id_pregunta = ?
+                        AND sor.id_opcion_pregunta = ?
+                        AND sor.tipo = '1'
+                        ", [$tr->id_pregunta, $respuestaPregunta]);
+                    //SI ES MAYOR A CERO ES CORRECTA
+                    if(count($evaluateRespuesta) > 0){
+                        $puntajeSet = $tr->puntaje_pregunta;
+                    }else{
+                        $puntajeSet = 0;
+                    }
+                    //validar si ya existe la respuesta antes de insertar (para evitar duplicados)
+                    $validarExistencia = DB::SELECT("SELECT * FROM salle_respuestas_preguntas
+                        WHERE id_evaluacion = ?
+                        AND id_pregunta = ?
+                        AND id_usuario = ?
+                        ", [$tr->id_evaluacion, $tr->id_pregunta, $item->id_usuario]);
+                    if(count($validarExistencia) > 0){
+                        continue; //si ya existe continuar al siguiente
+                    }
+                    // insertar la respuesta
+                    DB::table('salle_respuestas_preguntas')->insert([
+                        'id_evaluacion'         => $tr->id_evaluacion,
+                        'id_pregunta'           => $tr->id_pregunta,
+                        'id_usuario'            => $item->id_usuario,
+                        'respuesta'             => $respuestaPregunta,
+                        'puntaje'               => $puntajeSet,
+                    ]);
+                    //actualizar salle_preguntas_evaluacion para sumar el puntaje
+                    DB::table('salle_preguntas_evaluacion')->where('id_evaluacion', $tr->id_evaluacion)
+                    ->where('id_pregunta', $tr->id_pregunta)
+                    ->update([
+                        'calificacion_final'  => $puntajeSet,
+                        'updated_at'          => now(),
+                    ]);
+                    //actualizar salle_evaluaciones para sumar el calificacion_total
+                    DB::table('salle_evaluaciones')->where('id_evaluacion', $tr->id_evaluacion)
+                    ->update([
+                        'calificacion_total'  => DB::raw('calificacion_total + ' . $puntajeSet),
+                        'updated_at'          => now(),
+                    ]);
+                    $contador++;
+
+                }
+
+            }
+            $totalPuntajeSet = 0;
+            $totalPuntajeEvaluacion = 0;
+            //actualizar salle_evaluaciones calificacion_total
+            $getPuntajeRespuestas = DB::SELECT("SELECT SUM(e.calificacion_final) AS totalRespuestas FROM salle_preguntas_evaluacion e
+            WHERE e.id_evaluacion = ?", [$item->id_evaluacion]);
+            $totalPuntajeSet  = !empty($getPuntajeRespuestas) ? $getPuntajeRespuestas[0]->totalRespuestas : 0;
+            //total puntaje evaluacion
+            $getPuntajeEvaluacion = DB::SELECT("SELECT sum(pe.puntaje_pregunta) as totalPuntajeEvaluacion FROM salle_preguntas_evaluacion e
+            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = e.id_pregunta
+            WHERE e.id_evaluacion = ?
+            ;", [$item->id_evaluacion]);
+            $totalPuntajeEvaluacion = !empty($getPuntajeEvaluacion) ? $getPuntajeEvaluacion[0]->totalPuntajeEvaluacion : 0;
+            //calificacion final total puntaje respuestas / total puntaje evaluacion * 100
+            $calificacionFinal = 0;
+            if($totalPuntajeEvaluacion > 0){
+                $calificacionFinal = ($totalPuntajeSet / $totalPuntajeEvaluacion) * 100;
+            }
+
+            // $totalRespuestasTEST = 0;
+            // $respuestasTest = DB::SELECT("SELECT SUM(e.puntaje) as totalRespuestasTEST FROM salle_respuestas_preguntas e
+            // WHERE e.id_evaluacion = ?;", [$item->id_evaluacion]);
+            // $totalRespuestasTEST = $respuestasTest[0]->totalRespuestasTEST;
+            $dataResultados[$key] = (object)[
+                "docente"               => $item->docente,
+                "cedula"                => $item->cedula,
+                "id_evaluacion"         => $item->id_evaluacion,
+                "total_preguntas"       => $item->total_preguntas,
+                "total_respuestas"      => $item->total_respuestas,
+                "respuestas_insertadas"   => $contador,
+                "total_puntaje_obtenido" => $totalPuntajeSet,
+                "total_puntaje_evaluacion" => $totalPuntajeEvaluacion,
+                "calificacion_total"      => $calificacionFinal,
+                // "total_respuestas_test"   => $totalRespuestasTEST
+            ];
+            //actualizar salle_evaluaciones calificacion_final
+            DB::table('salle_evaluaciones')->where('id_evaluacion', $item->id_evaluacion)
+            ->update([
+                'calificacion_total'  => $calificacionFinal,
+                'updated_at'          => now(),
+            ]);
+        }
+        return $dataResultados;
         return "hola mundo";
         // $getCodigos = 'SMCLL3-CFZCY9WFCC,
         // PSMCLL3-8E7RBKE7Y7,
@@ -1083,6 +1505,812 @@ class AdminController extends Controller
         //     'telnet' => $telnetOutput,
         // ]);
     }
+    //ALEATORIO COMPLETAR
+    public function pruebaData2(Request $request){
+          $ids = [
+            "3641"
+        ];
+        $query = DB::SELECT("SELECT *
+            FROM (
+                SELECT
+                    CONCAT(u.nombres,' ', u.apellidos) AS docente,
+                    u.cedula,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM salle_preguntas_evaluacion p
+                        WHERE p.id_evaluacion = e.id_evaluacion
+                    ) AS total_preguntas,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM salle_respuestas_preguntas r
+                        WHERE r.id_evaluacion = e.id_evaluacion
+                    ) AS total_respuestas,
+
+                    e.*
+                FROM salle_evaluaciones e
+                LEFT JOIN usuario u ON u.idusuario = e.id_usuario
+                WHERE e.n_evaluacion = '7'
+                AND e.estado = '2'
+            ) t
+            WHERE t.total_preguntas <> t.total_respuestas
+            AND t.id_evaluacion in (" . implode(',', $ids) .  ")
+            ");
+        $dataResultados = [];
+        foreach($query as $key => $item){
+            $preguntasFaltantes = DB::SELECT("SELECT p.*, pe.puntaje_pregunta
+            FROM salle_preguntas_evaluacion p
+            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = p.id_pregunta
+            LEFT JOIN salle_respuestas_preguntas r
+                ON r.id_pregunta = p.id_pregunta
+            AND r.id_evaluacion = p.id_evaluacion
+            WHERE p.id_evaluacion = ?
+            AND r.id_pregunta IS NULL
+            AND pe.id_tipo_pregunta <> '1'
+            ", [$item->id_evaluacion]);
+            $contador = 0;
+            // por cada pregunta buscar una opcion aleatoria
+            foreach($preguntasFaltantes as $k => $tr){
+                $respuestaPregunta = null;
+                //
+                $opcionAleatoria = DB::SELECT("SELECT t.id_opcion_pregunta
+                FROM (
+                    SELECT sor.id_opcion_pregunta
+                    FROM salle_opciones_preguntas sor
+                    WHERE sor.id_pregunta = ?
+                    ORDER BY sor.id_opcion_pregunta ASC
+                    LIMIT 2
+                ) t
+                ORDER BY RAND()
+                LIMIT 1;
+                ", [$tr->id_pregunta]);
+                //cambiar a opcion correcta
+                // $opcionAleatoria = DB::SELECT("SELECT sor.id_opcion_pregunta
+                //     FROM salle_opciones_preguntas sor
+                //     WHERE sor.id_pregunta = ?
+                //     AND sor.tipo = '1'
+                // ", [$tr->id_pregunta]);
+                if($opcionAleatoria){
+                    $respuestaPregunta = $opcionAleatoria[0]->id_opcion_pregunta;
+                    $puntajeSet = 0;
+                    //evaluacion si es correcta o no
+                    $evaluateRespuesta = DB::SELECT("SELECT * FROM salle_opciones_preguntas sor
+                        WHERE sor.id_pregunta = ?
+                        AND sor.id_opcion_pregunta = ?
+                        AND sor.tipo = '1'
+                        ", [$tr->id_pregunta, $respuestaPregunta]);
+                    //SI ES MAYOR A CERO ES CORRECTA
+                    if(count($evaluateRespuesta) > 0){
+                        $puntajeSet = $tr->puntaje_pregunta;
+                    }else{
+                        $puntajeSet = 0;
+                    }
+                    //validar si ya existe la respuesta antes de insertar (para evitar duplicados)
+                    $validarExistencia = DB::SELECT("SELECT * FROM salle_respuestas_preguntas
+                        WHERE id_evaluacion = ?
+                        AND id_pregunta = ?
+                        AND id_usuario = ?
+                        ", [$tr->id_evaluacion, $tr->id_pregunta, $item->id_usuario]);
+                    if(count($validarExistencia) > 0){
+                        continue; //si ya existe continuar al siguiente
+                    }
+                    // insertar la respuesta
+                    DB::table('salle_respuestas_preguntas')->insert([
+                        'id_evaluacion'         => $tr->id_evaluacion,
+                        'id_pregunta'           => $tr->id_pregunta,
+                        'id_usuario'            => $item->id_usuario,
+                        'respuesta'             => $respuestaPregunta,
+                        'puntaje'               => $puntajeSet,
+                    ]);
+                    //actualizar salle_preguntas_evaluacion para sumar el puntaje
+                    DB::table('salle_preguntas_evaluacion')->where('id_evaluacion', $tr->id_evaluacion)
+                    ->where('id_pregunta', $tr->id_pregunta)
+                    ->update([
+                        'calificacion_final'  => $puntajeSet,
+                        'updated_at'          => now(),
+                    ]);
+                    //actualizar salle_evaluaciones para sumar el calificacion_total
+                    DB::table('salle_evaluaciones')->where('id_evaluacion', $tr->id_evaluacion)
+                    ->update([
+                        'calificacion_total'  => DB::raw('calificacion_total + ' . $puntajeSet),
+                        'updated_at'          => now(),
+                    ]);
+                    $contador++;
+
+                }
+
+            }
+            $totalPuntajeSet = 0;
+            $totalPuntajeEvaluacion = 0;
+            //actualizar salle_evaluaciones calificacion_total
+            $getPuntajeRespuestas = DB::SELECT("SELECT SUM(e.calificacion_final) AS totalRespuestas FROM salle_preguntas_evaluacion e
+            WHERE e.id_evaluacion = ?", [$item->id_evaluacion]);
+            $totalPuntajeSet  = !empty($getPuntajeRespuestas) ? $getPuntajeRespuestas[0]->totalRespuestas : 0;
+            //total puntaje evaluacion
+            $getPuntajeEvaluacion = DB::SELECT("SELECT sum(pe.puntaje_pregunta) as totalPuntajeEvaluacion FROM salle_preguntas_evaluacion e
+            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = e.id_pregunta
+            WHERE e.id_evaluacion = ?
+            ;", [$item->id_evaluacion]);
+            $totalPuntajeEvaluacion = !empty($getPuntajeEvaluacion) ? $getPuntajeEvaluacion[0]->totalPuntajeEvaluacion : 0;
+            //calificacion final total puntaje respuestas / total puntaje evaluacion * 100
+            $calificacionFinal = 0;
+            if($totalPuntajeEvaluacion > 0){
+                $calificacionFinal = ($totalPuntajeSet / $totalPuntajeEvaluacion) * 100;
+            }
+
+            // $totalRespuestasTEST = 0;
+            // $respuestasTest = DB::SELECT("SELECT SUM(e.puntaje) as totalRespuestasTEST FROM salle_respuestas_preguntas e
+            // WHERE e.id_evaluacion = ?;", [$item->id_evaluacion]);
+            // $totalRespuestasTEST = $respuestasTest[0]->totalRespuestasTEST;
+            $dataResultados[$key] = (object)[
+                "docente"               => $item->docente,
+                "cedula"                => $item->cedula,
+                "id_evaluacion"         => $item->id_evaluacion,
+                "total_preguntas"       => $item->total_preguntas,
+                "total_respuestas"      => $item->total_respuestas,
+                "respuestas_insertadas"   => $contador,
+                "total_puntaje_obtenido" => $totalPuntajeSet,
+                "total_puntaje_evaluacion" => $totalPuntajeEvaluacion,
+                "calificacion_total"      => $calificacionFinal,
+                // "total_respuestas_test"   => $totalRespuestasTEST
+            ];
+            //actualizar salle_evaluaciones calificacion_final
+            DB::table('salle_evaluaciones')->where('id_evaluacion', $item->id_evaluacion)
+            ->update([
+                'calificacion_total'  => $calificacionFinal,
+                'updated_at'          => now(),
+            ]);
+        }
+        return $dataResultados;
+    }
+    //fundamentales
+    public function pruebaData3(Request $request){
+          $ids = [
+            "3641",
+        ];
+        $query = DB::SELECT("SELECT *
+            FROM (
+                SELECT
+                    CONCAT(u.nombres,' ', u.apellidos) AS docente,
+                    u.cedula,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM salle_preguntas_evaluacion p
+                        WHERE p.id_evaluacion = e.id_evaluacion
+                    ) AS total_preguntas,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM salle_respuestas_preguntas r
+                        WHERE r.id_evaluacion = e.id_evaluacion
+                    ) AS total_respuestas,
+
+                    e.*
+                FROM salle_evaluaciones e
+                LEFT JOIN usuario u ON u.idusuario = e.id_usuario
+                WHERE e.n_evaluacion = '7'
+                AND e.estado = '2'
+            ) t
+            WHERE t.total_preguntas <> t.total_respuestas
+            AND t.id_evaluacion in (" . implode(',', $ids) .  ")
+            ");
+        $dataResultados = [];
+        foreach($query as $key => $item){
+            // preguntas faltantes del area fundamentales
+            $preguntasFaltantes = DB::SELECT("SELECT p.*, pe.puntaje_pregunta, a.id_asignatura, a.nombre_asignatura,ar.id_area, ar.nombre_area
+            FROM salle_preguntas_evaluacion p
+            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = p.id_pregunta
+            LEFT JOIN salle_asignaturas a ON pe.id_asignatura = a.id_asignatura
+            LEFT JOIN salle_areas ar ON ar.id_area = a.id_area
+            LEFT JOIN salle_respuestas_preguntas r
+                ON r.id_pregunta = p.id_pregunta
+            AND r.id_evaluacion = p.id_evaluacion
+            WHERE p.id_evaluacion = ?
+            AND r.id_pregunta IS NULL
+            AND pe.id_tipo_pregunta <> '1'
+            AND ar.id_area = '47'
+            ", [$item->id_evaluacion]);
+            $contador = 0;
+            // por cada pregunta buscar una opcion aleatoria
+            foreach($preguntasFaltantes as $k => $tr){
+                $respuestaPregunta = null;
+                //
+                $opcionAleatoria = DB::SELECT("SELECT t.id_opcion_pregunta
+                FROM (
+                    SELECT sor.id_opcion_pregunta
+                    FROM salle_opciones_preguntas sor
+                    WHERE sor.id_pregunta = ?
+                    ORDER BY sor.id_opcion_pregunta ASC
+                    LIMIT 2
+                ) t
+                ORDER BY RAND()
+                LIMIT 1;
+                ", [$tr->id_pregunta]);
+                //cambiar a opcion correcta
+                // $opcionAleatoria = DB::SELECT("SELECT sor.id_opcion_pregunta
+                //     FROM salle_opciones_preguntas sor
+                //     WHERE sor.id_pregunta = ?
+                //     AND sor.tipo = '1'
+                // ", [$tr->id_pregunta]);
+                if($opcionAleatoria){
+                    $respuestaPregunta = $opcionAleatoria[0]->id_opcion_pregunta;
+                    $puntajeSet = 0;
+                    //evaluacion si es correcta o no
+                    $evaluateRespuesta = DB::SELECT("SELECT * FROM salle_opciones_preguntas sor
+                        WHERE sor.id_pregunta = ?
+                        AND sor.id_opcion_pregunta = ?
+                        AND sor.tipo = '1'
+                        ", [$tr->id_pregunta, $respuestaPregunta]);
+                    //SI ES MAYOR A CERO ES CORRECTA
+                    if(count($evaluateRespuesta) > 0){
+                        $puntajeSet = $tr->puntaje_pregunta;
+                    }else{
+                        $puntajeSet = 0;
+                    }
+                    //validar si ya existe la respuesta antes de insertar (para evitar duplicados)
+                    $validarExistencia = DB::SELECT("SELECT * FROM salle_respuestas_preguntas
+                        WHERE id_evaluacion = ?
+                        AND id_pregunta = ?
+                        AND id_usuario = ?
+                        ", [$tr->id_evaluacion, $tr->id_pregunta, $item->id_usuario]);
+                    if(count($validarExistencia) > 0){
+                        continue; //si ya existe continuar al siguiente
+                    }
+                    // insertar la respuesta
+                    DB::table('salle_respuestas_preguntas')->insert([
+                        'id_evaluacion'         => $tr->id_evaluacion,
+                        'id_pregunta'           => $tr->id_pregunta,
+                        'id_usuario'            => $item->id_usuario,
+                        'respuesta'             => $respuestaPregunta,
+                        'puntaje'               => $puntajeSet,
+                    ]);
+                    //actualizar salle_preguntas_evaluacion para sumar el puntaje
+                    DB::table('salle_preguntas_evaluacion')->where('id_evaluacion', $tr->id_evaluacion)
+                    ->where('id_pregunta', $tr->id_pregunta)
+                    ->update([
+                        'calificacion_final'  => $puntajeSet,
+                        'updated_at'          => now(),
+                    ]);
+                    //actualizar salle_evaluaciones para sumar el calificacion_total
+                    DB::table('salle_evaluaciones')->where('id_evaluacion', $tr->id_evaluacion)
+                    ->update([
+                        'calificacion_total'  => DB::raw('calificacion_total + ' . $puntajeSet),
+                        'updated_at'          => now(),
+                    ]);
+                    $contador++;
+
+                }
+
+            }
+            $totalPuntajeSet = 0;
+            $totalPuntajeEvaluacion = 0;
+            //actualizar salle_evaluaciones calificacion_total
+            $getPuntajeRespuestas = DB::SELECT("SELECT SUM(e.calificacion_final) AS totalRespuestas FROM salle_preguntas_evaluacion e
+            WHERE e.id_evaluacion = ?", [$item->id_evaluacion]);
+            $totalPuntajeSet  = !empty($getPuntajeRespuestas) ? $getPuntajeRespuestas[0]->totalRespuestas : 0;
+            //total puntaje evaluacion
+            $getPuntajeEvaluacion = DB::SELECT("SELECT sum(pe.puntaje_pregunta) as totalPuntajeEvaluacion FROM salle_preguntas_evaluacion e
+            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = e.id_pregunta
+            WHERE e.id_evaluacion = ?
+            ;", [$item->id_evaluacion]);
+            $totalPuntajeEvaluacion = !empty($getPuntajeEvaluacion) ? $getPuntajeEvaluacion[0]->totalPuntajeEvaluacion : 0;
+            //calificacion final total puntaje respuestas / total puntaje evaluacion * 100
+            $calificacionFinal = 0;
+            if($totalPuntajeEvaluacion > 0){
+                $calificacionFinal = ($totalPuntajeSet / $totalPuntajeEvaluacion) * 100;
+            }
+
+            // $totalRespuestasTEST = 0;
+            // $respuestasTest = DB::SELECT("SELECT SUM(e.puntaje) as totalRespuestasTEST FROM salle_respuestas_preguntas e
+            // WHERE e.id_evaluacion = ?;", [$item->id_evaluacion]);
+            // $totalRespuestasTEST = $respuestasTest[0]->totalRespuestasTEST;
+            $dataResultados[$key] = (object)[
+                "docente"               => $item->docente,
+                "cedula"                => $item->cedula,
+                "id_evaluacion"         => $item->id_evaluacion,
+                "total_preguntas"       => $item->total_preguntas,
+                "total_respuestas"      => $item->total_respuestas,
+                "respuestas_insertadas"   => $contador,
+                "total_puntaje_obtenido" => $totalPuntajeSet,
+                "total_puntaje_evaluacion" => $totalPuntajeEvaluacion,
+                "calificacion_total"      => $calificacionFinal,
+                // "total_respuestas_test"   => $totalRespuestasTEST
+            ];
+            //actualizar salle_evaluaciones calificacion_final
+            DB::table('salle_evaluaciones')->where('id_evaluacion', $item->id_evaluacion)
+            ->update([
+                'calificacion_total'  => $calificacionFinal,
+                'updated_at'          => now(),
+            ]);
+        }
+        return $dataResultados;
+    }
+
+    //POR ASIGNATURA
+     public function pruebaData4(Request $request){
+        return "hola mundo";
+          $configuracion = [
+            [
+                'id_evaluacion' => 3162,
+                'ids_asignaturas' => ['142','146','152','156','160','163']
+            ],
+            [
+                'id_evaluacion' => 3165,
+                'ids_asignaturas' => ['160']
+            ],
+            [
+                'id_evaluacion' => 3050,
+                'ids_asignaturas' => ['130','133','134','139']
+            ],
+            [
+                'id_evaluacion' => 3175,
+                'ids_asignaturas' => ['142','150','152']
+            ]
+        ];
+
+        // Crear un array asociativo para buscar asignaturas por id_evaluacion
+        $evaluacionAsignaturas = [];
+        $idsEvaluaciones = [];
+        foreach($configuracion as $item){
+            $evaluacionAsignaturas[$item['id_evaluacion']] = $item['ids_asignaturas'];
+            $idsEvaluaciones[] = $item['id_evaluacion'];
+        }
+
+        $query = DB::SELECT("SELECT *
+            FROM (
+                SELECT
+                    CONCAT(u.nombres,' ', u.apellidos) AS docente,
+                    u.cedula,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM salle_preguntas_evaluacion p
+                        WHERE p.id_evaluacion = e.id_evaluacion
+                    ) AS total_preguntas,
+
+                    (
+                        SELECT COUNT(*)
+                        FROM salle_respuestas_preguntas r
+                        WHERE r.id_evaluacion = e.id_evaluacion
+                    ) AS total_respuestas,
+
+                    e.*
+                FROM salle_evaluaciones e
+                LEFT JOIN usuario u ON u.idusuario = e.id_usuario
+                WHERE e.n_evaluacion = '7'
+                AND e.estado = '2'
+            ) t
+            WHERE t.total_preguntas <> t.total_respuestas
+            AND t.id_evaluacion in (" . implode(',', $idsEvaluaciones) .  ")
+            ");
+        $dataResultados = [];
+        foreach($query as $key => $item){
+            // Obtener las asignaturas correspondientes a esta evaluacion
+            $asignaturasPermitidas = isset($evaluacionAsignaturas[$item->id_evaluacion])
+                ? $evaluacionAsignaturas[$item->id_evaluacion]
+                : [];
+
+            if(empty($asignaturasPermitidas)){
+                continue; // Si no hay asignaturas configuradas, saltar esta evaluacion
+            }
+
+            // preguntas faltantes del area fundamentales
+            $preguntasFaltantes = DB::SELECT("SELECT p.*, pe.puntaje_pregunta, a.id_asignatura, a.nombre_asignatura,ar.id_area, ar.nombre_area
+            FROM salle_preguntas_evaluacion p
+            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = p.id_pregunta
+            LEFT JOIN salle_asignaturas a ON pe.id_asignatura = a.id_asignatura
+            LEFT JOIN salle_areas ar ON ar.id_area = a.id_area
+            LEFT JOIN salle_respuestas_preguntas r
+                ON r.id_pregunta = p.id_pregunta
+            AND r.id_evaluacion = p.id_evaluacion
+            WHERE p.id_evaluacion = ?
+            AND r.id_pregunta IS NULL
+            AND pe.id_tipo_pregunta <> '1'
+   			AND a.id_asignatura IN ('" . implode("','", $asignaturasPermitidas) . "')
+
+            ", [$item->id_evaluacion]);
+            $contador = 0;
+            // por cada pregunta buscar una opcion aleatoria
+            foreach($preguntasFaltantes as $k => $tr){
+                $respuestaPregunta = null;
+                //
+                $opcionAleatoria = DB::SELECT("SELECT t.id_opcion_pregunta
+                FROM (
+                    SELECT sor.id_opcion_pregunta
+                    FROM salle_opciones_preguntas sor
+                    WHERE sor.id_pregunta = ?
+                    ORDER BY sor.id_opcion_pregunta ASC
+                    LIMIT 2
+                ) t
+                ORDER BY RAND()
+                LIMIT 1;
+                ", [$tr->id_pregunta]);
+                //cambiar a opcion correcta
+                // $opcionAleatoria = DB::SELECT("SELECT sor.id_opcion_pregunta
+                //     FROM salle_opciones_preguntas sor
+                //     WHERE sor.id_pregunta = ?
+                //     AND sor.tipo = '1'
+                // ", [$tr->id_pregunta]);
+                if($opcionAleatoria){
+                    $respuestaPregunta = $opcionAleatoria[0]->id_opcion_pregunta;
+                    $puntajeSet = 0;
+                    //evaluacion si es correcta o no
+                    $evaluateRespuesta = DB::SELECT("SELECT * FROM salle_opciones_preguntas sor
+                        WHERE sor.id_pregunta = ?
+                        AND sor.id_opcion_pregunta = ?
+                        AND sor.tipo = '1'
+                        ", [$tr->id_pregunta, $respuestaPregunta]);
+                    //SI ES MAYOR A CERO ES CORRECTA
+                    if(count($evaluateRespuesta) > 0){
+                        $puntajeSet = $tr->puntaje_pregunta;
+                    }else{
+                        $puntajeSet = 0;
+                    }
+                    //validar si ya existe la respuesta antes de insertar (para evitar duplicados)
+                    $validarExistencia = DB::SELECT("SELECT * FROM salle_respuestas_preguntas
+                        WHERE id_evaluacion = ?
+                        AND id_pregunta = ?
+                        AND id_usuario = ?
+                        ", [$tr->id_evaluacion, $tr->id_pregunta, $item->id_usuario]);
+                    if(count($validarExistencia) > 0){
+                        continue; //si ya existe continuar al siguiente
+                    }
+                    // insertar la respuesta
+                    DB::table('salle_respuestas_preguntas')->insert([
+                        'id_evaluacion'         => $tr->id_evaluacion,
+                        'id_pregunta'           => $tr->id_pregunta,
+                        'id_usuario'            => $item->id_usuario,
+                        'respuesta'             => $respuestaPregunta,
+                        'puntaje'               => $puntajeSet,
+                    ]);
+                    //actualizar salle_preguntas_evaluacion para sumar el puntaje
+                    DB::table('salle_preguntas_evaluacion')->where('id_evaluacion', $tr->id_evaluacion)
+                    ->where('id_pregunta', $tr->id_pregunta)
+                    ->update([
+                        'calificacion_final'  => $puntajeSet,
+                        'updated_at'          => now(),
+                    ]);
+                    //actualizar salle_evaluaciones para sumar el calificacion_total
+                    DB::table('salle_evaluaciones')->where('id_evaluacion', $tr->id_evaluacion)
+                    ->update([
+                        'calificacion_total'  => DB::raw('calificacion_total + ' . $puntajeSet),
+                        'updated_at'          => now(),
+                    ]);
+                    $contador++;
+
+                }
+
+            }
+            $totalPuntajeSet = 0;
+            $totalPuntajeEvaluacion = 0;
+            //actualizar salle_evaluaciones calificacion_total
+            $getPuntajeRespuestas = DB::SELECT("SELECT SUM(e.calificacion_final) AS totalRespuestas FROM salle_preguntas_evaluacion e
+            WHERE e.id_evaluacion = ?", [$item->id_evaluacion]);
+            $totalPuntajeSet  = !empty($getPuntajeRespuestas) ? $getPuntajeRespuestas[0]->totalRespuestas : 0;
+            //total puntaje evaluacion
+            $getPuntajeEvaluacion = DB::SELECT("SELECT sum(pe.puntaje_pregunta) as totalPuntajeEvaluacion FROM salle_preguntas_evaluacion e
+            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = e.id_pregunta
+            WHERE e.id_evaluacion = ?
+            ;", [$item->id_evaluacion]);
+            $totalPuntajeEvaluacion = !empty($getPuntajeEvaluacion) ? $getPuntajeEvaluacion[0]->totalPuntajeEvaluacion : 0;
+            //calificacion final total puntaje respuestas / total puntaje evaluacion * 100
+            $calificacionFinal = 0;
+            if($totalPuntajeEvaluacion > 0){
+                $calificacionFinal = ($totalPuntajeSet / $totalPuntajeEvaluacion) * 100;
+            }
+
+            // $totalRespuestasTEST = 0;
+            // $respuestasTest = DB::SELECT("SELECT SUM(e.puntaje) as totalRespuestasTEST FROM salle_respuestas_preguntas e
+            // WHERE e.id_evaluacion = ?;", [$item->id_evaluacion]);
+            // $totalRespuestasTEST = $respuestasTest[0]->totalRespuestasTEST;
+            $dataResultados[$key] = (object)[
+                "docente"               => $item->docente,
+                "cedula"                => $item->cedula,
+                "id_evaluacion"         => $item->id_evaluacion,
+                "total_preguntas"       => $item->total_preguntas,
+                "total_respuestas"      => $item->total_respuestas,
+                "respuestas_insertadas"   => $contador,
+                "total_puntaje_obtenido" => $totalPuntajeSet,
+                "total_puntaje_evaluacion" => $totalPuntajeEvaluacion,
+                "calificacion_total"      => $calificacionFinal,
+                // "total_respuestas_test"   => $totalRespuestasTEST
+            ];
+            //actualizar salle_evaluaciones calificacion_final
+            DB::table('salle_evaluaciones')->where('id_evaluacion', $item->id_evaluacion)
+            ->update([
+                'calificacion_total'  => $calificacionFinal,
+                'updated_at'          => now(),
+            ]);
+        }
+        return $dataResultados;
+    }
+
+    //rellenar salle_preguntas
+    public function pruebaData5(Request $request){
+       $configuracion = [
+            [
+                'id_usuario' => 44510,
+                'id_evaluacion_rellenar'     => 3641,
+                'id_evaluacion_pr_completas' => 3929
+            ],
+        ];
+
+        foreach($configuracion as $item){
+            $id_evaluacion_rellenar     = $item['id_evaluacion_rellenar'];
+            $id_evaluacion_pr_completas = $item['id_evaluacion_pr_completas'];
+            $id_usuario = $item['id_usuario'];
+            //preguntas completas
+            $preguntasCompletas = DB::SELECT("SELECT a.id_asignatura,
+                    a.nombre_asignatura,
+                    COUNT(e.id_pregunta) AS total_preguntas
+                FROM salle_preguntas_evaluacion e
+                LEFT JOIN salle_preguntas pe
+                    ON pe.id_pregunta = e.id_pregunta
+                LEFT JOIN salle_asignaturas a
+                    ON a.id_asignatura = pe.id_asignatura
+                LEFT JOIN salle_areas ar
+                    ON ar.id_area = a.id_area
+                WHERE e.id_evaluacion = '$id_evaluacion_pr_completas'
+                GROUP BY a.id_asignatura, a.nombre_asignatura;
+            ");
+            //respuestas con preguntas incompletas
+            $preguntasIncompletas = DB::SELECT("SELECT a.id_asignatura,
+                    a.nombre_asignatura,
+                    COUNT(r.id_respuesta_pregunta) AS total_respuestas,
+                    r.id_evaluacion
+                FROM salle_respuestas_preguntas r
+                LEFT JOIN salle_preguntas pe
+                    ON pe.id_pregunta = r.id_pregunta
+                LEFT JOIN salle_asignaturas a
+                    ON a.id_asignatura = pe.id_asignatura
+                LEFT JOIN salle_areas ar
+                    ON ar.id_area = a.id_area
+               WHERE  r.id_evaluacion = '$id_evaluacion_rellenar'
+                GROUP BY id_asignatura, a.nombre_asignatura, r.id_evaluacion;
+
+            ");
+
+            // Crear un array asociativo de las respuestas incompletas para fácil búsqueda
+            $incompletasMap = [];
+            foreach($preguntasIncompletas as $incompleta){
+                $incompletasMap[$incompleta->id_asignatura] = [
+                    'nombre_asignatura' => $incompleta->nombre_asignatura,
+                    'total_respuestas' => $incompleta->total_respuestas,
+                    'id_evaluacion' => $incompleta->id_evaluacion
+                ];
+            }
+
+            // Comparar y crear array de diferencias
+            $diferencias = [];
+            foreach($preguntasCompletas as $completa){
+                $id_asignatura = $completa->id_asignatura;
+                $total_completas = $completa->total_preguntas;
+
+                // Verificar si existe en incompletas
+                if(isset($incompletasMap[$id_asignatura])){
+                    $total_incompletas = $incompletasMap[$id_asignatura]['total_respuestas'];
+                } else {
+                    $total_incompletas = 0;
+                }
+
+                // Calcular cuántas preguntas faltan
+                $preguntas_faltantes = $total_completas - $total_incompletas;
+
+                // Agregar al array de diferencias
+                $diferencias[] = [
+                    'id_asignatura' => $id_asignatura,
+                    'nombre_asignatura' => $completa->nombre_asignatura,
+                    'total_completas' => $total_completas,
+                    'total_incompletas' => $total_incompletas,
+                    'preguntas_faltantes' => $preguntas_faltantes,
+                    'estado' => $preguntas_faltantes == 0 ? 'COMPLETO' : 'INCOMPLETO'
+                ];
+            }
+
+            //===========================MOSTRAR COMPLETAS==============================
+
+            $arrayCompletas = array_filter($diferencias, function($diff) {
+                return $diff['estado'] === 'COMPLETO';
+            });
+            $resultadoFinalCompletas = array_values($arrayCompletas);
+            // agregar respuestas completas
+            foreach($resultadoFinalCompletas as $comp){
+                $preguntasCompletasDetalle = DB::SELECT("SELECT distinct r.id_pregunta
+                    FROM salle_respuestas_preguntas r
+                    LEFT JOIN salle_preguntas pe ON pe.id_pregunta = r.id_pregunta
+                    LEFT JOIN salle_asignaturas a ON a.id_asignatura = pe.id_asignatura
+                    LEFT JOIN salle_areas ar ON ar.id_area = a.id_area
+                    WHERE  r.id_evaluacion = '$id_evaluacion_rellenar'
+                    AND a.id_asignatura = '".$comp['id_asignatura']."'
+                ");
+                foreach($preguntasCompletasDetalle as $pcd){
+                    $puntajeSet = 0;
+                    //obtener el puntaje de la pregunta
+                    $getPuntajePregunta = DB::SELECT("SELECT SUM(COALESCE(r.puntaje, 0)) AS puntaje_pregunta
+                    FROM salle_respuestas_preguntas r
+                    WHERE r.id_evaluacion = '$id_evaluacion_rellenar'
+                    AND r.id_pregunta = '".$pcd->id_pregunta."';
+                    ");
+                    if(!empty($getPuntajePregunta)) {
+                        $puntajeSet = $getPuntajePregunta[0]->puntaje_pregunta;
+                    }
+                    //validar si ya existe la respuesta antes de insertar (para evitar duplicados)
+                    $validarExistencia = DB::SELECT("SELECT * FROM salle_preguntas_evaluacion
+                        WHERE id_evaluacion = ?
+                        AND id_pregunta = ?
+                        ", [$id_evaluacion_rellenar, $pcd->id_pregunta]);
+                    if(count($validarExistencia) > 0){
+                        continue; //si ya existe continuar al siguiente
+                    }
+                    // registrar en salle_preguntas_evaluacion
+                    $preguntaEvaluacion = new SallePreguntasEvaluacion();
+                    $preguntaEvaluacion->id_evaluacion = $id_evaluacion_rellenar;
+                    $preguntaEvaluacion->id_pregunta = $pcd->id_pregunta; //pregunta de prueba
+                    $preguntaEvaluacion->calificacion_final = $puntajeSet;
+                    $preguntaEvaluacion->save();
+                }
+            }
+
+            //===========================MOSTRAR INCOMPLETAS==============================
+            // Filtrar las diferencias solo incompletas
+            $resultadoFinalImcompletas = array_filter($diferencias, function($diff) {
+                return $diff['estado'] === 'INCOMPLETO';
+            });
+            $resultadoFinalImcompletas = array_values($resultadoFinalImcompletas);
+            // Procesar asignaturas incompletas
+            foreach($resultadoFinalImcompletas as $incomp){
+                $id_asignatura = $incomp['id_asignatura'];
+
+                // Obtener las preguntas que ya respondió el usuario
+                $preguntasRespondidas = DB::SELECT("SELECT DISTINCT r.id_pregunta
+                    FROM salle_respuestas_preguntas r
+                    LEFT JOIN salle_preguntas pe ON pe.id_pregunta = r.id_pregunta
+                    WHERE r.id_evaluacion = '$id_evaluacion_rellenar'
+                    AND pe.id_asignatura = '$id_asignatura'
+                ");
+                foreach($preguntasRespondidas as $pr){
+                      $puntajeSet = 0;
+                    //obtener el puntaje de la pregunta
+                    $getPuntajePregunta = DB::SELECT("SELECT SUM(COALESCE(r.puntaje, 0)) AS puntaje_pregunta
+                    FROM salle_respuestas_preguntas r
+                    WHERE r.id_evaluacion = '$id_evaluacion_rellenar'
+                    AND r.id_pregunta = '".$pr->id_pregunta."';
+                    ");
+                    if(!empty($getPuntajePregunta)) {
+                        $puntajeSet = $getPuntajePregunta[0]->puntaje_pregunta;
+                    }
+                    //validar si ya existe la respuesta antes de insertar (para evitar duplicados)
+                    $validarExistencia = DB::SELECT("SELECT * FROM salle_preguntas_evaluacion
+                        WHERE id_evaluacion = ?
+                        AND id_pregunta = ?
+                        ", [$id_evaluacion_rellenar, $pr->id_pregunta]);
+                    if(count($validarExistencia) > 0){
+                        continue; //si ya existe continuar al siguiente
+                    }
+                    // registrar en salle_preguntas_evaluacion
+                    $preguntaEvaluacion = new SallePreguntasEvaluacion();
+                    $preguntaEvaluacion->id_evaluacion = $id_evaluacion_rellenar;
+                    $preguntaEvaluacion->id_pregunta = $pr->id_pregunta; //pregunta de prueba
+                    $preguntaEvaluacion->calificacion_final = $puntajeSet;
+                    $preguntaEvaluacion->save();
+                }
+
+            }
+
+            //================== RELLENAR PREGUNTAS FALTANTES DE ASIGNATURAS INCOMPLETAS=============
+            foreach($resultadoFinalImcompletas as $incomp){
+                $total_completas     = $incomp['total_completas'];
+                $id_asignatura       = $incomp['id_asignatura'];
+                $preguntas_faltantes = $incomp['preguntas_faltantes'];
+
+                // Obtener preguntas que ya están registradas en salle_preguntas_evaluacion para esta evaluación y asignatura
+                $preguntasYaRegistradas = DB::SELECT("SELECT DISTINCT e.id_pregunta
+                    FROM salle_preguntas_evaluacion e
+                    LEFT JOIN salle_preguntas pe ON pe.id_pregunta = e.id_pregunta
+                    WHERE e.id_evaluacion = '$id_evaluacion_rellenar'
+                    AND pe.id_asignatura = '$id_asignatura'
+                ");
+
+                // Si ya tiene todas las preguntas completas, continuar al siguiente
+                if(count($preguntasYaRegistradas) >= $total_completas){
+                    continue;
+                }
+
+                // Crear array de IDs ya registrados
+                $idsYaRegistrados = array_map(function($item) {
+                    return $item->id_pregunta;
+                }, $preguntasYaRegistradas);
+
+                $idsYaRegistrados_str = !empty($idsYaRegistrados) ? implode(',', $idsYaRegistrados) : '0';
+
+                // Buscar preguntas de la evaluación completa que NO estén registradas
+                $preguntasParaAgregar = DB::SELECT("SELECT DISTINCT e.id_pregunta
+                    FROM salle_preguntas_evaluacion e
+                    LEFT JOIN salle_preguntas pe ON pe.id_pregunta = e.id_pregunta
+                    WHERE e.id_evaluacion = '$id_evaluacion_pr_completas'
+                    AND pe.id_asignatura = '$id_asignatura'
+                    AND e.id_pregunta NOT IN ($idsYaRegistrados_str)
+                    LIMIT $preguntas_faltantes
+                ");
+
+                // Insertar las preguntas faltantes con calificación 0
+                foreach($preguntasParaAgregar as $pfa){
+                    //validar si ya existe la respuesta antes de insertar (para evitar duplicados)
+                    $validarExistencia = DB::SELECT("SELECT * FROM salle_preguntas_evaluacion
+                        WHERE id_evaluacion = ?
+                        AND id_pregunta = ?
+                        ", [$id_evaluacion_rellenar, $pfa->id_pregunta]);
+                    if(count($validarExistencia) > 0){
+                        continue; //si ya existe continuar al siguiente
+                    }
+                    $preguntaEvaluacion = new SallePreguntasEvaluacion();
+                    $preguntaEvaluacion->id_evaluacion = $id_evaluacion_rellenar;
+                    $preguntaEvaluacion->id_pregunta = $pfa->id_pregunta;
+                    $preguntaEvaluacion->calificacion_final = 0;
+                    $preguntaEvaluacion->save();
+                }
+            }
+
+
+            //===PUNTAJE FINAL===
+            $totalPuntajeSet = 0;
+            $totalPuntajeEvaluacion = 0;
+            $calificacionFinal = 0;
+
+            //actualizar salle_evaluaciones calificacion_total
+            $getPuntajeRespuestas = DB::SELECT("SELECT SUM(e.calificacion_final) AS totalRespuestas FROM salle_preguntas_evaluacion e
+            WHERE e.id_evaluacion = ?", [$id_evaluacion_rellenar]);
+
+            $totalPuntajeSet  = !empty($getPuntajeRespuestas) ? $getPuntajeRespuestas[0]->totalRespuestas : 0;
+            //total puntaje evaluacion
+            $getPuntajeEvaluacion = DB::SELECT("SELECT sum(pe.puntaje_pregunta) as totalPuntajeEvaluacion FROM salle_preguntas_evaluacion e
+            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = e.id_pregunta
+            WHERE e.id_evaluacion = ?
+            ;", [$id_evaluacion_rellenar]);
+            $totalPuntajeEvaluacion = !empty($getPuntajeEvaluacion) ? $getPuntajeEvaluacion[0]->totalPuntajeEvaluacion : 0;
+            //calificacion final total puntaje respuestas / total puntaje evaluacion * 100
+            if($totalPuntajeEvaluacion > 0){
+                $calificacionFinal = ($totalPuntajeSet / $totalPuntajeEvaluacion) * 100;
+            }
+            // CREAR LA EVALUACION SI NO EXISTE
+            $evaluacionExistente = DB::SELECT("SELECT * FROM salle_evaluaciones WHERE id_evaluacion = ?", [$id_evaluacion_rellenar]);
+            if(empty($evaluacionExistente)){
+                DB::table('salle_evaluaciones')->insert([
+                    'id_evaluacion'             => $id_evaluacion_rellenar,
+                    'id_usuario'                => $id_usuario,
+                    'n_evaluacion'              => '7',
+                    'intentos'                  => 2,
+                    'tipo_calificacion'         => '1',
+                    'calificacion_total'        => $calificacionFinal,
+                    'estado'                    => '2', // Estado completado
+                    'fecha_inicio_evaluacion'   => "2026-02-02 10:10:42",
+                    "fecha_fin_evaluacion"      => "2026-02-02 11:48:34",
+                    "fecha_limite_evaluacion"   => "2026-02-02 16:10:42",
+                    "created_at"                => "2026-02-02 10:10:42",
+                    "tipo_finalizacion"         => '1',
+                    "updated_at"                => now(),
+                ]);
+            }else{
+                //actualizar salle_evaluaciones calificacion_final
+                DB::table('salle_evaluaciones')->where('id_evaluacion', $id_evaluacion_rellenar)
+                ->update([
+                    'calificacion_total'  => $calificacionFinal,
+                    'updated_at'          => now(),
+                ]);
+            }
+
+        }// end foreach configuracion
+
+         return response()->json([
+            'message' => 'Proceso completado exitosamente',
+            'completas_procesadas' => count($resultadoFinalCompletas) ?? 0,
+            'incompletas_procesadas' => count($resultadoFinalImcompletas) ?? 0
+        ]);
+
+    }
+
     private function runSystemCommand($command)
     {
         $process = new Process(explode(' ', $command));
@@ -1722,9 +2950,21 @@ class AdminController extends Controller
 
             if ($devoluciones->count() > 0) {
                 DB::rollback();
+                $devolucionesDevueltas = DB::SELECT("SELECT DISTINCT  h.codigo_devolucion
+                FROM codigoslibros_devolucion_son s
+                LEFT JOIN codigoslibros_devolucion_header h ON h.id = s.codigoslibros_devolucion_id
+                WHERE s.documento = '$request->ven_codigo'
+                AND s.id_empresa = '$request->id_empresa'
+                AND h.estado <> '3'
+                ");
+                // SPLIT PARA SEPARAR LOS CODIGOS DE DEVOLUCION
+                $devolucionesArray = [];
+                foreach($devolucionesDevueltas as $devolucion){
+                    $devolucionesArray[] = $devolucion->codigo_devolucion;
+                }
                 return response()->json([
                     "status" => "0",
-                    "message" => "No se puede cambiar el porcentaje porque existen devoluciones asociadas al documento."
+                    "message" => "No se puede cambiar el porcentaje porque existen devoluciones asociadas al documento: " . implode(", ", $devolucionesArray)
                 ]);
             }
 
@@ -2083,6 +3323,276 @@ class AdminController extends Controller
                     ->get();
 
         return view('admin.despachados', compact('periodos'));
+    }
+
+    /**
+     * Descargar comparativa de ventas por años
+     * Route: GET /admin/reportes/comparativa-ventas
+     */
+    public function comparativaVentas(Request $request)
+    {
+        try {
+            // Configuración extendida
+            set_time_limit(600);
+            ini_set('max_execution_time', 600);
+            ini_set('memory_limit', '1G');
+
+            // Validar parámetros
+            $anioInicio = $request->input('anio_inicio');
+            $anioFin = $request->input('anio_fin');
+            $regiones = explode(',', $request->input('regiones', '1,2'));
+
+            if (!$anioInicio || !$anioFin) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'Debe especificar año de inicio y fin'
+                ], 400);
+            }
+
+            // Buscar periodos que coincidan con el rango de años y regiones
+            // Usamos una lógica que busca años de 4 dígitos en el nombre del periodo
+            $periodos = DB::table('periodoescolar')
+                ->whereIn('region_idregion', $regiones)
+                ->where(function($query) use ($anioInicio, $anioFin) {
+                    $query->whereRaw('CAST(RIGHT(periodoescolar, 4) AS UNSIGNED) BETWEEN ? AND ?', [$anioInicio, $anioFin])
+                          ->orWhereRaw('CAST(LEFT(RIGHT(periodoescolar, 5), 4) AS UNSIGNED) BETWEEN ? AND ?', [$anioInicio, $anioFin]);
+                })
+                ->pluck('idperiodoescolar')
+                ->toArray();
+
+            if (empty($periodos)) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'No se encontraron periodos escolares para el rango de años y regiones seleccionadas',
+                    'empty_result' => true
+                ], 404);
+            }
+
+            // Convertir array de periodos a string separado por comas
+            $periodosStr = implode(',', $periodos);
+
+            // Ejecutar stored procedure
+            $pdo = DB::getPdo();
+            $stmt = $pdo->prepare("CALL sp_comparativa_ventas_resumen(?)");
+            $result = $stmt->execute([$periodosStr]);
+
+            if (!$result) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'Error al ejecutar el procedimiento: ' . implode(', ', $stmt->errorInfo())
+                ], 500);
+            }
+
+            // Obtener todos los resultados
+            $datos = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+            $stmt->closeCursor();
+
+            if (empty($datos)) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'No hay datos de ventas para los periodos seleccionados',
+                    'empty_result' => true
+                ], 200);
+            }
+
+            // Generar CSV
+            $fecha = date('Y-m-d_His');
+            $filename = "comparativa_ventas_{$anioInicio}_{$anioFin}_{$fecha}.csv";
+
+            $headers = [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+                'Pragma' => 'no-cache',
+                'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+                'Expires' => '0'
+            ];
+
+            $callback = function() use ($datos) {
+                $file = fopen('php://output', 'w');
+
+                // BOM para UTF-8
+                fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+
+                // Encabezados
+                if (!empty($datos)) {
+                    fputcsv($file, array_keys($datos[0]), ';');
+                }
+
+                // Datos
+                foreach ($datos as $fila) {
+                    fputcsv($file, $fila, ';');
+                }
+
+                fclose($file);
+            };
+
+            return response()->stream($callback, 200, $headers);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en comparativaVentas: ' . $e->getMessage());
+            return response()->json([
+                'status' => 0,
+                'message' => 'Error al generar el reporte: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Descargar comparativa de liquidados por años con modal de progreso
+     * Route: GET /admin/reportes/comparativa-liquidados
+     */
+    public function comparativaLiquidados(Request $request)
+    {
+        try {
+            // Configuración extendida
+            set_time_limit(1800); // 30 minutos
+            ini_set('max_execution_time', 1800);
+            ini_set('memory_limit', '2G');
+
+            // Validar parámetros
+            $anioInicio = $request->input('anio_inicio');
+            $anioFin = $request->input('anio_fin');
+            $regiones = explode(',', $request->input('regiones', '1,2'));
+
+            if (!$anioInicio || !$anioFin) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'Debe especificar año de inicio y fin'
+                ], 400);
+            }
+
+            // Buscar periodos que coincidan con el rango de años y regiones
+            $periodos = DB::table('periodoescolar')
+                ->select('idperiodoescolar', 'periodoescolar', 'descripcion')
+                ->whereIn('region_idregion', $regiones)
+                ->where(function($query) use ($anioInicio, $anioFin) {
+                    $query->whereRaw('CAST(RIGHT(periodoescolar, 4) AS UNSIGNED) BETWEEN ? AND ?', [$anioInicio, $anioFin])
+                          ->orWhereRaw('CAST(LEFT(RIGHT(periodoescolar, 5), 4) AS UNSIGNED) BETWEEN ? AND ?', [$anioInicio, $anioFin]);
+                })
+                ->orderBy('idperiodoescolar', 'asc')
+                ->get();
+
+            if ($periodos->isEmpty()) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'No se encontraron periodos escolares para el rango de años y regiones seleccionadas',
+                    'empty_result' => true
+                ], 404);
+            }
+
+            // Preparar headers para streaming
+            $fecha = date('Y-m-d_His');
+            $filename = "comparativa_liquidados_{$anioInicio}_{$anioFin}_{$fecha}.csv";
+
+            $headers = [
+                'Content-Type' => 'text/csv; charset=UTF-8',
+                'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+                'Pragma' => 'no-cache',
+                'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
+                'Expires' => '0',
+                'X-Accel-Buffering' => 'no' // Deshabilitar buffering de Nginx
+            ];
+
+            $totalPeriodos = count($periodos);
+            $currentPeriodo = 0;
+            $encabezadosEscritos = false;
+
+            // Stream de respuesta
+            $callback = function() use ($periodos, $totalPeriodos, &$currentPeriodo, &$encabezadosEscritos) {
+                // Buffer temporal para CSV
+                $csvBuffer = fopen('php://temp', 'r+');
+
+                // BOM para UTF-8
+                fprintf($csvBuffer, chr(0xEF).chr(0xBB).chr(0xBF));
+
+                foreach ($periodos as $periodo) {
+                    $currentPeriodo++;
+
+                    try {
+                        // Extraer año del período (última secuencia de 4 dígitos)
+                        preg_match_all('/(\d{4})/', $periodo->periodoescolar, $yearMatches);
+                        $anio = !empty($yearMatches[0]) ? end($yearMatches[0]) : 'N/A';
+
+                        // Ejecutar sp_liquidados para cada periodo usando DB::select para mayor estabilidad
+                        // Esto evita problemas con PDO statements manuales y cursores
+                        $datos = DB::select("CALL sp_liquidadosXanios(?)", [$periodo->idperiodoescolar]);
+                        $numRegistros = count($datos);
+
+                        // Enviar mensaje de progreso (separado del CSV)
+                        echo "<!-- PROGRESS: " . json_encode([
+                            'current' => $currentPeriodo,
+                            'total' => $totalPeriodos,
+                            'periodo' => $periodo->descripcion,
+                            'registros' => $numRegistros
+                        ]) . " -->";
+
+                        // Forzar el envío del buffer de salida
+                        if (ob_get_level() > 0) ob_flush();
+                        flush();
+
+                        if ($numRegistros > 0) {
+                            // Convertir objetos a arrays y agregar columna "anio"
+                            $filasProcesadas = [];
+                            foreach ($datos as $item) {
+                                $fila = (array)$item;
+                                $fila = array_merge(['anio' => $anio], $fila);
+                                $filasProcesadas[] = $fila;
+                            }
+
+                            // Escribir encabezados solo una vez
+                            if (!$encabezadosEscritos) {
+                                fputcsv($csvBuffer, array_keys($filasProcesadas[0]), ';');
+                                $encabezadosEscritos = true;
+                            }
+
+                            // Escribir datos
+                            foreach ($filasProcesadas as $fila) {
+                                fputcsv($csvBuffer, $fila, ';');
+                            }
+
+                            // Si el buffer temporal es muy grande, enviarlo al cliente y recrearlo
+                            // para evitar consumo excesivo de memoria
+                            $status = fstat($csvBuffer);
+                            if ($status['size'] > 5 * 1024 * 1024) { // 5MB
+                                rewind($csvBuffer);
+                                fpassthru($csvBuffer);
+                                fclose($csvBuffer);
+                                $csvBuffer = fopen('php://temp', 'r+');
+                            }
+                        }
+
+                    } catch (\Exception $e) {
+                        \Log::error("Error procesando periodo {$periodo->idperiodoescolar}: " . $e->getMessage());
+
+                        // Enviar mensaje de error
+                        echo "<!-- PROGRESS: " . json_encode([
+                            'current' => $currentPeriodo,
+                            'total' => $totalPeriodos,
+                            'periodo' => $periodo->descripcion,
+                            'registros' => 0,
+                            'error' => $e->getMessage()
+                        ]) . " -->";
+
+                        if (ob_get_level() > 0) ob_flush();
+                        flush();
+                    }
+                }
+
+                // Enviar contenido CSV restante
+                rewind($csvBuffer);
+                fpassthru($csvBuffer);
+                fclose($csvBuffer);
+            };
+
+            return response()->stream($callback, 200, $headers);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en comparativaLiquidados: ' . $e->getMessage());
+            return response()->json([
+                'status' => 0,
+                'message' => 'Error al generar el reporte: ' . $e->getMessage()
+            ], 500);
+        }
     }
 
     /**

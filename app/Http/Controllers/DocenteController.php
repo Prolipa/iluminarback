@@ -110,62 +110,93 @@ class DocenteController extends Controller
 
         return $usuarios;
     }
-    public function docentesInstitucionSalle($id,$evaluacion,$docente){
-        $institucion = $id;
-        $docente     = $docente;
-        $usuarios = User::select(
-            'usuario.idusuario',
-            'usuario.cedula',
-            'usuario.nombres',
-            'usuario.apellidos',
-            'usuario.name_usuario',
-            'usuario.email',
-            'usuario.telefono',
-            'usuario.estado_idEstado',
-            'usuario.id_group',
-            'usuario.institucion_idInstitucion',
-            'usuario.foto_user',
-            'i.idInstitucion',
-            DB::RAW('MAX(se.id_evaluacion) AS id_evaluacion')
-        )
-        ->leftJoin('salle_evaluaciones as se', 'se.id_usuario', '=', 'usuario.idusuario')
-        ->leftjoin('institucion as i', 'i.idInstitucion', '=', 'usuario.institucion_idInstitucion')
-        // ->where('institucion_idInstitucion', $institucion)
-        ->when($institucion != 0, function ($query) use ($institucion) {
-            return $query->where('institucion_idInstitucion', $institucion);
-        })
-        ->when($docente != 0, function ($query) use ($docente) {
-            return $query->where(function ($q) use ($docente) {
-                $q->where('usuario.email', 'like', "%{$docente}%")
-                ->orWhere('usuario.cedula', 'like', "%{$docente}%");
-            });
-        })
-        ->whereIn('id_group', [6, 13])
-        ->groupBy(
-            'usuario.idusuario',
-            'usuario.cedula',
-            'usuario.nombres',
-            'usuario.apellidos',
-            'usuario.name_usuario',
-            'usuario.email',
-            'usuario.telefono',
-            'usuario.estado_idEstado',
-            'usuario.id_group',
-            'usuario.institucion_idInstitucion',
-            'usuario.foto_user',
-            'i.idInstitucion'
-        )
-        ->get();
-        // traer las evaluaciones resueltas
-        foreach($usuarios as $key => $item){
-            $evaluacionResuelta = DB::SELECT("SELECT * FROM salle_evaluaciones e
-            WHERE e.id_usuario ='$item->idusuario'
-            AND e.estado = '2'
-            AND e.n_evaluacion = '$evaluacion'");
-            $usuarios[$key]->intentosEvaluaciones = $evaluacionResuelta;
+
+    public function docentesInstitucionSalle(Request $request)
+    {
+        $institucion = (int) $request->institucion;
+        $evaluacion  = $request->evaluacion;
+        $docente     = $request->docente;
+
+        // =====================================
+        // 1️⃣ TRAER DOCENTES
+        // =====================================
+        $usuarios = DB::table('usuario')
+            ->select(
+                'usuario.idusuario',
+                'usuario.cedula',
+                'usuario.nombres',
+                'usuario.apellidos',
+                'usuario.name_usuario',
+                'usuario.email',
+                'usuario.telefono',
+                'usuario.estado_idEstado',
+                'usuario.id_group',
+
+                'usuario.foto_user',
+                'i.idInstitucion',
+                'i.nombreInstitucion',
+                'i.tipo_institucion as tipo_institucion_id',
+                'tp.descripcion as tipo_InstitucionDescripcion',
+            )
+            ->leftJoin('institucion as i', 'i.idInstitucion', '=', 'usuario.institucion_idInstitucion')
+            ->leftJoin('institucion_tipo_institucion as tp', 'tp.id', '=', 'i.tipo_institucion')
+            // Filtro institución
+            ->when($institucion !== 0, function ($q) use ($institucion) {
+                $q->where('usuario.institucion_idInstitucion', $institucion);
+            })
+
+            // Filtro docente
+            ->when(!empty($docente), function ($q) use ($docente) {
+                $q->where(function ($sub) use ($docente) {
+                    $sub->where('usuario.email', 'like', "%{$docente}%")
+                        ->orWhere('usuario.cedula', 'like', "%{$docente}%");
+                });
+            })
+
+            ->whereIn('usuario.id_group', [6, 13])
+            ->get();
+
+        // =====================================
+        // 2️⃣ TRAER EVALUACIONES (1 QUERY)
+        // =====================================
+        $evaluaciones = DB::table('salle_evaluaciones as e')
+            ->select(
+                'e.*',
+                DB::raw("
+                    CASE e.tipo_finalizacion
+                        WHEN 1 THEN 'Finalizada: botón finalizar'
+                        WHEN 2 THEN 'Finalizada: abandonó la evaluación'
+                        WHEN 3 THEN 'Finalizada: tiempo agotado'
+                        WHEN 4 THEN 'Finalizada: tiempo agotado'
+                        ELSE ''
+                    END AS descripcion_finalizacion
+                ")
+            )
+            ->where('e.estado', 2)
+            ->where('e.n_evaluacion', $evaluacion)
+            ->orderBy('e.id_evaluacion', 'desc')
+            ->get()
+            ->groupBy('id_usuario');
+
+        // =====================================
+        // 3️⃣ ASIGNAR EVALUACIONES A DOCENTES
+        // =====================================
+        foreach ($usuarios as $usuario) {
+
+            $intentos = $evaluaciones[$usuario->idusuario] ?? collect();
+
+            // Todas las evaluaciones del docente
+            $usuario->intentosEvaluaciones = $intentos;
+
+            // Último intento (equivalente al MAX(id_evaluacion))
+            $usuario->id_evaluacion = $intentos->first()->id_evaluacion ?? null;
         }
+
         return $usuarios;
     }
+
+
+
 
     public function tareas(Request $request){
         $tareas = DB::SELECT("SELECT tarea.* FROM curso JOIN tarea ON tarea.curso_idcurso = curso.idcurso WHERE curso.idusuario = ? AND curso.estado = '1' AND tarea.estado = '1'",[$request->idusuario]);

@@ -105,6 +105,7 @@ Route::apiResource('menu', 'MenuController');
 Route::get('menuHospital', 'MenuController@menuHospital');
 Route::get('menu_unidades_libros/{id}/{region}', 'LibroController@menu_unidades_libros');
 Route::get('menu_unidades_libros_new/{id}/{region}/{idusuario}/{periodo_id}', 'LibroController@menu_unidades_libros_new');
+Route::get('menu_unidades_libros_guia/{id}/{region}', 'LibroController@menu_unidades_libros_guia');
 Route::post('cuadernos_usuario_libro', 'CuadernoController@cuadernos_usuario_libro');
 Route::get('desgloselibrousuario/{id}/{region}', 'LibroController@desgloselibrousuario');
 
@@ -286,6 +287,10 @@ Route::get('editar_codigos_masivos', 'SeminarioController@editar_codigos_masivos
 
 Route::get('guardarData', 'AdminController@guardarData');
 Route::get('pruebaData', 'AdminController@pruebaData');
+Route::get('pruebaData2', 'AdminController@pruebaData2');
+Route::get('pruebaData3', 'AdminController@pruebaData3');
+Route::get('pruebaData4', 'AdminController@pruebaData4');
+Route::get('pruebaData5', 'AdminController@pruebaData5');
 Route::get('llenarIdsPedidosVal', 'AdminController@llenarIdsPedidosVal');
 //========================FIN APIS PARA MATRICULAS=============================
 //========================APIS PARA SEGUIMIENTO=================================
@@ -354,6 +359,10 @@ Route::middleware(['admin'])->group(function () {
     // === RUTAS LEGACY PARA COMPATIBILIDAD ===
     // Ruta para mostrar la vista de códigos despachados (LEGACY)
     Route::get('admin/despachados/vista', 'AdminController@mostrarVistaDespachados');
+    // Ruta para comparativa de ventas por años (NEW)
+    Route::get('admin/reportes/comparativa-ventas', 'AdminController@comparativaVentas');
+    // Ruta para comparativa de liquidados por años (NEW)
+    Route::get('admin/reportes/comparativa-liquidados', 'AdminController@comparativaLiquidados');
     // Ruta para probar el procedimiento almacenado (LEGACY)
     Route::get('admin/despachados/test/{id_periodo}', 'AdminController@testProcedimientoDespachados');
     // RUTA TEMPORAL PARA DEBUGGING (LEGACY)
@@ -718,7 +727,7 @@ Route::get('institucionUsuario/{id}', 'usuarioController@institucionUsuario');
 //ruta para cambiar el password
 Route::post('changePassword', 'UsuarioController@changePassword');
 Route::get('docentesInstitucion/{id}', 'DocenteController@docentesInstitucion');
-Route::get('docentesInstitucionSalle/{id}/{evaluacion}/{docente}', 'DocenteController@docentesInstitucionSalle');
+Route::post('docentesInstitucionSalle', 'DocenteController@docentesInstitucionSalle');
 Route::get('estudiantesInstitucion/{id}', 'EstudianteController@estudiantesInstitucion');
 Route::get('reporteLibros', 'ReporteUsuarioController@index');
 Route::get('docentes', 'UsuarioController@docentes');
@@ -870,8 +879,7 @@ Route::apiResource('asignaturas_salle', 'SalleAsignaturasController');
 Route::get('asignaturas_area_salle/{id}', 'SalleAsignaturasController@asignaturas_area_salle');
 Route::post('crea_area_salle', 'SalleAreasController@crea_area_salle');
 Route::post('crea_asignatura_salle', 'SalleAsignaturasController@crea_asignatura_salle');
-Route::get('instituciones_salle', 'InstitucionController@instituciones_salle');
-Route::get('instituciones_salle/{n_evaluacion}', 'InstitucionController@instituciones_salleXEvaluacion');
+Route::get('instituciones_salle/{n_evaluacion}/{tipo_institucion}', 'InstitucionController@instituciones_salleXEvaluacion');
 Route::get('instituciones_salle_select', 'InstitucionController@instituciones_salle_select');
 Route::post('save_instituciones_salle', 'InstitucionController@save_instituciones_salle');
 // salle asignaturas docente
@@ -902,10 +910,12 @@ Route::post('salle_finalizarEvaluacion', 'SallePreguntasController@salle_finaliz
 Route::get('evaluaciones_resueltas_salle/{id_docente}/{n_evaluacion}', 'SallePreguntasController@evaluaciones_resueltas_salle');
 Route::post('salle_guardarSeleccion', 'SallePreguntasController@salle_guardarSeleccion');
 Route::post('salle_intento_eval', 'SallePreguntasController@salle_intento_eval');
+Route::post('salle_consolidar_evaluacion', 'SallePreguntasController@salle_consolidar_evaluacion');
 Route::post('save_finalizar_evalIntentos', 'SallePreguntasController@save_finalizar_evalIntentos');
 Route::post('obtenerCalificacionSalle','SallePreguntasController@obtenerCalificacionSalle');
+Route::get('Post_traerPreguntaSalle','SallePreguntasController@Post_traerPreguntaSalle');
 //salle reportes
-Route::get('reporte_evaluaciones_institucion/{fecha}', 'SalleReportesController@reporte_evaluaciones_institucion');
+Route::get('reporte_evaluaciones_institucion/{fecha}/{tipo_institucion}', 'SalleReportesController@reporte_evaluaciones_institucion');
 Route::get('salle_promedio_areas/{periodo}/{institucion}', 'SalleReportesController@salle_promedio_areas');
 Route::get('salle_promedio_asignatura/{periodo}/{institucion}/{area}', 'SalleReportesController@salle_promedio_asignatura');
 Route::get('salle_promedios_tipos_pregunta/{periodo}/{institucion}/{id_asignatura}', 'SalleReportesController@salle_promedios_tipos_pregunta');
@@ -924,7 +934,6 @@ Route::get('eliminarMenu/{id}', 'MenuController@eliminarMenu');
 Route::get('traerCantidadUsuarios', 'UsuarioController@traerCantidadUsuarios');
 //usuarios salle
 Route::post('usuarioSalle', 'UsuarioController@usuarioSalle');
-Route::get('usuarioSalle/{evaluacion}', 'UsuarioController@usuarioSallexEvaluacion');
 Route::get('salleadministrador', 'UsuarioController@salleadministrador');
 Route::post('add_edit_user_salle', 'UsuarioController@add_edit_user_salle');
 Route::post('activa_desactiva_user', 'UsuarioController@activa_desactiva_user');
@@ -1166,6 +1175,18 @@ Route::get('clientesAbonoNoDocumentos', 'AbonoController@clientesAbonoNoDocument
 Route::get('getSalesAndPayments', 'AbonoController@getSalesAndPayments');
 Route::get('obtenerVentas', 'AbonoController@obtenerVentas');
 Route::get('obtenerDatosClientes', 'AbonoController@obtenerDatosClientes');
+
+// 🚀 Rutas para Reporte Progresivo
+Route::get('obtenerVentasProgresivo', 'AbonoController@obtenerVentasProgresivo');
+Route::post('obtenerAbonosProgresivo', 'AbonoController@obtenerAbonosProgresivo');
+Route::post('obtenerDevolucionesProgresivo', 'AbonoController@obtenerDevolucionesProgresivo');
+Route::post('obtenerDevolucionesSinEmpresaProgresivo', 'AbonoController@obtenerDevolucionesSinEmpresaProgresivo');
+Route::post('obtenerAbonosSinDocumentosProgresivo', 'AbonoController@obtenerAbonosSinDocumentosProgresivo');
+Route::post('obtenerNotasCreditoProgresivo', 'AbonoController@obtenerNotasCreditoProgresivo');
+Route::post('obtenerFacturasOperativasProgresivo', 'AbonoController@obtenerFacturasOperativasProgresivo');
+Route::post('agruparResultadosFinalesProgresivo', 'AbonoController@agruparResultadosFinalesProgresivo');
+Route::get('obtenerDetalleTransacciones', 'AbonoController@obtenerDetalleTransacciones');
+
 //FIN ABONO
 //CUENTA DE BANCO
 Route::post('cuenta_registro', 'BancoController@cuenta_registro');
@@ -1287,6 +1308,8 @@ Route::post('save_niveles_area_formato', 'PedidosController@save_niveles_area_fo
 Route::get('cargarPeriodoFormatoPedidos', 'PedidosController@cargarPeriodoFormatoPedidos');
 Route::get('getAllPedidos', 'PedidosController@getAllPedidos');
 Route::get('get_pedidos_periodoAgrupado/{periodo}', 'PedidosController@get_pedidos_periodoAgrupado');
+Route::get('get_pedidos_periodoAgrupado_new/{periodo}', 'PedidosController@get_pedidos_periodoAgrupado_new');
+Route::get('get_libros_pedidosAlcancesXContrato', 'PedidosController@get_libros_pedidosAlcancesXContrato');
 Route::get('get_pedidos_periodo/{periodo}/{rol}/{usuario}', 'PedidosController@get_pedidos_periodo');
 Route::get('get_pedidos_periodo_facturador/{periodo}/{id_facturador}', 'PedidosController@get_pedidos_periodo_facturador');
 Route::get('get_pedidos_periodoxContrato/{contrato}', 'PedidosController@get_pedidos_periodo_contrato');
@@ -1375,6 +1398,10 @@ Route::get('VerifcarMetodosGet_Institucion_Autoridades','Institucion_Autoridades
 Route::get('VerifcarMetodosGet_Editoriales','EditorialesController@VerifcarMetodosGet_Editoriales');
 Route::get('Reporte_Instituciones','InstitucionController@Reporte_Instituciones');
 Route::get('Procesar_MetodosGet_ActividadAnimacionController','ActividadAnimacionController@Procesar_MetodosGet_ActividadAnimacionController');
+Route::get('f_venta_anuladas_revision','VentasController@f_venta_anuladas_revision');
+Route::get('f_venta_audits_revision','VentasController@f_venta_audits_revision');
+Route::get('GetProducto_ParaCaracteristicas','_14ProductoController@GetProducto_ParaCaracteristicas');
+Route::get('Get_Detallexprocodigo','OrdenTrabajoController@Get_Detallexprocodigo');
 Route::post('VerifcarMetodosPost_Institucion_Autoridades','Institucion_AutoridadesController@VerifcarMetodosPost_Institucion_Autoridades');
 Route::post('VerifcarMetodosPost_Editoriales','EditorialesController@VerifcarMetodosPost_Editoriales');
 Route::post('actualizarPassword_PerfilUser','UsuarioController@actualizarPassword_PerfilUser');
@@ -1715,6 +1742,7 @@ Route::get('getUsuarios/{rol}/{institucion}', 'NeetTemaController@getUsuarios');
 //=====SALLE========================================================
 Route::group(['prefix' => 'salle'], function () {
     Route::resource('periodos', 'SallePeriodoController');
+    Route::get('metodosGetSalle', 'SallePeriodoController@metodosGetSalle');
     Route::post('MoverPreguntas', 'SallePreguntasController@MoverPreguntas');
     Route::post('ActivarPreguntas', 'SallePreguntasController@ActivarPreguntas');
     Route::get('exportAllPreguntasXAsignatura', 'SallePreguntasController@exportAllPreguntasXAsignatura');
@@ -2087,6 +2115,14 @@ Route::get('InfoClienteAgrupado/{codigo}/{periodo}','ProformaController@InfoClie
 Route::get('Get_proformasCliente','ProformaController@Get_proformasCliente');
 Route::post('Proforma_Registrar_modificar','ProformaController@Proforma_Registrar_modificar');
 Route::post('Proforma_Registrar_modificar_solicitud','ProformaController@Proforma_Registrar_modificar_solicitud');
+Route::post('Proforma_Guardar_Desde_Modal','ProformaController@Proforma_Guardar_Desde_Modal');
+Route::post('Proforma_Actualizar_Desde_Modal','ProformaController@Proforma_Actualizar_Desde_Modal');
+Route::get('get_libros_proformados_por_contrato','ProformaController@get_libros_proformados_por_contrato');
+Route::get('get_libros_vendidos_por_contrato','ProformaController@get_libros_vendidos_por_contrato');
+Route::get('get_cantidades_vendidas_proforma','ProformaController@get_cantidades_vendidas_proforma');
+Route::get('get_proformas_por_contrato','ProformaController@get_proformas_por_contrato');
+Route::get('get_ventas_por_contrato','ProformaController@get_ventas_por_contrato');
+Route::get('get_proforma_para_editar/{id}','ProformaController@get_proforma_para_editar');
 Route::post('PostProforma_Editar','ProformaController@PostProforma_Editar');
 Route::post('PostProforma_Editar_solicitud','ProformaController@PostProforma_Editar_solicitud');
 Route::post('PostProformaDetalle_Editar','ProformaController@PostProformaDetalle_Editar');
@@ -2098,6 +2134,13 @@ Route::post('Eliminar_DetaProforma','ProformaController@Eliminar_DetaProforma');
 Route::post('Eliminar_Proforma','ProformaController@Eliminar_Proforma');
 Route::post('PostProformaIntitu','ProformaController@PostProformaIntitu');
 Route::post('PostProformaSucursal','ProformaController@PostProformaSucursal');
+//NUEVAS RUTAS PARA PROFORMAS DE FACTURACIÓN
+Route::post('Put_Estado_Proforma','ProformaController@actualizarEstadoProforma');
+Route::get('Delete_proforma','ProformaController@eliminarProforma');
+Route::post('Post_Crear_Venta_Proforma','ProformaController@crearVentaDesdeProforma');
+Route::post('Get_Stocks_Productos','ProformaController@Get_Stocks_Productos');
+Route::post('Regresar_Stock','ProformaController@regresarStock');
+Route::post('Anular_Venta','ProformaController@anularVenta');
 //fin proforma
 //venta
 Route::get('Get_CodVenta','VentasController@Get_CodVenta');
@@ -2123,6 +2166,8 @@ Route::get('GetVentasP','VentasController@GetVentasP');
 Route::post('imprimirDVenta','VentasController@imprimirDVenta');
 Route::get('GetPreFacturasxAgrupa','VentasController@GetPreFacturasxAgrupa');
 Route::get('GetFacturasxAgrupa','VentasController@GetFacturasxAgrupa');
+Route::get('consultar-stock','VentasController@consultar_stock');
+Route::get('consultar-stock-libros','VentasController@consultarStockLibros');
 Route::get('GetFacturasxAgrupaXPeriodo','VentasController@GetFacturasxAgrupaXPeriodo');
 Route::get('getDventas','VentasController@getDventas');
 Route::get('Get_DatoFactura','VentasController@Get_DatoFactura');
@@ -2336,9 +2381,9 @@ Route::post('guardar_factura_operativa', 'FacturaOperativaController@guardar');
 Route::post('cambiarEstado', 'FacturaOperativaController@cambiarEstado');
 
 // configuracion
-Route::get('metodosGetConfiguracion','ConfiguracionController@metodosGetConfiguracion');
-Route::post('metodosPostConfiguracion','ConfiguracionController@metodosPostConfiguracion');
+Route::get('configuracion_general','ConfiguracionGeneralController@configuracion_general');
 
 // usuario
 Route::get('metodosGetUsuario','UsuarioController@metodosGetUsuario');
 Route::post('metodosPostUsuario','UsuarioController@metodosPostUsuario');
+Route::get('codigosLibrosBuscarBtn','CodigosLibrosController@codigosLibrosBuscarBtn');

@@ -386,6 +386,7 @@ class LibroController extends Controller
         foreach($libro as $key => $item){
             //variables por defecto
             $weblibro       = $item->weblibro;
+            $weblibro_guia  = $item->weblibro_guia;
             $portada        = $item->portada;
             $pdfsinguia     = $item->pdfsinguia;
             $pdfconguia     = $item->pdfconguia;
@@ -395,6 +396,7 @@ class LibroController extends Controller
                 //si no hay libro de costa asignado tomamos el por defecto
                 if($item->s_weblibro != null || $item->s_weblibro != ""){
                     $weblibro       = $item->s_weblibro;
+                    $weblibro_guia  = $item->s_weblibro_guia;
                     $portada        = $item->s_portada;
                     $pdfsinguia     = $item->s_pdfsinguia;
                     $pdfconguia     = $item->s_pdfconguia;
@@ -406,6 +408,7 @@ class LibroController extends Controller
                 //si no hay libro de costa asignado tomamos el por defecto
                 if($item->c_weblibro != null || $item->c_weblibro != ""){
                     $weblibro       = $item->c_weblibro;
+                    $weblibro_guia  = $item->c_weblibro_guia;
                     $portada        = $item->c_portada;
                     $pdfsinguia     = $item->c_pdfsinguia;
                     $pdfconguia     = $item->c_pdfconguia;
@@ -420,6 +423,7 @@ class LibroController extends Controller
                 "titulo"                    => $item->titulo,
                 "portada"                   => $portada,
                 "weblibro"                  => $weblibro,
+                "weblibro_guia"             => $weblibro_guia,
                 "pdfsinguia"                => $pdfsinguia,
                 "pdfconguia"                => $pdfconguia,
                 "guiadidactica"             => $guiadidactica,
@@ -486,6 +490,63 @@ class LibroController extends Controller
                 "updated_at"        => $item->updated_at,
                 "weblibro"          => $weblibro,
             ];
+        }
+        return $datos;
+    }
+
+    public function menu_unidades_libros_guia($libro,$region)
+    {
+        $unidades = DB::SELECT('SELECT u.*, l.weblibro_guia
+        FROM unidades_libros u, libro l
+         WHERE u.id_libro = l.idlibro AND u.id_libro = ?',[$libro]);
+        if(empty($unidades)){
+            return $unidades;
+        }
+
+        // Verificar si hay al menos un valor no nulo en pag_inicio_guia o pag_fin_guia
+        $hayValoresGuia = false;
+        foreach($unidades as $item){
+            if($item->pag_inicio_guia !== null || $item->pag_fin_guia !== null){
+                $hayValoresGuia = true;
+                break;
+            }
+        }
+
+        $datos = [];
+        foreach($unidades as $key => $item){
+            //variables por defecto
+            $weblibro_guia       = $item->weblibro_guia;
+
+            // Si no hay valores de guía en ningún registro, usar los valores normales
+            if(!$hayValoresGuia){
+                $datos[$key] =[
+                    "id_unidad_libro"   => $item->id_unidad_libro,
+                    "id_libro"          => $item->id_libro,
+                    "unidad"            => $item->unidad,
+                    "nombre_unidad"     => $item->nombre_unidad,
+                    "txt_nombre_unidad" => $item->txt_nombre_unidad,
+                    "pag_fin_guia"      => $item->pag_fin,
+                    "pag_inicio_guia"   => $item->pag_inicio,
+                    "estado"            => $item->estado,
+                    "created_at"        => $item->created_at,
+                    "updated_at"        => $item->updated_at,
+                    "weblibro_guia"     => $weblibro_guia,
+                ];
+            } else {
+                $datos[$key] =[
+                    "id_unidad_libro"   => $item->id_unidad_libro,
+                    "id_libro"          => $item->id_libro,
+                    "unidad"            => $item->unidad,
+                    "nombre_unidad"     => $item->nombre_unidad,
+                    "txt_nombre_unidad" => $item->txt_nombre_unidad,
+                    "pag_fin_guia"      => $item->pag_fin_guia,
+                    "pag_inicio_guia"   => $item->pag_inicio_guia,
+                    "estado"            => $item->estado,
+                    "created_at"        => $item->created_at,
+                    "updated_at"        => $item->updated_at,
+                    "weblibro_guia"     => $weblibro_guia,
+                ];
+            }
         }
         return $datos;
     }
@@ -562,6 +623,8 @@ class LibroController extends Controller
                 "txt_nombre_unidad" => $item->txt_nombre_unidad,
                 "pag_inicio"        => $item->pag_inicio,
                 "pag_fin"           => $item->pag_fin,
+                "pag_inicio_guia"   => $item->pag_inicio_guia,
+                "pag_fin_guia"      => $item->pag_fin_guia,
                 "estado"            => $item->estado,
                 "created_at"        => $item->created_at,
                 "updated_at"        => $item->updated_at,
@@ -705,6 +768,30 @@ class LibroController extends Controller
     public function guardarLibro(Request $request){
         try{
             DB::beginTransaction();
+            $weblibro_guia = ($request->weblibro_guia == null || $request->weblibro_guia == "null" || trim($request->weblibro_guia) === '')
+                ? null
+                : $request->weblibro_guia;
+            // 👉 VALIDACIÓN: si quieren quitar weblibro_guia
+            if ($weblibro_guia === null && $request->idlibro) {
+                $existenUnidadesConGuia = DB::table('unidades_libros')
+                    ->where('id_libro', $request->idlibro)
+                    ->where(function ($q) {
+                        $q->whereNotNull('pag_inicio_guia')
+                        ->orWhereNotNull('pag_fin_guia');
+                    })
+                    ->where(function ($q) {
+                        $q->where('pag_inicio_guia', '!=', '')
+                        ->orWhere('pag_fin_guia', '!=', '');
+                    })
+                    ->exists();
+                if ($existenUnidadesConGuia) {
+                    DB::rollBack();
+                    return response()->json([
+                        'status'  => 0,
+                        'message' => 'No puede dejar vacio el campo "Web libro con guia" porque existen unidades registradas con páginas para este libro. Vacíe primero las páginas con guía de las unidades.'
+                    ], 200);
+                }
+            }
             if($request->idlibro ){
                 $libro = Libro::findOrFail($request->idlibro);
 
@@ -716,6 +803,7 @@ class LibroController extends Controller
                 $libro->descripcionlibro            = $request->descripcionlibro;
                 $libro->serie                       = $request->serie;
                 $libro->weblibro                    = $request->weblibro;
+                $libro->weblibro_guia               = ($request->weblibro_guia          == null || $request->weblibro_guia == "null") ? null : $request->weblibro_guia;
                 $libro->pdfsinguia                  = ($request->pdfsinguia             == null || $request->pdfsinguia == "null") ? null : $request->pdfsinguia;
                 $libro->pdfconguia                  = ($request->pdfconguia             == null || $request->pdfconguia == "null") ? null : $request->pdfconguia;
                 $libro->guiadidactica               = ($request->guiadidactica          == null || $request->guiadidactica == "null") ? null : $request->guiadidactica;
@@ -790,15 +878,18 @@ class LibroController extends Controller
                     $librosSerie->boton              = "success";
                     $librosSerie->save();
                 }
-            DB::commit();
-        }catch(\Exception $e){
-            return ["error"=>"0", "message" => "No se pudo actualizar/guardar","error"=>$e];
-            DB::rollback();
-        }
-        if($libro){
-        return ["status"=>"1", "message" => "Se guardo correctamente"];
-        }else{
-        return ["error"=>"0", "message" => "No se pudo actualizar/guardar"];
+                DB::commit();
+                return response()->json([
+                    'status'  => 1,
+                    'message' => 'Se guardó correctamente'
+                ], 200);
+            }catch(\Exception $e){
+                DB::rollBack();
+                return response()->json([
+                    'status'  => 0,
+                    'message' => 'No se pudo actualizar/guardar',
+                'error'   => $e->getMessage()
+            ], 500);
         }
     }
     //actualizar campo conteodemo

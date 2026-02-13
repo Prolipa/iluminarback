@@ -31,7 +31,7 @@ trait TraitCodigosGeneral{
         $consulta = DB::SELECT("SELECT
         c.venta_lista_institucion,
         c.anio,c.serie, c.codigo,c.bc_estado,c.estado,c.estado_liquidacion,contador,c.serie,
-        c.venta_estado,c.bc_periodo,c.bc_institucion,c.idusuario,c.id_periodo,c.contrato,c.libro as book,c.libro_idlibro,
+        c.venta_estado,c.bc_periodo,c.bc_institucion,c.idusuario,c.id_periodo,c.contrato,c.libro_idlibro,
         CONCAT(u.nombres, ' ', u.apellidos) as estudiante, CONCAT(ucr.nombres, ' ', ucr.apellidos) as creador,
          u.email,u.cedula, ib.nombreInstitucion as institucion_barras,c.created_at,
         i.nombreInstitucion, p.periodoescolar as periodo,pb.periodoescolar as periodo_barras,c.bc_fecha_ingreso,
@@ -56,7 +56,7 @@ trait TraitCodigosGeneral{
         c.porcentaje_descuento,  c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado,
         c.codigo_proforma,c.proforma_empresa, c.devuelto_proforma, ls.codigo_liquidacion,
         CONCAT(ase.nombres, ' ', ase.apellidos) as asesor, c.combo, c.codigo_combo, c.documento_devolucion, c.plus,
-        c.quitar_de_reporte
+        c.quitar_de_reporte, ls.nombre as book
         FROM codigoslibros c
         LEFT JOIN usuario u ON c.idusuario = u.idusuario
         LEFT JOIN usuario ucr ON c.idusuario_creador_codigo = ucr.idusuario
@@ -76,7 +76,7 @@ trait TraitCodigosGeneral{
         ->select(DB::raw('c.factura, c.prueba_diagnostica,c.contador,c.codigo_union,
         IF(c.prueba_diagnostica ="1", "Prueba de diagnóstico","Código normal") as tipoCodigo,
         c.porcentaje_descuento,
-        c.libro as book,c.serie,c.created_at,
+        c.serie,c.created_at,
         c.codigo,c.bc_estado,c.estado,c.estado_liquidacion,c.bc_fecha_ingreso,
         c.venta_estado,c.bc_periodo,c.bc_institucion,c.idusuario,c.id_periodo,
         c.contrato,c.libro, c.venta_lista_institucion,
@@ -112,7 +112,8 @@ trait TraitCodigosGeneral{
         p.periodoescolar as periodo,
         pb.periodoescolar as periodo_barras,ivl.nombreInstitucion as InstitucionLista,
         c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado,c.codigo_proforma,c.proforma_empresa, c.devuelto_proforma,
-        ls.codigo_liquidacion, CONCAT(ase.nombres, " ", ase.apellidos) as asesor, c.combo,c.codigo_combo,c.documento_devolucion, c.plus, c.quitar_de_reporte'
+        ls.codigo_liquidacion, CONCAT(ase.nombres, " ", ase.apellidos) as asesor, c.combo,c.codigo_combo,c.documento_devolucion, c.plus, c.quitar_de_reporte, ls.nombre as book',
+
         ))
         ->leftJoin('usuario as  u',         'c.idusuario',                  'u.idusuario')
         ->leftJoin('usuario as  ase',       'c.asesor_id',                  'ase.idusuario')
@@ -224,7 +225,7 @@ trait TraitCodigosGeneral{
         $consulta = DB::SELECT("SELECT c.factura, c.prueba_diagnostica,c.contador,c.codigo_union,
             IF(c.prueba_diagnostica ='1', 'Prueba de diagnóstico','Código normal') as tipoCodigo,
             c.porcentaje_descuento,
-            c.libro as book,c.serie,c.created_at,
+            c.serie,c.created_at,
             c.codigo,c.bc_estado,c.estado,c.estado_liquidacion,c.bc_fecha_ingreso,
             c.venta_estado,c.bc_periodo,c.bc_institucion,c.idusuario,c.id_periodo,
             c.contrato,c.libro, c.venta_lista_institucion,
@@ -258,7 +259,7 @@ trait TraitCodigosGeneral{
             ib.nombreInstitucion as institucionBarra, i.nombreInstitucion,
             p.periodoescolar as periodo,
             pb.periodoescolar as periodo_barras,ivl.nombreInstitucion as InstitucionLista,
-            c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado
+            c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado, ls.nombre as book
             FROM codigoslibros c
             LEFT JOIN usuario u ON c.idusuario = u.idusuario
             LEFT JOIN institucion ib ON c.bc_institucion = ib.idInstitucion
@@ -266,6 +267,7 @@ trait TraitCodigosGeneral{
             LEFT JOIN institucion ivl ON c.venta_lista_institucion = ivl.idInstitucion
             LEFT JOIN periodoescolar p ON c.id_periodo = p.idperiodoescolar
             LEFT JOIN periodoescolar pb ON c.bc_periodo = pb.idperiodoescolar
+            LEFT JOIN libros_series as ls ON ls.idLibro = c.libro_idlibro
             WHERE factura = '$factura'
             AND c.prueba_diagnostica ='0'
         ");

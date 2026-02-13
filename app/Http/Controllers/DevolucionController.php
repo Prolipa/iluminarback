@@ -312,6 +312,7 @@ class DevolucionController extends Controller
             'codigoslibros_devolucion_header.codigo_devolucion',
             // Agrega aquí los campos de f_venta que necesites
             'f_venta.ven_desc_por',
+            'f_venta.idtipodoc',
             '1_4_cal_producto.codigos_combos',
             Db::raw('CONCAT(libro.nombrelibro,
                       CASE
