@@ -80,7 +80,7 @@ class SallePeriodoController extends Controller
         }
     }
 
-    //API:GET/>>salle/metodosGetSalle?action=GET_EVALUACION_ACTIVA&GET_EVALUACION_ACTIVA&institucion_id=1690
+    //API:GET/>>salle/metodosGetSalle?action=GET_EVALUACION_ACTIVA&institucion_id=1690
     public function GET_EVALUACION_ACTIVA(Request $request){
         $institucion_id      = $request->institucion_id;
         $getInstitucion      = Institucion::findOrFail($institucion_id);

@@ -75,18 +75,18 @@ class _14Producto extends Model
         $setEmpresa = '';
         // Determina la columna a actualizar basada en la empresa
         if($tipo == 0){
-            if ($empresa == 1) {
+            if ($empresa == 1 || $empresa == 5) {
                 $setEmpresa = 'pro_stock';
-            } elseif ($empresa == 3) {
+            } elseif ($empresa == 3 || $empresa == 4) {
                 $setEmpresa = 'pro_stockCalmed';
             }
         }
         //actualizar notas
         if($tipo == 1)
         {
-            if ($empresa == 1) {
+            if ($empresa == 1 || $empresa == 5) {
                 $setEmpresa = 'pro_deposito';
-            } elseif ($empresa == 3) {
+            } elseif ($empresa == 3 || $empresa == 4) {
                 $setEmpresa = 'pro_depositoCalmed';
             }
         }

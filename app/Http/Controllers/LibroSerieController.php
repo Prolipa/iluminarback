@@ -58,6 +58,15 @@ class LibroSerieController extends Controller
         return $query;
     }
 
+    public function Todo_Libros_Individuales_pedido_alcance_formatoprecio(){
+        $query = DB::SELECT('SELECT ls.codigo_liquidacion, ls.nombre, pro.ifcombo, CONCAT(ls.nombre ," (",ls.codigo_liquidacion,")") AS nombreCompleto
+            FROM libros_series ls
+            LEFT JOIN `1_4_cal_producto` pro ON ls.codigo_liquidacion = pro.pro_codigo
+            WHERE pro.ifcombo = 0
+            ORDER BY ls.codigo_liquidacion ASC');
+        return $query;
+    }
+
     /**
      * Show the form for creating a new resource.
      *

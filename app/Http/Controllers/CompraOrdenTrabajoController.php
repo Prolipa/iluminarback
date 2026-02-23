@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CompraOrdenTrabajo;
 use App\Models\DetalleCompraOrden;
 use App\Models\_14Producto;
+use App\Models\_14GrupoProducto;
 use DB;
 use App\Models\_14ProductoStockHistorico;
 use App\Http\Controllers\Controller;
@@ -56,14 +57,14 @@ class CompraOrdenTrabajoController extends Controller
             return $query;
         }
         if ($request->busqueda == 'finalizado') {
-            $query = DB::SELECT("SELECT * FROM 1_1_orden_trabajo 
+            $query = DB::SELECT("SELECT * FROM 1_1_orden_trabajo
             WHERE or_estado =2 ORDER BY or_fecha DESC limit 100");
             return $query;
         }
     }
 
        public function PostCompraOrden_Registrar_modificar(Request $request)
-       {      
+       {
          $compra1 = CompraOrdenTrabajo::Where('com_codigo',$request->com_codigo)->get();
          if(count($compra1)>0){
             try{
@@ -80,11 +81,11 @@ class CompraOrdenTrabajoController extends Controller
                 $compra->updated_at = now();
                 $compra->save();
                 foreach($miarray as $key => $item){
-                    $query1 = DB::SELECT("SELECT pro_stock as stoc, pro_reservar as reserve, pro_deposito as depos from 1_4_cal_producto where pro_codigo='$item->pro_codigo'"); 
+                    $query1 = DB::SELECT("SELECT pro_stock as stoc, pro_reservar as reserve, pro_deposito as depos from 1_4_cal_producto where pro_codigo='$item->pro_codigo'");
                     $codi=$query1[0]->stoc;
                     $codi1=$query1[0]->reserve;
                     $codi2=$query1[0]->depos;
-                    $query2 = DB::SELECT("SELECT det_com_cantidad as cant, det_com_st as stoc from 1_4_cal_detalle_compra where com_codigo='$request->com_codigo' and pro_codigo='$item->pro_codigo'"); 
+                    $query2 = DB::SELECT("SELECT det_com_cantidad as cant, det_com_st as stoc from 1_4_cal_detalle_compra where com_codigo='$request->com_codigo' and pro_codigo='$item->pro_codigo'");
                     $cant=$query2[0]->cant;
                     $cants=$query2[0]->cants;
                     $canti=(int)$item->det_com_cantidad-(int)$cant;
@@ -97,7 +98,7 @@ class CompraOrdenTrabajoController extends Controller
                     $pro->pro_reservar = $co;
                     $pro->pro_stock = $co2;
                     $pro->pro_deposito = $co1;
-                    $pro->save(); 
+                    $pro->save();
                     $compras = DetalleCompraOrden::findOrFail($item->det_com_codigo);
                     $compras->det_com_cantidad = $item->det_com_cantidad;
                     $compras->det_com_valor_u = $item->det_com_valor_u;
@@ -130,7 +131,7 @@ class CompraOrdenTrabajoController extends Controller
                 $compra->updated_at = now();
                 $compra->save();
                 foreach($miarray as $key => $item){
-                    $query1 = DB::SELECT("SELECT pro_stock as stoc, pro_reservar as reserve, pro_deposito as depos from 1_4_cal_producto where pro_codigo='$item->pro_codigo'"); 
+                    $query1 = DB::SELECT("SELECT pro_stock as stoc, pro_reservar as reserve, pro_deposito as depos from 1_4_cal_producto where pro_codigo='$item->pro_codigo'");
                     $codi=$query1[0]->stoc;
                     $codi1=$query1[0]->reserve;
                     $codi2=$query1[0]->depos;
@@ -141,29 +142,29 @@ class CompraOrdenTrabajoController extends Controller
                     $pro->pro_reservar = $co;
                     $pro->pro_stock = $co2;
                     $pro->pro_deposito = $co1;
-                    $pro->save(); 
+                    $pro->save();
                     $compras = new DetalleCompraOrden;
                     $compras->com_codigo = $request->com_codigo;
                     $compras->pro_codigo = $item->pro_codigo;
                     $compras->det_com_cantidad = intval($item->cantidades);
                     $compras->det_com_st= intval($item->stock);
                     $compras->det_com_valor_u = floatval($item->valorunit);
-                    $compras->save();        
-                } 
+                    $compras->save();
+                }
                 DB::commit();
             }catch(\Exception $e){
                 return ["error"=>"0", "message" => "No se pudo guardar","error"=>$e];
                 DB::rollback();
             }
          }
-       
+
        if($compra){
            return $compra;
        }else{
            return "No se pudo guardar/actualizar";
        }
     }
-    
+
     public function PostCompraOrdenTrabajo_Registrar_modificar(Request $request)
     {
         // return $request;
@@ -172,7 +173,7 @@ class CompraOrdenTrabajoController extends Controller
                 'prov_codigo' => 'required',
                 'empresa' => 'required'
             ]);
-    
+
             DB::beginTransaction();
             //INICIO VERIFICA SI HAY STOCK DISPONIBLE EN EL CASO DEL EDITAR Y QUIERE REDUCIR STOCK Y VA A QUEDAR < 0 NO LE VA A DEJAR
             // Actualización de productos y detalles de compra
@@ -209,8 +210,8 @@ class CompraOrdenTrabajoController extends Controller
                         }
                     } else {
                         $stockAntiguo = $item->cantidades_antiguo;
-                        // NUEVA LÓGICA PARA gru_pro_codigo == 2
-                        if ($item->gru_pro_codigo == 2) {
+                        // NUEVA LÓGICA PARA grupos permitidos [2, 14, 15, 16, 17]
+                        if (in_array($item->gru_pro_codigo, _14GrupoProducto::GRUPOS_PERMITIDOS)) {
                             if ($empresa == "1") {
                                 $stockDisponible = $producto->pro_stock;
                                 $stockResultante = ($producto->pro_stock - $item->cantidades_antiguo) + $item->cantidades;
@@ -279,7 +280,7 @@ class CompraOrdenTrabajoController extends Controller
             //FIN VERIFICACION STOCK
             // Variables de compra y operación de modificación o creación
             $compra = null;
-    
+
             if ($request->editar == 'yes') {
                 $compra = CompraOrdenTrabajo::find($request->com_codigo);
                 if (!$compra) {
@@ -317,7 +318,7 @@ class CompraOrdenTrabajoController extends Controller
                     'com_empresa' => $request->empresa,
                 ]);
             }
-    
+
             foreach ($detalleCompraItems as $item) {
                 $producto = _14Producto::findOrFail($item->pro_codigo);
                 // Guardar valores antes de actualizar (old_values)
@@ -370,17 +371,17 @@ class CompraOrdenTrabajoController extends Controller
             ];
             _14ProductoStockHistorico::insert($registroHistorial);
             //FIN SECCION HISTORICO PRODUCTOS Y ACTUALIZACION STOCK
-    
+
             DB::commit();
-    
+
             return response()->json(["status" => "1", "message" => "Se envió correctamente"]);
-    
+
         } catch (\Throwable $e) {
             DB::rollback();
             return response()->json(["status" => "0", "error" => "No se pudo guardar la compra de la orden de trabajo", "message" => $e->getMessage()]);
         }
     }
-    
+
     private function actualizarProductoConDistribucion($request, $item, $producto, $compra, $empresa)
     {
         try {
@@ -413,7 +414,7 @@ class CompraOrdenTrabajoController extends Controller
                     ]);
                 }
             }
-    
+
             DetalleCompraOrden::updateOrCreate(
                 ['com_codigo' => $compra->com_codigo, 'pro_codigo' => $item->pro_codigo],
                 [
@@ -426,21 +427,21 @@ class CompraOrdenTrabajoController extends Controller
                     'det_com_factura' => $item->stock,
                 ]
             );
-    
+
             CompraOrdenTrabajo::where('com_codigo', $compra->com_codigo)
                 ->update(['com_distribucion' => 0]);
-    
+
         } catch (\Throwable $e) {
             throw $e;
         }
     }
-    
+
     private function actualizarProductoSinDistribucion($request, $item, $producto, $compra, $empresa)
     {
         try {
             if ($request->editar == 'yes') {
-                if ($item->gru_pro_codigo == 2) {
-                    // GRUPO 2: usar pro_stock y pro_stockCalmed
+                if (in_array($item->gru_pro_codigo, _14GrupoProducto::GRUPOS_PERMITIDOS)) {
+                    // GRUPOS PERMITIDOS [2, 14, 15, 16, 17]: usar pro_stock y pro_stockCalmed
                     if ($empresa == "1") {
                         $producto->update([
                             'pro_reservar' => ($producto->pro_reservar - $item->cantidades_antiguo) + $item->cantidades,
@@ -467,8 +468,8 @@ class CompraOrdenTrabajoController extends Controller
                     }
                 }
             } else {
-                if ($item->gru_pro_codigo == 2) {
-                    // GRUPO 2: usar pro_stock y pro_stockCalmed
+                if (in_array($item->gru_pro_codigo, _14GrupoProducto::GRUPOS_PERMITIDOS)) {
+                    // GRUPOS PERMITIDOS [2, 14, 15, 16, 17]: usar pro_stock y pro_stockCalmed
                     if ($empresa == "1") {
                         $producto->update([
                             'pro_reservar' => $producto->pro_reservar + $item->cantidades,
@@ -495,7 +496,7 @@ class CompraOrdenTrabajoController extends Controller
                     }
                 }
             }
-    
+
             DetalleCompraOrden::updateOrCreate(
                 ['com_codigo' => $compra->com_codigo, 'pro_codigo' => $item->pro_codigo],
                 [
@@ -507,15 +508,15 @@ class CompraOrdenTrabajoController extends Controller
                     'det_com_cantidad' => $item->cantidades,
                 ]
             );
-    
+
         } catch (\Throwable $e) {
             throw $e;
         }
     }
-    
 
-    
-     
+
+
+
     public function Eliminar_CompraOrden(Request $request)
     {
         if ($request->com_codigo) {
@@ -528,7 +529,7 @@ class CompraOrdenTrabajoController extends Controller
                         $codigo = $detalles->pro_codigo;
                         $cantidad = $detalles->det_com_cantidad;
                         $st= $detalles->det_com_st;
-                        $query1 = DB::SELECT("SELECT pro_stock as stoc, pro_reservar as reserve, pro_deposito as depos from 1_4_cal_producto where pro_codigo='$detalles->pro_codigo'"); 
+                        $query1 = DB::SELECT("SELECT pro_stock as stoc, pro_reservar as reserve, pro_deposito as depos from 1_4_cal_producto where pro_codigo='$detalles->pro_codigo'");
                         $codi=$query1[0]->stoc;
                         $codi1=$query1[0]->reserve;
                         $codi2=$query1[0]->depos;
@@ -576,7 +577,7 @@ class CompraOrdenTrabajoController extends Controller
             }
 
             foreach ($compraDetalles as $detalle) {
-                $producto = _14Producto::find($detalle->pro_codigo);            
+                $producto = _14Producto::find($detalle->pro_codigo);
                 if ($producto) {
                     if ($request->distribuirStock) {
                         if ($request->empresa == "1") {
@@ -587,7 +588,7 @@ class CompraOrdenTrabajoController extends Controller
                             $producto->pro_stockCalmed -= $detalle->det_com_factura;
                             $producto->pro_depositoCalmed -= $detalle->det_com_nota;
                             $producto->pro_reservar -= $detalle->det_com_cantidad;
-                        }                        
+                        }
                     } else {
                         if ($request->empresa == "1") {
                             $producto->pro_reservar -= $detalle->det_com_cantidad;
@@ -595,7 +596,7 @@ class CompraOrdenTrabajoController extends Controller
                         } else if ($request->empresa == "3") {
                             $producto->pro_reservar -= $detalle->det_com_cantidad;
                             $producto->pro_depositoCalmed -= $detalle->det_com_cantidad;
-                        }                       
+                        }
                     }
                     $producto->save();
                 }

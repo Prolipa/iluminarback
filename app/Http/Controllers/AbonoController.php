@@ -3322,7 +3322,11 @@ class AbonoController extends Controller
             $secuencial = $tipoDocumento->tdo_secuencial_Prolipa;
         } else if ($empresa == 3) {
             $secuencial = $tipoDocumento->tdo_secuencial_calmed;
-        } else {
+        } else if ($empresa == 5) {
+            $secuencial = $tipoDocumento->tdo_secuencial_Prolipa2026;
+        } else if ($empresa == 4) {
+            $secuencial = $tipoDocumento->tdo_secuencial_calmed2026;
+        }else{
             $secuencial = null;
             return 'No hay empresa seleccionada';
         }
@@ -3470,9 +3474,11 @@ class AbonoController extends Controller
                     $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod FROM f_tipo_documento WHERE tdo_id = 17");
                 } else if ($empresa == 3) {
                     $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod FROM f_tipo_documento WHERE tdo_id = 17");
-                }
-
-                if (empty($query1)) {
+                } else if ($empresa == 4) {
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod FROM f_tipo_documento WHERE tdo_id = 17");
+                } else if ($empresa == 5) {
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod FROM f_tipo_documento WHERE tdo_id = 17");
+                }else if (empty($query1)) {
                     throw new \Exception('No se encontró el tipo de documento con ID 17');
                 }
 
@@ -3488,6 +3494,10 @@ class AbonoController extends Controller
                     $tipo_doc->tdo_secuencial_Prolipa = $co;
                 } else if ($empresa == 3) {
                     $tipo_doc->tdo_secuencial_calmed = $co;
+                } else if ($empresa == 4) {
+                    $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                } else if ($empresa == 5) {
+                    $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                 }
 
                 // Guardar el tipo de documento
@@ -3530,13 +3540,18 @@ class AbonoController extends Controller
             }
 
             // Intentar actualizar
-            $updated = $venta->update([
-                'ven_valor' => $request->ValorTOTAL,
-                'ven_subtotal' => $request->subtotal,
-                'ven_desc_por' => $request->descuento,
-                'ven_descuento' => $request->ValorDescuento,
-                'ven_fecha' => $request->fecha,
-            ]);
+            $updated = DB::table('f_venta')
+                ->where('ven_codigo', $request->numeroDocumento)
+                ->where('periodo_id', $request->periodo)
+                ->where('institucion_id', $request->establecimiento)
+                ->where('id_empresa', $request->empresa)
+                ->update([
+                    'ven_valor' => $request->ValorTOTAL,
+                    'ven_subtotal' => $request->subtotal,
+                    'ven_desc_por' => $request->descuento,
+                    'ven_descuento' => $request->ValorDescuento,
+                    'ven_fecha' => $request->fecha,
+                ]);
 
             if (!$updated) {
                 throw new \Exception("El DOCUMENTO DE VENTA NO SE ACTUALIZÓ.");
@@ -4240,6 +4255,86 @@ class AbonoController extends Controller
     }
 
     /**
+     * 🧾 Paso 6: Obtener Retenciones Sin Documentos (sin Pre-factura vinculada)
+     */
+    public function obtenerRetencionesSinDocumentosProgresivo(Request $request)
+    {
+        try {
+            $registros = json_decode($request->registros, true);
+            $retencionesSinDocs = [];
+
+            // Buscar retenciones (abono_tipo = 3) que no tengan pre-factura (idtipodoc=1) en el periodo
+            $retencionesSinFacturas = DB::table('abono as ab')
+                ->select(
+                    'ab.abono_ruc_cliente',
+                    'ab.abono_empresa',
+                    DB::raw('SUM(ab.abono_valor_retencion) AS suma_retencion'),
+                    DB::raw("CONCAT(u.apellidos, ' ', u.nombres) AS nombre_cliente"),
+                    DB::raw("CASE
+                                WHEN COUNT(fv.ven_codigo) = 0 THEN 'No hay documentos'
+                                ELSE 'Existen documentos'
+                            END AS estado_documentos")
+                )
+                ->leftJoin('usuario as u', 'u.cedula', '=', 'ab.abono_ruc_cliente')
+                ->leftJoin('f_venta as fv', function ($join) use ($request) {
+                    $join->on('fv.ruc_cliente', '=', 'ab.abono_ruc_cliente')
+                        ->on('fv.id_empresa', '=', 'ab.abono_empresa')
+                        ->where('fv.idtipodoc', '=', 1)
+                        ->where('fv.est_ven_codigo', '<>', 3)
+                        ->where('fv.periodo_id', '=', $request->periodo);
+                })
+                ->where('ab.abono_estado', 0)
+                ->where('ab.abono_tipo', '=', 3)
+                ->where('ab.abono_valor_retencion', '>', 0)
+                ->where('ab.abono_periodo', '=', $request->periodo)
+                ->groupBy('ab.abono_ruc_cliente', 'ab.abono_empresa', 'u.nombres', 'u.apellidos')
+                ->havingRaw('COUNT(fv.ven_codigo) = 0')
+                ->get();
+
+            foreach ($retencionesSinFacturas as $retencion) {
+                $clienteReporte = collect($registros)->firstWhere('ruc_cliente', $retencion->abono_ruc_cliente);
+
+                $retencionesSinDocs[] = [
+                    'idtipodoc'            => 23,
+                    'tdo_id'               => 23,
+                    'tdo_nombre'           => 'RETENCION SIN PRE-FACTURAS',
+                    'empresa'              => $retencion->abono_empresa == 1 ? 'PROLIPA' : 'GRUPOCALMED CIA.LTDA.',
+                    'id_empresa'           => $retencion->abono_empresa,
+                    'nombreInstitucion'    => $clienteReporte['nombreInstitucion'] ?? $retencion->nombre_cliente,
+                    'asesor'               => $clienteReporte['asesor'] ?? '',
+                    'cliente_facturado'    => $clienteReporte['cliente_facturado'] ?? $retencion->nombre_cliente,
+                    'idInstitucion'        => $clienteReporte['idInstitucion'] ?? '',
+                    'punto_venta'          => $clienteReporte['punto_venta'] ?? '',
+                    'institucion_id'       => $clienteReporte['idInstitucion'] ?? '',
+                    'ruc_cliente'          => $retencion->abono_ruc_cliente,
+                    'subtotal_total'       => 0,
+                    'descuento_total'      => 0,
+                    'valor_total'          => 0,
+                    'todos_los_documentos' => '',
+                    'abono_total'          => 0,
+                    'retencion_total'      => round($retencion->suma_retencion, 2),
+                    'devolucion'           => 0,
+                    'devolucion_todas'     => [],
+                    'devolucion_bruta'     => 0,
+                    'abono_liquidacion'    => 0,
+                    'abono_cruce'          => 0,
+                    'factura_operativa'    => 0,
+                ];
+            }
+
+            return response()->json([
+                'success' => true,
+                'data'    => $retencionesSinDocs
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener retenciones sin documentos: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * 🏢 Paso 7: Obtener Facturas Operativas
      */
     public function obtenerFacturasOperativasProgresivo(Request $request)
@@ -4362,7 +4457,7 @@ class AbonoController extends Controller
                     'descuento_total' => $grupo->sum('descuento_total'),
                     'valor_total' => $grupo->sum('valor_total'),
                     'abono_total' => $base['abono_total'],
-                    'retencion_total' => ($base['idtipodoc'] == 1) ? $base['retencion_total'] : 0,
+                    'retencion_total' => ($base['idtipodoc'] == 1 || $base['idtipodoc'] == 23) ? $base['retencion_total'] : 0,
                     'abono_liquidacion' => $base['abono_liquidacion'],
                     'abono_cruce' => $base['abono_cruce'],
                     'devolucion' => $grupo->sum('devolucion'),

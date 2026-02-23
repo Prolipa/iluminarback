@@ -13,6 +13,9 @@ class _14GrupoProducto extends Model
     protected $primaryKey = 'gru_pro_codigo';
     public $timestamps = false;
 
+    // Grupos de productos permitidos
+    const GRUPOS_PERMITIDOS = [2, 14, 15, 16, 17];
+
     protected $fillable = [
         'gru_pro_codigo',
         'gru_pro_nombre',

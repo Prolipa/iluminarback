@@ -118,6 +118,21 @@ Route::group(['prefix' => 'perseo/consultas'], function () {
     //consulta de tipos de iva
     Route::post('tipoiva_consulta','Perseo\PerseoConsultasController@tipoiva_consulta');
 });
+// ==================================
+// VENTAS PERSEO (Transacciones directas)
+// ==================================
+Route::group(['prefix' => 'perseo/ventas'], function () {
+    // Crear venta con Perseo (sin proforma previa)
+    Route::post('crear','Perseo\VentaPerseoController@crearVentaPerseo');
+    // Actualizar venta existente
+    Route::put('actualizar','Perseo\VentaPerseoController@actualizarVentaPerseo');
+    // Obtener detalles de una venta
+    Route::get('detalle/{ven_codigo}','Perseo\VentaPerseoController@obtenerDetalleVenta');
+    // Enviar venta a Perseo como pedido
+    Route::post('enviar-perseo','Perseo\VentaPerseoController@enviarAPerseo');
+    // Anular venta
+    Route::post('anular','Perseo\VentaPerseoController@anularVenta');
+});
 //moderna
 Route::group(['prefix' => 'perseo/moderna'], function () {
     Route::resource('moderna','Perseo\PerseoModernaController');

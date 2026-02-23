@@ -1120,9 +1120,8 @@ class CodigoLibrosController extends Controller
     // }
     public function getTipoVenta(Request $request)
     {
-        set_time_limit(6000000);
-        ini_set('max_execution_time', 6000000);
-
+        // set time 2 minutes
+        set_time_limit(120);
         // Obtener los detalles de tipoVenta
         $tipoVenta = DB::SELECT("SELECT
             c.serie, c.prueba_diagnostica, c.factura, c.codigo_union,codigo_paquete,
@@ -1147,13 +1146,15 @@ class CodigoLibrosController extends Controller
             ib.nombreInstitucion as institucionBarra,
             pb.periodoescolar as periodo_barras, ivl.nombreInstitucion as InstitucionLista,
             c.codigo_proforma, c.proforma_empresa, c.combo, c.codigo_combo, ls.codigo_liquidacion,
-            c.documento_devolucion, c.plus, c.quitar_de_reporte, c.devuelto_proforma,c.documento_devolucion, ls.nombre as book
+            c.documento_devolucion, c.plus, c.quitar_de_reporte, c.devuelto_proforma,c.documento_devolucion, ls.nombre as book,
+            e.nombre as nombre_empresa, e.descripcion_corta as descripcion_empresa
             FROM codigoslibros c
             LEFT JOIN institucion ib ON c.bc_institucion = ib.idInstitucion
             LEFT JOIN institucion ivl ON c.venta_lista_institucion = ivl.idInstitucion
             LEFT JOIN periodoescolar pb ON c.bc_periodo = pb.idperiodoescolar
             LEFT JOIN libro l ON c.libro_idlibro = l.idlibro
             LEFT JOIN libros_series ls on ls.idLibro = l.idlibro
+            LEFT JOIN empresas e ON c.proforma_empresa = e.id
             WHERE (c.bc_institucion = '$request->institucion_id' OR c.venta_lista_institucion = '$request->institucion_id')
             AND c.bc_periodo = '$request->periodo_id'
             AND c.prueba_diagnostica = '0'
@@ -1171,20 +1172,16 @@ class CodigoLibrosController extends Controller
         // Ahora, procesamos cada grupo para contar cuántos códigos tiene y asignar el nombre de la empresa
         $proformas = $proformasGrouped->map(function ($group) {
             $codigoProforma = $group->first()->codigo_proforma;
-            $proformaEmpresa = $group->first()->proforma_empresa;
+            $nombreEmpresa = $group->first()->nombre_empresa;
 
-            // Determinamos el nombre de la empresa
-            $empresa = 'sin documentos';
-            if ($proformaEmpresa == '1') {
-                $empresa = 'Prolipa';
-            } elseif ($proformaEmpresa == '3') {
-                $empresa = 'Grupo Calmed';
-            }
+            // Determinamos el nombre de la empresa desde la base de datos
+            // Si no hay empresa asociada, usamos 'sin documentos'
+            $empresa = $nombreEmpresa ?? 'sin documentos';
 
             // Contamos cuántos registros hay en este grupo
             return [
-                'codigo_proforma' => $codigoProforma,
-                'empresa' => $empresa,
+                'codigo_proforma'  => $codigoProforma,
+                'empresa'           => $empresa,
                 'cantidad_codigos' => $group->count(),
             ];
         });
@@ -5200,7 +5197,7 @@ class CodigoLibrosController extends Controller
             CASE WHEN c.estado = 2 THEN 'Bloqueado' ELSE 'Activo' END AS estado,
             CASE WHEN c.venta_estado = 2 THEN 'Lista' ELSE 'Directa' END AS venta_estado,
             c.codigo_proforma,
-            CASE WHEN c.proforma_empresa = 3 THEN 'Calmed' WHEN c.proforma_empresa = 2 THEN 'Prolipa' ELSE 'Sin empresa' END AS proforma_empresa,
+            e.descripcion_corta AS proforma_empresa,
             c.factura,
             c.liquidado_regalado,
             c.combo,
@@ -5215,6 +5212,7 @@ class CodigoLibrosController extends Controller
         LEFT JOIN institucion i ON i.idInstitucion = c.bc_institucion
         LEFT JOIN institucion i2 ON i2.idInstitucion = c.venta_lista_institucion
         LEFT JOIN institucion iv ON iv.idInstitucion = c.bc_institucion
+        LEFT JOIN empresas e ON c.proforma_empresa = e.id
         WHERE
             c.prueba_diagnostica = '0'
             AND c.estado_liquidacion IN ('0', '1', '2')

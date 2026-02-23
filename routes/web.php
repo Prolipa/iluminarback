@@ -1182,6 +1182,7 @@ Route::post('obtenerAbonosProgresivo', 'AbonoController@obtenerAbonosProgresivo'
 Route::post('obtenerDevolucionesProgresivo', 'AbonoController@obtenerDevolucionesProgresivo');
 Route::post('obtenerDevolucionesSinEmpresaProgresivo', 'AbonoController@obtenerDevolucionesSinEmpresaProgresivo');
 Route::post('obtenerAbonosSinDocumentosProgresivo', 'AbonoController@obtenerAbonosSinDocumentosProgresivo');
+Route::post('obtenerRetencionesSinDocumentosProgresivo', 'AbonoController@obtenerRetencionesSinDocumentosProgresivo');
 Route::post('obtenerNotasCreditoProgresivo', 'AbonoController@obtenerNotasCreditoProgresivo');
 Route::post('obtenerFacturasOperativasProgresivo', 'AbonoController@obtenerFacturasOperativasProgresivo');
 Route::post('agruparResultadosFinalesProgresivo', 'AbonoController@agruparResultadosFinalesProgresivo');
@@ -1402,6 +1403,7 @@ Route::get('f_venta_anuladas_revision','VentasController@f_venta_anuladas_revisi
 Route::get('f_venta_audits_revision','VentasController@f_venta_audits_revision');
 Route::get('GetProducto_ParaCaracteristicas','_14ProductoController@GetProducto_ParaCaracteristicas');
 Route::get('Get_Detallexprocodigo','OrdenTrabajoController@Get_Detallexprocodigo');
+Route::get('Todo_Libros_Individuales_pedido_alcance_formatoprecio','LibroSerieController@Todo_Libros_Individuales_pedido_alcance_formatoprecio');
 Route::post('VerifcarMetodosPost_Institucion_Autoridades','Institucion_AutoridadesController@VerifcarMetodosPost_Institucion_Autoridades');
 Route::post('VerifcarMetodosPost_Editoriales','EditorialesController@VerifcarMetodosPost_Editoriales');
 Route::post('actualizarPassword_PerfilUser','UsuarioController@actualizarPassword_PerfilUser');
@@ -2116,13 +2118,17 @@ Route::get('Get_proformasCliente','ProformaController@Get_proformasCliente');
 Route::post('Proforma_Registrar_modificar','ProformaController@Proforma_Registrar_modificar');
 Route::post('Proforma_Registrar_modificar_solicitud','ProformaController@Proforma_Registrar_modificar_solicitud');
 Route::post('Proforma_Guardar_Desde_Modal','ProformaController@Proforma_Guardar_Desde_Modal');
+Route::post('Proforma_Perseo_Guardar_Desde_Modal','ProformaController@Proforma_Perseo_Guardar_Desde_Modal');
 Route::post('Proforma_Actualizar_Desde_Modal','ProformaController@Proforma_Actualizar_Desde_Modal');
+Route::post('Proforma_Perseo_Actualizar_Desde_Modal','ProformaController@Proforma_Perseo_Actualizar_Desde_Modal');
+Route::post('Proforma_Perseo_Actualizar_Con_Reservas','ProformaController@Proforma_Perseo_Actualizar_Con_Reservas');
 Route::get('get_libros_proformados_por_contrato','ProformaController@get_libros_proformados_por_contrato');
 Route::get('get_libros_vendidos_por_contrato','ProformaController@get_libros_vendidos_por_contrato');
 Route::get('get_cantidades_vendidas_proforma','ProformaController@get_cantidades_vendidas_proforma');
 Route::get('get_proformas_por_contrato','ProformaController@get_proformas_por_contrato');
 Route::get('get_ventas_por_contrato','ProformaController@get_ventas_por_contrato');
 Route::get('get_proforma_para_editar/{id}','ProformaController@get_proforma_para_editar');
+Route::get('get_proforma_para_editar_perseo/{id}','ProformaController@get_proforma_para_editar_perseo');
 Route::post('PostProforma_Editar','ProformaController@PostProforma_Editar');
 Route::post('PostProforma_Editar_solicitud','ProformaController@PostProforma_Editar_solicitud');
 Route::post('PostProformaDetalle_Editar','ProformaController@PostProformaDetalle_Editar');
@@ -2142,6 +2148,16 @@ Route::post('Get_Stocks_Productos','ProformaController@Get_Stocks_Productos');
 Route::post('Regresar_Stock','ProformaController@regresarStock');
 Route::post('Anular_Venta','ProformaController@anularVenta');
 //fin proforma
+
+//RUTAS PARA EDICIÓN DE VENTAS PERSEO
+Route::get('get_venta_para_editar_perseo/{ven_codigo}','Perseo\VentaPerseoController@obtenerVentaParaEditar');
+Route::post('Venta_Perseo_Actualizar','Perseo\VentaPerseoController@actualizarVentaPerseoConReservas');
+
+//RUTAS PARA VENTAS DE OBSEQUIOS PERSEO
+Route::get('obtener_pedidos_obsequios_por_contrato','Perseo\VentaPerseoController@obtenerPedidosObsequiosPorContrato');
+Route::get('api/perseo/ventas/obtenerDatosDetalleLibros/{id}','Perseo\VentaPerseoController@obtenerDatosDetalleLibros');
+Route::post('Venta_Obsequios_Perseo_Generar','Perseo\VentaPerseoController@generarVentaObsequios');
+
 //venta
 Route::get('Get_CodVenta','VentasController@Get_CodVenta');
 Route::get('Get_tdocu','VentasController@Get_tdocu');
@@ -2168,6 +2184,7 @@ Route::get('GetPreFacturasxAgrupa','VentasController@GetPreFacturasxAgrupa');
 Route::get('GetFacturasxAgrupa','VentasController@GetFacturasxAgrupa');
 Route::get('consultar-stock','VentasController@consultar_stock');
 Route::get('consultar-stock-libros','VentasController@consultarStockLibros');
+Route::get('consultar-stock-perseo','VentasController@consultarStockPerseo');
 Route::get('GetFacturasxAgrupaXPeriodo','VentasController@GetFacturasxAgrupaXPeriodo');
 Route::get('getDventas','VentasController@getDventas');
 Route::get('Get_DatoFactura','VentasController@Get_DatoFactura');

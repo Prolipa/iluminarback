@@ -8,11 +8,13 @@ use App\Models\J_juegos;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\_14Producto;
+use App\Models\_14ProductoStockHistorico;
 use App\Models\CodigosLibros;
 use App\Models\CodigosLibrosDevolucionHeader;
 use App\Models\CodigosLibrosDevolucionSon;
 use App\Models\CuotasPorCobrar;
 use App\Models\EstudianteMatriculado;
+use App\Models\f_tipo_documento;
 use App\Models\HistoricoCodigos;
 use App\Models\Institucion;
 use App\Models\Libro;
@@ -24,6 +26,7 @@ use App\Models\PedidoAlcanceHistorico;
 use App\Models\PedidoConvenio;
 use App\Models\PedidoDocumentoDocente;
 use App\Models\Pedidos;
+use App\Models\Periodo;
 use App\Models\RepresentanteEconomico;
 use App\Models\RepresentanteLegal;
 use App\Models\SallePreguntasEvaluacion;
@@ -35,6 +38,7 @@ use App\Models\Verificacion;
 use App\Models\Video;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\Facturacion\DevolucionRepository;
+use App\Repositories\Facturacion\ProformaRepository;
 use App\Repositories\pedidos\PedidosRepository;
 use DB;
 use GraphQL\Server\RequestError;
@@ -56,12 +60,14 @@ class AdminController extends Controller
     protected $devolucionRepository;
     private $codigosRepository;
     protected $pedidoRepository;
-    public function __construct( DevolucionRepository  $devolucionRepository,CodigosRepository $codigosRepository, PedidosRepository $pedidoRepository)
+    protected $proformaRepository;
+    public function __construct( DevolucionRepository  $devolucionRepository,CodigosRepository $codigosRepository, PedidosRepository $pedidoRepository, ProformaRepository $proformaRepository)
     {
 
         $this->devolucionRepository  = $devolucionRepository;
         $this->codigosRepository     = $codigosRepository;
         $this->pedidoRepository      = $pedidoRepository;
+        $this->proformaRepository    = $proformaRepository;
     }
     public function groqProxy(Request $request)
     {
@@ -2452,12 +2458,84 @@ class AdminController extends Controller
     }
 
     public function guardarData(Request $request){
+        $query = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+        WHERE p.gru_pro_codigo  ='14'
+        AND p.pro_depositoCalmed > 0
+        ");
 
-        // set_time_limit(6000);
-        // ini_set('max_execution_time', 600000);
+        // Arrays para el histórico (inicializar ANTES del foreach)
+        $arrayOldValues = [];
+        $arrayNewValues = [];
+        $dataConvertida = [];
+        $contador = 0;
 
+        //la cantidad de pro_depositoCalmed cambiar a pro_stockCalmed y dejar en cero el pro_depositoCalmed
+        foreach($query as $key => $item){
+            // 1. Guardar valores ANTES del update
+            $oldValues = [
+                'pro_codigo'         => $item->pro_codigo,
+                'pro_reservar'       => $item->pro_reservar ?? 0,
+                'pro_stock'          => $item->pro_stock ?? 0,
+                'pro_stockCalmed'    => $item->pro_stockCalmed ?? 0,
+                'pro_deposito'       => $item->pro_deposito ?? 0,
+                'pro_depositoCalmed' => $item->pro_depositoCalmed ?? 0,
+            ];
 
+            // 2. Hacer el update
+            DB::table('1_4_cal_producto')->where('pro_codigo', $item->pro_codigo)
+            ->update([
+                'pro_stockCalmed' => $item->pro_depositoCalmed,
+                'pro_depositoCalmed' => 0,
+                'updated_at' => now(),
+            ]);
 
+            // 3. Obtener valores DESPUÉS del update
+            $getNuevo = DB::table('1_4_cal_producto')
+                ->where('pro_codigo', $item->pro_codigo)
+                ->first();
+
+            $newValues = [
+                'pro_codigo'         => $getNuevo->pro_codigo,
+                'pro_reservar'       => $getNuevo->pro_reservar ?? 0,
+                'pro_stock'          => $getNuevo->pro_stock ?? 0,
+                'pro_stockCalmed'    => $getNuevo->pro_stockCalmed ?? 0,
+                'pro_deposito'       => $getNuevo->pro_deposito ?? 0,
+                'pro_depositoCalmed' => $getNuevo->pro_depositoCalmed ?? 0,
+            ];
+
+            // 4. Agregar al array (NO guardar aún)
+            $arrayOldValues[] = $oldValues;
+            $arrayNewValues[] = $newValues;
+
+            // 5. Agregar información resumida de la conversión
+            $dataConvertida[] = [
+                'pro_codigo' => $item->pro_codigo,
+                'nombre' => $item->pro_nombre,
+                'pro_depositoCalmed_modificado_a' => 0,
+                'pro_stockCalmed_modificado_a' => $item->pro_depositoCalmed,
+            ];
+
+            $contador++;
+        }
+
+        // 6. Guardar TODO el histórico en UN SOLO registro
+        if(count($arrayOldValues) > 0){
+            _14ProductoStockHistorico::insert([
+                'psh_old_values' => json_encode($arrayOldValues),
+                'psh_new_values' => json_encode($arrayNewValues),
+                'psh_tipo'       => 6,
+                'id_pedido'      => null,
+                'user_created'   => $request->user_created ?? auth()->id(),
+                'created_at'     => now(),
+                'updated_at'     => now(),
+            ]);
+        }
+
+        return [
+            'registros_procesados' => $contador,
+            'resultados' => $query,
+            'data_convertida' => $dataConvertida,
+        ];
 
 
         // $contadorSolinfaGONZALEZ = 0;
@@ -3300,14 +3378,7 @@ class AdminController extends Controller
             return response()->json(["status" => "0", 'message' => 'Error al actualizar los datos: ' . $e->getMessage()], 500);
         }
     }
-    public function hola(){
-       $query = DB::select("select * from area");
-       $query2 = DB::select("select * from nivel");
-        return [
-            "area" => $query,
-            "nivel" => $query2
-        ];
-    }
+
 
     /**
      * Mostrar vista para descargar códigos despachados

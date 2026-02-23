@@ -67,7 +67,11 @@ class FacturaOperativaController extends Controller
                     $campoSecuencial = 'tdo_secuencial_Prolipa';
                 } elseif ($data['id_empresa'] == 3) { // Calmed
                     $campoSecuencial = 'tdo_secuencial_calmed';
-                } else {
+                }else if ($data['id_empresa'] == 4) { // Calmed 2026
+                    $campoSecuencial = 'tdo_secuencial_calmed2026';
+                }else if ($data['id_empresa'] == 5) { // Prolipa 2026
+                    $campoSecuencial = 'tdo_secuencial_Prolipa2026';
+                }  else {
                     // Opcional: Manejar otras empresas o usar SinEmpresa
                     $campoSecuencial = 'tdo_secuencial_SinEmpresa';
                 }

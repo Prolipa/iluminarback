@@ -53,6 +53,8 @@ class f_tipo_documentoController extends Controller
         $tipo_docuemnto->tdo_nombre = $request->tdo_nombre;
         $tipo_docuemnto->tdo_secuencial_Prolipa = $request->tdo_secuencial_Prolipa;
         $tipo_docuemnto->tdo_secuencial_calmed = $request->tdo_secuencial_calmed;
+        $tipo_docuemnto->tdo_secuencial_calmed2026 = $request->tdo_secuencial_calmed2026;
+        $tipo_docuemnto->tdo_secuencial_Prolipa2026 = $request->tdo_secuencial_Prolipa2026;
         $tipo_docuemnto->tdo_letra = $request->tdo_letra;
         $tipo_docuemnto->tdo_descripcion = $request->tdo_descripcion;
         //$tipo_docuemnto->user_created = $request->user_created;
@@ -62,6 +64,8 @@ class f_tipo_documentoController extends Controller
            $tipo_docuemnto->tdo_nombre = $request->tdo_nombre;
             $tipo_docuemnto->tdo_secuencial_Prolipa = $request->tdo_secuencial_Prolipa;
             $tipo_docuemnto->tdo_secuencial_calmed = $request->tdo_secuencial_calmed;
+            $tipo_docuemnto->tdo_secuencial_calmed2026 = $request->tdo_secuencial_calmed2026;
+            $tipo_docuemnto->tdo_secuencial_Prolipa2026 = $request->tdo_secuencial_Prolipa2026;
             $tipo_docuemnto->tdo_letra = $request->tdo_letra;
             $tipo_docuemnto->tdo_descripcion = $request->tdo_descripcion;
             $tipo_docuemnto->user_created = $request->user_created;

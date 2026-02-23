@@ -16,6 +16,7 @@ use App\Models\DetalleVentas;
 use App\Models\f_tipo_documento;
 use App\Models\LibroSerie;
 use App\Models\Periodo;
+use App\Models\User;
 use App\Models\Ventas;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\Facturacion\DevolucionRepository;
@@ -74,7 +75,8 @@ class DevolucionController extends Controller
         if($request->getDevolucionesCombosDesarmados)           { return $this->getDevolucionesCombosDesarmados($request); }
         if($request->getDevolucionesCombosDesarmadosXId)        { return $this->getDevolucionesCombosDesarmadosXId($request); }
         if($request->getCodigosComboEtiquetaDevolucionSon)      { return $this->getCodigosComboEtiquetaDevolucionSon($request); }
-
+        if($request->documentoVentasIntercambios)               { return $this->documentoVentasIntercambios($request); }
+        if($request->getHistoricoCodigosDevolucionSon)          { return $this->getHistoricoCodigosDevolucionSon($request); }
     }
     //api:get/devoluciones?listadoProformasAgrupadas=1&institucion=1620&periodo_id=27
     public function listadoProformasAgrupadas(Request $request)
@@ -274,6 +276,51 @@ class DevolucionController extends Controller
         $finalizados  = $request->input('finalizados');
         $agrupar      = $request->input('agrupar');
         $porcliente   = $request->input('porcliente');
+
+        // Si solicitan agrupación por documento (documento,id_empresa,pro_codigo,id_cliente)
+        if ($request->input('agrupar_por_documento') == 1) {
+            $sql = "SELECT
+                s.documento,
+                s.id_empresa,
+                s.pro_codigo,
+                ls.nombre AS nombrelibro,
+                s.id_cliente,
+                COUNT(*) AS cantidad,
+                COALESCE(dv.det_ven_valor_u, 0) AS det_ven_valor_u,
+                v.ven_cliente,
+                v.ruc_cliente,
+                CONCAT(u.nombres,' ',u.apellidos) AS clientePerseo
+            FROM codigoslibros_devolucion_son s
+            LEFT JOIN libros_series ls
+                ON ls.codigo_liquidacion = s.pro_codigo
+            LEFT JOIN f_detalle_venta dv
+                ON dv.ven_codigo = s.documento
+                AND dv.id_empresa = s.id_empresa
+                AND dv.pro_codigo = s.pro_codigo
+            LEFT JOIN f_venta v
+                ON v.ven_codigo = s.documento
+                AND v.id_empresa = s.id_empresa
+            LEFT JOIN usuario u
+                ON u.idusuario = v.ven_cliente
+            WHERE s.codigoslibros_devolucion_id = ?
+                AND s.combo IS NULL
+                AND s.estado <> '0'
+                AND s.tipo_codigo = '0'
+            GROUP BY
+                s.documento,
+                s.id_empresa,
+                s.pro_codigo,
+                ls.nombre,
+                s.id_cliente,
+                dv.det_ven_valor_u,
+                v.ven_cliente,
+                v.ruc_cliente,
+                u.nombres,
+                u.apellidos;
+            ";
+            return DB::select($sql, [$id_documento]);
+        }
+
         $getCodigos = CodigosLibrosDevolucionSon::query()
         ->leftJoin('codigoslibros', 'codigoslibros.codigo', '=', 'codigoslibros_devolucion_son.codigo')
         ->leftJoin('libro', 'libro.idlibro', '=', 'codigoslibros_devolucion_son.id_libro')
@@ -396,6 +443,266 @@ class DevolucionController extends Controller
         ",[$id_cliente]);
         return $query;
     }
+
+    //api:get/devoluciones?getHistoricoCodigosDevolucionSon=1
+    public function getHistoricoCodigosDevolucionSon(Request $request)
+    {
+        $query = DB::SELECT("
+            SELECT
+                s.codigo,
+                s.observacion,
+                s.descripcion,
+                s.created_at,
+                u.nombres AS usuario_nombres,
+                u.apellidos AS usuario_apellidos,
+                h.codigo_devolucion,
+                i.idInstitucion,
+                i.nombreInstitucion,
+                p.periodoescolar,
+                l.nombrelibro
+            FROM hist_codigos_son s
+            LEFT JOIN libro l ON l.idlibro = s.id_libro
+            LEFT JOIN usuario u ON u.idusuario = s.user_created
+            LEFT JOIN codigoslibros_devolucion_header h ON h.id = s.id_devolucion_header
+            LEFT JOIN institucion i ON i.idInstitucion = h.id_cliente
+            LEFT JOIN periodoescolar p ON p.idperiodoescolar = h.periodo_id
+            ORDER BY s.created_at DESC
+        ");
+        return $query;
+    }
+
+    //api:post/devoluciones?intercambiarCodigosDocumento=1
+    public function intercambiarCodigosDocumento(Request $request)
+    {
+        DB::beginTransaction();
+        try {
+            $id_documento_origen  = $request->input('id_documento_origen');
+            $arrayDetalle         = json_decode($request->input('detalle_venta'));
+            $iniciales            = $request->input('iniciales') ?? '';
+            $id_usuario           = $request->input('id_usuario');
+            $idtipodoc            = $request->input('tdo_id');
+            $id_empresa           = $request->input('id_empresa', 0);
+            $tipo_venta           = $request->input('tipo_venta'); // venta directa , venta lista
+            $porcentaje_descuento = $request->input('porcentaje_descuento', 0); // porcentaje descuento para venta lista
+            $id_cliente_perseo    = $request->input('id_cliente_perseo'); // cliente para venta lista
+            $observacion_intercambio = $request->input('observacion_intercambio', ''); // observación del intercambio
+
+            if (!$id_documento_origen || !$arrayDetalle || !$id_usuario || !$idtipodoc) {
+                return response()->json(['status' => 0, 'message' => 'Parámetros incompletos']);
+            }
+
+            // Obtener el documento header origen
+            $header = CodigosLibrosDevolucionHeader::find($id_documento_origen);
+            if (!$header) {
+                return response()->json(['status' => 0, 'message' => 'Documento origen no encontrado']);
+            }
+
+            $periodo_id = $header->periodo_id;
+            $id_cliente = $header->id_cliente;
+
+            //=======SECUENCIA DOCUMENTO=============
+            // Obtener el código de contrato del período
+            $getPeriodo = Periodo::where('idperiodoescolar', $periodo_id)->first();
+            if (!$getPeriodo) {
+                return response()->json(["status" => "0", "message" => "No existe el código para el período escolar"]);
+            }
+
+            $tipoDocumento = f_tipo_documento::find($idtipodoc);
+            if (!$tipoDocumento) {
+                return response()->json(['status' => 0, 'message' => 'Tipo de documento inválido']);
+            }
+
+            $letraDocumento     = $tipoDocumento->tdo_letra;
+            $letraEmpresa       = $id_empresa == 1 ? "P" : "C";
+            $codigo_contrato    = $getPeriodo->codigo_contrato;
+
+            // Incrementar y obtener nueva secuencia usando el método del modelo
+            $nuevaSecuencia      = f_tipo_documento::incrementarSecuencia($idtipodoc, $id_empresa);
+            $secuenciaFormateada = f_tipo_documento::formatSecuencia($nuevaSecuencia);
+
+            // Generar código del nuevo documento
+            $nuevo_ven_codigo    = $letraDocumento . "-" . $letraEmpresa . "-" . $codigo_contrato . "-" . $iniciales . "-NV" . "-" . $secuenciaFormateada;
+            //=======FIN SECUENCIA DOCUMENTO=============
+
+            // Crear documento en f_venta
+            $ven_valor     = 0;
+            $ven_subtotal  = 0;
+            $ven_descuento = 0;
+
+            // Calcular totales basados en el detalle
+            foreach ($arrayDetalle as $detalle) {
+                $cantidad       = $detalle->cantidad;
+                $precio         = $detalle->det_ven_valor_u ?? 0;
+                $subtotalLinea  = $cantidad * $precio;
+                $ven_subtotal   += $subtotalLinea;
+            }
+            $ven_descuento      = $ven_subtotal * ($porcentaje_descuento / 100);
+            $ven_valor          = $ven_subtotal - $ven_descuento; // Aquí puedes ajustar si hay descuentos o impuestos adicionales
+            // cliente de perseo
+            $userPerseo             = User::where('idusuario',$id_cliente_perseo)->first();
+            $idclientePerseo        = DB::SELECT("SELECT v.clientesidPerseo FROM f_venta v
+                WHERE v.ven_cliente = '{$id_cliente_perseo}'
+                AND v.id_empresa = '{$id_empresa}'
+                AND v.clientesidPerseo IS NOT NULL
+                LIMIT 1
+
+            ");
+            // Insertar en f_venta
+            DB::table('f_venta')->insert([
+                'ven_codigo'        => $nuevo_ven_codigo,
+                'tip_ven_codigo'    => $tipo_venta,
+                'est_ven_codigo'    => '1',
+                'ven_tipo_inst'     => $tipo_venta == 1 ? 'V' : 'L', // V para venta directa, L para venta lista
+                'ven_subtotal'      => $ven_subtotal,
+                'ven_valor'         => $ven_valor,
+                'ven_com_porcentaje'=> 0,
+                'ven_iva_por'       => 0,
+                'ven_iva'           => 0,
+                'ven_desc_por'      => $porcentaje_descuento,
+                'ven_descuento'     => $ven_descuento,
+                'ven_fecha'         => now(),
+                'ven_idproforma'    => null,
+                'ven_transporte'    => 0,
+                'periodo_id'        => $periodo_id,
+                'user_created'      => $id_usuario,
+                'id_empresa'        => $id_empresa,
+                'institucion_id'    => $id_cliente,
+                'idtipodoc'         => $idtipodoc,
+                'ven_cliente'       => $id_cliente_perseo,
+                'ruc_cliente'       => $userPerseo ? $userPerseo->cedula : null,
+                'clientesidPerseo'  => $idclientePerseo ? $idclientePerseo[0]->clientesidPerseo : null,
+                'updated_at'        => now(),
+            ]);
+
+            // Insertar detalles en f_detalle_venta
+            foreach ($arrayDetalle as $detalle) {
+                DB::table('f_detalle_venta')->insert([
+                    'ven_codigo'        => $nuevo_ven_codigo,
+                    'id_empresa'        => $id_empresa,
+                    'pro_codigo'        => $detalle->pro_codigo,
+                    'det_ven_cantidad'  => $detalle->cantidad,
+                    'det_ven_valor_u'   => $detalle->det_ven_valor_u ?? 0,
+                    'det_ven_dev'       => 0,
+                ]);
+
+                // Actualizar códigos en codigoslibros_devolucion_son
+                // Buscar códigos que coincidan con el detalle
+                $codigosDevolucion = CodigosLibrosDevolucionSon::where('codigoslibros_devolucion_id', $id_documento_origen)
+                    ->where('pro_codigo', $detalle->pro_codigo)
+                    ->where('documento', $detalle->documento)
+                    ->where('id_empresa', $detalle->id_empresa)
+                    ->where('tipo_codigo', 0)
+                    ->whereNull('combo')
+                    ->where('estado', '<>', '0')
+                    ->limit($detalle->cantidad)
+                    ->get();
+                // // los codigos actualizar el documento por el nuevo documento generado
+                foreach ($codigosDevolucion as $codigo) {
+                    $documento_original = $codigo->documento;
+                    $codigo->documento  = $nuevo_ven_codigo;
+                    $codigo->save();
+                    // ir colocando en f_detalle_venta por pro_codigo y nuevo_ven_codigo
+                    DB::table('f_detalle_venta')
+                        ->where('ven_codigo', $nuevo_ven_codigo)
+                        ->where('id_empresa', $codigo->id_empresa)
+                        ->where('pro_codigo', $codigo->pro_codigo)
+                        ->update(['det_ven_dev' => DB::raw('det_ven_dev + 1')]);
+                    // ir descontando en f_detalle_venta por pro_codigo y documento original
+                   DB::table('f_detalle_venta')
+                    ->where('ven_codigo', $documento_original)
+                    ->where('id_empresa', $codigo->id_empresa)
+                    ->where('pro_codigo', $codigo->pro_codigo)
+                    ->update([
+                        'det_ven_dev' => DB::raw('det_ven_dev - 1'),
+                        'det_ven_cantidad' => DB::raw('det_ven_cantidad - 1')
+                    ]);
+
+                    // Recalcular totales en f_venta del documento original
+                    $ventaOriginal = DB::table('f_venta')
+                        ->where('ven_codigo', $documento_original)
+                        ->where('id_empresa', $codigo->id_empresa)
+                        ->first();
+
+                    if ($ventaOriginal) {
+                        // Obtener el nuevo subtotal sumando todos los detalles
+                        $nuevoSubtotal = DB::table('f_detalle_venta')
+                            ->where('ven_codigo', $documento_original)
+                            ->where('id_empresa', $codigo->id_empresa)
+                            ->sum(DB::raw('det_ven_cantidad * det_ven_valor_u'));
+
+                        $porcentajeDescuento = $ventaOriginal->ven_desc_por ?? 0;
+                        $nuevoDescuento = $nuevoSubtotal * ($porcentajeDescuento / 100);
+                        $nuevoValor = $nuevoSubtotal - $nuevoDescuento;
+
+                        // Actualizar documentos_venta_generados_devolucion
+                        $documentosGenerados = $ventaOriginal->documentos_venta_generados_devolucion ?? '';
+
+                        // Convertir a array para verificar si ya existe el documento
+                        $arrayDocumentos = array_filter(array_map('trim', explode(',', $documentosGenerados)));
+
+                        // Solo agregar si no existe en el array
+                        if (!in_array($nuevo_ven_codigo, $arrayDocumentos)) {
+                            if (empty($documentosGenerados)) {
+                                $documentosGenerados = $nuevo_ven_codigo;
+                            } else {
+                                $documentosGenerados .= ',' . $nuevo_ven_codigo;
+                            }
+                        }
+
+                        // Actualizar f_venta con los nuevos valores
+                        DB::table('f_venta')
+                            ->where('ven_codigo', $documento_original)
+                            ->where('id_empresa', $codigo->id_empresa)
+                            ->update([
+                                'ven_subtotal' => $nuevoSubtotal,
+                                'ven_descuento' => $nuevoDescuento,
+                                'ven_valor' => $nuevoValor,
+                                'documentos_venta_generados_devolucion' => $documentosGenerados
+                            ]);
+                    }
+                    // guardar historico en codigoslibros_devolucion_son_historico
+                    $formData = (Object) [
+                        "codigo"                => $codigo->codigo,
+                        "observacion"           => $observacion_intercambio,
+                        "descripcion"           => "Se intercambio el documento {$documento_original} por el documento {$nuevo_ven_codigo}",
+                        "id_devolucion_header"  => $id_documento_origen,
+                        "id_libro"              => $codigo->id_libro,
+                        "user_created"          => $id_usuario
+                    ];
+                    $this->tr_saveHistoricoSon($formData);
+                }// end for codigosDevolucion son
+            }
+
+            // registrar en codigoslibros_devolucion_header regitrar el nuevo documento creado en el campo documentos_venta_generados
+            $headerDevolucion = CodigosLibrosDevolucionHeader::find($id_documento_origen);
+            if ($headerDevolucion) {
+                $documentosActuales = $headerDevolucion->documentos_venta_generados;
+
+                if (empty($documentosActuales) || is_null($documentosActuales)) {
+                    // Si está vacío o es null, colocar el documento sin comas
+                    $headerDevolucion->documentos_venta_generados = $nuevo_ven_codigo;
+                } else {
+                    // Si ya existe algo, agregar una coma y el nuevo documento
+                    $headerDevolucion->documentos_venta_generados = $documentosActuales . ',' . $nuevo_ven_codigo;
+                }
+
+                $headerDevolucion->save();
+            }
+
+            DB::commit();
+            return response()->json([
+                'status'     => 1,
+                'message'    => 'Documento creado correctamente',
+                'ven_codigo' => $nuevo_ven_codigo
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['status' => 0, 'message' => $e->getMessage()]);
+        }
+    }
+
+
     //api:get/devoluciones?getDocumentosDevolucion=1&creadas=1
     public function getDocumentosDevolucion(Request $request)
     {
@@ -907,21 +1214,22 @@ class DevolucionController extends Controller
     //api:post/devoluciones
     public function store(Request $request)
     {
-        if($request->validateBeforeCreate)      { return $this->validateBeforeCreate($request); }
-        if($request->devolverDocumentoBodega)   { return $this->devolverDocumentoBodega($request); }
-        if($request->updateDocumentoDevolucion) { return $this->updateDocumentoDevolucion($request); }
-        if($request->guardarComboDocumento)     { return $this->guardarComboDocumento($request); }
-        if($request->guardarDevolucionCombos)   { return $this->guardarDevolucionCombos($request); }
-        if($request->actualizarDatosDevolucion) { return $this->actualizarDatosDevolucion($request); }
-        if($request->returnToReview)            { return $this->returnToReview($request); }
-        if($request->CambioClienteDevolucion)   { return $this->CambioClienteDevolucion($request); }
-        if($request->finalizarDevolucionSueltos) { return $this->finalizarDevolucionSueltos($request); }
-        if($request->regresarEstadoDevuelto) { return $this->regresarEstadoDevuelto($request); }
-        if($request->actualizarPreciosEspeciales) { return $this->actualizarPreciosEspeciales($request); }
-        if($request->anulacionDevolucionSueltos) { return $this->anulacionDevolucionSueltos($request); }
-        if($request->eliminarDevolucionSueltos)  { return $this->eliminarDevolucionSueltos($request); }
+        if($request->validateBeforeCreate)          { return $this->validateBeforeCreate($request); }
+        if($request->devolverDocumentoBodega)       { return $this->devolverDocumentoBodega($request); }
+        if($request->updateDocumentoDevolucion)     { return $this->updateDocumentoDevolucion($request); }
+        if($request->guardarComboDocumento)         { return $this->guardarComboDocumento($request); }
+        if($request->guardarDevolucionCombos)       { return $this->guardarDevolucionCombos($request); }
+        if($request->actualizarDatosDevolucion)     { return $this->actualizarDatosDevolucion($request); }
+        if($request->returnToReview)                { return $this->returnToReview($request); }
+        if($request->CambioClienteDevolucion)       { return $this->CambioClienteDevolucion($request); }
+        if($request->finalizarDevolucionSueltos)    { return $this->finalizarDevolucionSueltos($request); }
+        if($request->regresarEstadoDevuelto)        { return $this->regresarEstadoDevuelto($request); }
+        if($request->actualizarPreciosEspeciales)   { return $this->actualizarPreciosEspeciales($request); }
+        if($request->anulacionDevolucionSueltos)    { return $this->anulacionDevolucionSueltos($request); }
+        if($request->eliminarDevolucionSueltos)     { return $this->eliminarDevolucionSueltos($request); }
         if($request->quitarCodigoDocumentoDevolucion) { return $this->quitarCodigoDocumentoDevolucion($request); }
         if($request->quitarCodigoDocumentoDevolucionComboEtiqueta) { return $this->quitarCodigoDocumentoDevolucionComboEtiqueta($request); }
+        if($request->intercambiarCodigosDocumento)  { return $this->intercambiarCodigosDocumento($request); }
     }
     //api:post/validateBeforeCreate=1
     public function validateBeforeCreate($request){
@@ -2759,6 +3067,69 @@ class DevolucionController extends Controller
         return $query;
     }
 
+    //api:get/devoluciones?documentoVentasIntercambios=1&id_devolucion=493
+    public function documentoVentasIntercambios($request){
+        $id_devolucion = $request->input('id_devolucion');
+
+        if (!$id_devolucion) {
+            return response()->json(['status' => '0', 'message' => 'El id_devolucion es requerido.'], 200);
+        }
+
+        // Obtener el registro de la tabla codigoslibros_devolucion_header
+        $header = DB::table('codigoslibros_devolucion_header')
+            ->where('id', $id_devolucion)
+            ->first();
+
+        if (!$header) {
+            return response()->json(['status' => '0', 'message' => 'No se encontró el documento de devolución.'], 200);
+        }
+
+        // Obtener el campo documentos_venta_generados
+        $documentos_venta_generados = $header->documentos_venta_generados;
+
+        if (!$documentos_venta_generados) {
+            return response()->json(['status' => '1', 'data' => []], 200);
+        }
+
+        // Separar los documentos por comas y limpiar espacios
+        $documentos_array = array_filter(array_map('trim', explode(',', $documentos_venta_generados)));
+
+        if (empty($documentos_array)) {
+            return response()->json(['status' => '1', 'data' => []], 200);
+        }
+
+        // Hacer LEFT JOIN con f_venta para obtener los detalles de cada documento
+        $ventas = DB::table('f_venta')
+            ->leftJoin('empresas', 'f_venta.id_empresa', '=', 'empresas.id')
+            ->leftJoin('institucion', 'f_venta.institucion_id', '=', 'institucion.idInstitucion')
+            ->leftJoin('usuario', 'f_venta.ven_cliente', '=', 'usuario.idusuario')
+            ->leftJoin('f_tipo_documento', 'f_venta.idtipodoc', '=', 'f_tipo_documento.tdo_id')
+            ->select(
+                'f_venta.ven_codigo',
+                'f_venta.ven_fecha',
+                'f_venta.ven_valor',
+                'f_venta.ven_subtotal',
+                'f_venta.ven_descuento',
+                'f_venta.ven_desc_por',
+                'f_venta.ven_iva',
+                'f_venta.id_empresa',
+                'f_venta.institucion_id',
+                'f_venta.idtipodoc',
+                'f_venta.est_ven_codigo',
+                'f_venta.ven_cliente',
+                'f_venta.ruc_cliente',
+                'empresas.nombre as nombre_empresa',
+                'empresas.descripcion_corta',
+                'institucion.nombreInstitucion',
+                'usuario.nombres as cliente_nombres',
+                'usuario.apellidos as cliente_apellidos',
+                'f_tipo_documento.tdo_nombre as tipo_documento'
+            )
+            ->whereIn('f_venta.ven_codigo', $documentos_array)
+            ->get();
+
+        return response()->json(['status' => '1', 'data' => $ventas], 200);
+    }
     //api:post/devoluciones/regresarEstadoDevuelto
     public function regresarEstadoDevuelto($request)
     {

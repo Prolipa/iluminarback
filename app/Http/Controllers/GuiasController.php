@@ -1027,11 +1027,11 @@ class GuiasController extends Controller
                 //get stock
                 $getStock           = _14Producto::obtenerProducto($codigoFact);
                 //prolipa
-                if($empresa == 1){
+                if($empresa == 1 || $empresa == 5){
                     $stockAnterior  = $getStock->pro_stock;
                 }
                 //calmed
-                if($empresa == 3){
+                if($empresa == 3 || $empresa == 4){
                     $stockAnterior  = $getStock->pro_stockCalmed;
                 }
 

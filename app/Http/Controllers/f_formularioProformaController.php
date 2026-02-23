@@ -78,9 +78,7 @@ class f_formularioProformaController extends Controller
 
     public function Post_Registrar_modificar_formularioProforma(Request $request)
     {
-        DB::beginTransaction();
-            try {
-            $this->ActualizarAutoIncrementable();
+        try {
             // Buscar el formularioProforma por su ffp_id o crear uno nuevo
             $formularioProforma = f_formulario_proforma::firstOrNew(['ffp_id' => $request->ffp_id]);
             // Asignar los demás datos del formularioProforma
@@ -95,25 +93,23 @@ class f_formularioProformaController extends Controller
                 // Si ya existe, omitir el campo user_created para evitar que se establezca en null
                 $formularioProforma->updated_at = now();
                 $formularioProforma->user_update = $request->user_update;
-                // Guardar el formularioProforma sin modificar user_created
-                $formularioProforma->save();
             } else {
                 // Si es un nuevo registro, establecer user_created y updated_at
                 $formularioProforma->updated_at = now();
                 $formularioProforma->user_created = $request->user_created;
-                $formularioProforma->save();
             }
-            // Verificar si el producto se guardó correctamente
-            if ($formularioProforma->wasRecentlyCreated || $formularioProforma->wasChanged()) {
-                DB::commit();
+            
+            // Intentar guardar
+            $guardado = $formularioProforma->save();
+            
+            if ($guardado) {
+                // Después de guardar exitosamente, actualizar el auto incrementable
+                $this->ActualizarAutoIncrementable();
                 return "Se guardó correctamente";
             } else {
-
-                DB::rollback();
                 return "No se pudo guardar/actualizar";
             }
         } catch (\Exception $e) {
-            DB::rollback();
             return response()->json(["status" => "0", 'message' => 'Error al actualizar los datos: ' . $e->getMessage()], 500);
         }
     }

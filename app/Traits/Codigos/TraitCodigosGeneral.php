@@ -2,6 +2,7 @@
 namespace App\Traits\Codigos;
 
 use App\Models\CodigosLibrosDevolucionSon;
+use App\Models\histCodigosSon;
 use DB;
 use App\Models\HistoricoCodigos;
 trait TraitCodigosGeneral{
@@ -56,7 +57,8 @@ trait TraitCodigosGeneral{
         c.porcentaje_descuento,  c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado,
         c.codigo_proforma,c.proforma_empresa, c.devuelto_proforma, ls.codigo_liquidacion,
         CONCAT(ase.nombres, ' ', ase.apellidos) as asesor, c.combo, c.codigo_combo, c.documento_devolucion, c.plus,
-        c.quitar_de_reporte, ls.nombre as book
+        c.quitar_de_reporte, ls.nombre as book,
+        e.descripcion_corta as descripcion_empresa
         FROM codigoslibros c
         LEFT JOIN usuario u ON c.idusuario = u.idusuario
         LEFT JOIN usuario ucr ON c.idusuario_creador_codigo = ucr.idusuario
@@ -67,6 +69,7 @@ trait TraitCodigosGeneral{
         LEFT JOIN periodoescolar pb ON c.bc_periodo = pb.idperiodoescolar
         LEFT JOIN libros_series as ls ON ls.idLibro = c.libro_idlibro
         LEFT JOIN usuario as ase ON c.asesor_id = ase.idusuario
+        LEFT JOIN empresas e ON c.proforma_empresa = e.id
         WHERE c.codigo LIKE '%$codigo%'");
         return $consulta;
     }
@@ -112,7 +115,8 @@ trait TraitCodigosGeneral{
         p.periodoescolar as periodo,
         pb.periodoescolar as periodo_barras,ivl.nombreInstitucion as InstitucionLista,
         c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado,c.codigo_proforma,c.proforma_empresa, c.devuelto_proforma,
-        ls.codigo_liquidacion, CONCAT(ase.nombres, " ", ase.apellidos) as asesor, c.combo,c.codigo_combo,c.documento_devolucion, c.plus, c.quitar_de_reporte, ls.nombre as book',
+        ls.codigo_liquidacion, CONCAT(ase.nombres, " ", ase.apellidos) as asesor, c.combo,c.codigo_combo,c.documento_devolucion, c.plus, c.quitar_de_reporte, ls.nombre as book,
+        e.descripcion_corta as descripcion_empresa',
 
         ))
         ->leftJoin('usuario as  u',         'c.idusuario',                  'u.idusuario')
@@ -122,7 +126,8 @@ trait TraitCodigosGeneral{
         ->leftJoin('institucion  as ivl',   'c.venta_lista_institucion',    'ivl.idInstitucion')
         ->leftJoin('periodoescolar as  p',  'c.id_periodo',                 'p.idperiodoescolar')
         ->leftJoin('periodoescolar as pb',  'c.bc_periodo',                 'pb.idperiodoescolar')
-        ->leftJoin('libros_series as ls',   'ls.idLibro',                   'c.libro_idlibro');
+        ->leftJoin('libros_series as ls',   'ls.idLibro',                   'c.libro_idlibro')
+        ->leftJoin('empresas as e',         'c.proforma_empresa',           'e.id');
         //por codigo
         if ($busqueda == 0) {  $resultado->where('c.codigo', '=', $codigo); }
         //por like codigo
@@ -217,6 +222,7 @@ trait TraitCodigosGeneral{
                 'devuelto_proforma'             => $item->devuelto_proforma,
                 'plus'                          => $item->plus,
                 'quitar_de_reporte'             => $item->quitar_de_reporte,
+                'descripcion_empresa'           => $item->descripcion_empresa,
             ];
         }
         return $datos;
@@ -365,6 +371,19 @@ trait TraitCodigosGeneral{
         $historico->tipo_tabla              = 1;
         $historico->save();
         return "Guardado en historico";
+    }
+
+    public function tr_saveHistoricoSon($request){
+        $hist = new histCodigosSon();
+        $hist->codigo                   = $request->codigo;
+        $hist->observacion              = $request->observacion;
+        $hist->descripcion              = $request->descripcion;
+        $hist->id_devolucion_header     = $request->id_devolucion_header;
+        $hist->id_libro                 = $request->id_libro;
+        $hist->user_created             = $request->user_created;
+        $hist->save();
+        return "Guardado en historico codigos son";
+
     }
     public function tr_GuardarDevolucionHijos($id_devolucion,$codigo,$pro_codigo,$id_cliente,$combo,$factura,$documento,$id_empresa,$tipo_venta,$id_periodo,$prueba_diagnostico,$codigo_union,$id_libro,$codigo_paquete,$estado_liquidacion,$regalado_liquidado,$precio,$tipo_importacion,$estado_codigo,$codigo_combo,$plus){
         //validar que si el codigo ya existe no guardar

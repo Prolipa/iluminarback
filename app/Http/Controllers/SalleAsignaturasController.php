@@ -18,6 +18,7 @@ class SalleAsignaturasController extends Controller
             FROM salle_asignaturas asi
             LEFT JOIN salle_areas  a ON asi.id_area = a.id_area
             LEFT JOIN salle_periodos_evaluacion p ON a.n_evaluacion = p.id
+            WHERE a.n_evaluacion = '$request->n_evaluacion'
         ");
         return $asignaturas;
     }

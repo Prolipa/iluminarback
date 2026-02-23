@@ -1,6 +1,7 @@
 <?php
 namespace App\Repositories\pedidos;
 
+use App\Models\_14Empresa;
 use App\Models\_14Producto;
 use App\Models\_14ProductoStockHistorico;
 use App\Models\DetalleVentas;
@@ -30,14 +31,15 @@ class  GuiaRepository extends BaseRepository
         if (!$getSecuencia) {
             return null;
         }
-
-        if ($empresa_id == 1) {
-            return ['secuencia' => $getSecuencia->tdo_secuencial_Prolipa, 'letra' => 'P'];
-        } elseif ($empresa_id == 3) {
-            return ['secuencia' => $getSecuencia->tdo_secuencial_calmed, 'letra' => 'C'];
+        $empresa = _14Empresa::find($empresa_id);
+        if (!$empresa) {
+            return null;
         }
 
-        return null;
+        $secuencia = _14Empresa::obtenerSecuenciaGuia($empresa_id, $getSecuencia);
+
+
+        return ['secuencia' => $secuencia, 'letra' => $empresa->letra_empresa];
     }
 
     /**
@@ -162,7 +164,7 @@ class  GuiaRepository extends BaseRepository
                 }
 
                 $stockAnteriorReserva   = $producto->pro_reservar;
-                $stockEmpresa           = $empresa_id == 1 ? $producto->pro_stock : ($empresa_id == 3 ? $producto->pro_stockCalmed : 0);
+                $stockEmpresa           = ($empresa_id == 1 || $empresa_id == 5) ? $producto->pro_stock : (($empresa_id == 3 || $empresa_id == 4) ? $producto->pro_stockCalmed : 0);
 
                 //tipo  0 => padre; 1 => pendientes
                 if($tipo == 0){

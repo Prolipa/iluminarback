@@ -18,6 +18,8 @@ class f_tipo_documento extends Model
         'tdo_nombre',
         'tdo_secuencial_calmed',
         'tdo_secuencial_Prolipa',
+        'tdo_secuencial_calmed2026',
+        'tdo_secuencial_Prolipa2026',
         'tdo_letra',
         'tdo_estado',
         'created_at',
@@ -26,7 +28,18 @@ class f_tipo_documento extends Model
     ];
     public function scopeObtenerSecuenciaXId($query, $id, $empresa)
     {
-        $campo = $empresa == 1 ? 'tdo_secuencial_Prolipa' : 'tdo_secuencial_calmed';
+        $campo = '';
+        if ($empresa == 1) {
+            $campo = 'tdo_secuencial_Prolipa';
+        } elseif ($empresa == 3) {
+            $campo = 'tdo_secuencial_calmed';
+        } elseif ($empresa == 4) {
+            $campo = 'tdo_secuencial_calmed2026';
+        } elseif ($empresa == 5) {
+            $campo = 'tdo_secuencial_Prolipa2026';
+        } else {
+            $campo = 'tdo_secuencial_SinEmpresa';
+        }
         return $query->where('tdo_id', $id)->select('tdo_id', $campo . ' as cod');
     }
 
@@ -54,8 +67,12 @@ class f_tipo_documento extends Model
         // Determinar la columna a actualizar basada en la empresa
         if ($empresa == 1) {
             $setEmpresa = 'tdo_secuencial_Prolipa';
-        } elseif ($empresa == 3) {
+        } else if ($empresa == 3) {
             $setEmpresa = 'tdo_secuencial_calmed';
+        } else if ($empresa == 4) {
+            $setEmpresa = 'tdo_secuencial_calmed2026';
+        } else if ($empresa == 5) {
+            $setEmpresa = 'tdo_secuencial_Prolipa2026';
         }
         // Si no se encontró una columna válida, retorna false
         if ($setEmpresa === '') {
@@ -68,16 +85,43 @@ class f_tipo_documento extends Model
     }
     public static function formatSecuencia($secuencia)
     {
-        // Asegúrate de que $secuencia sea un número entero
-        $secuencia = (int) $secuencia;
+        // Formato con 7 dígitos y ceros a la izquierda (ejemplo: 0001821)
+        return str_pad((int)$secuencia, 7, '0', STR_PAD_LEFT);
+    }
 
-        // Aplicar formato con ceros a la izquierda
-        if ($secuencia < 10) {
-            return str_pad($secuencia, 7, '0', STR_PAD_LEFT);
-        } elseif ($secuencia >= 10 && $secuencia < 1000) {
-            return str_pad($secuencia, 6, '0', STR_PAD_LEFT);
-        } elseif ($secuencia >= 1000) {
-            return str_pad($secuencia, 5, '0', STR_PAD_LEFT);
+    /**
+     * Incrementa y actualiza la secuencia de un tipo de documento
+     * @param int $tdo_id ID del tipo de documento
+     * @param int $id_empresa 1 para Prolipa, 3 para Calmed
+     * @return int Nueva secuencia actualizada
+     * @throws \Exception Si no se encuentra el documento o no se puede actualizar
+     */
+    public static function incrementarSecuencia($tdo_id, $id_empresa)
+    {
+        $tipo_doc = self::findOrFail($tdo_id);
+
+        // Determinar el campo de secuencia según la empresa
+        $campoSecuencia = '';
+        if ($id_empresa == 1) {
+            $campoSecuencia = 'tdo_secuencial_Prolipa';
+        } else if ($id_empresa == 3) {
+            $campoSecuencia = 'tdo_secuencial_calmed';
+        } else if ($id_empresa == 4) {
+            $campoSecuencia = 'tdo_secuencial_calmed2026';
+        } else if ($id_empresa == 5) {
+            $campoSecuencia = 'tdo_secuencial_Prolipa2026';
+        } else {
+            throw new \Exception("Empresa no válida. Debe ser 1 (Prolipa), 3 (Calmed), 4 (Calmed2026) o 5 (Prolipa2026)");
         }
+
+        // Obtener secuencia actual e incrementar
+        $secuenciaActual = (int) $tipo_doc->$campoSecuencia;
+        $nuevaSecuencia = $secuenciaActual + 1;
+
+        // Actualizar la secuencia
+        $tipo_doc->$campoSecuencia = $nuevaSecuencia;
+        $tipo_doc->save();
+
+        return $nuevaSecuencia;
     }
 }

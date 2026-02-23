@@ -780,9 +780,9 @@ class VentaPerseoController extends Controller
             $observacion = $venta->ven_observacion ?? 'Pedido';
             
             // Determinar qué columna de producto Perseo usar según empresa y ambiente
-            if ($empresa == 1) {
+            if ($empresa == 1 || $empresa == 5) {
                 $productoBuscar = $this->perseoProduccion == 0 ? 'id_perseo_prolipa' : 'id_perseo_prolipa_produccion';
-            } elseif ($empresa == 3) {
+            } elseif ($empresa == 3 || $empresa == 4) {
                 $productoBuscar = $this->perseoProduccion == 0 ? 'id_perseo_calmed' : 'id_perseo_calmed_produccion';
             } else {
                 throw new Exception('ID de empresa no válido');

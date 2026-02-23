@@ -152,7 +152,7 @@ class ProformaController extends Controller
 
     public function Get_DatosFactura(Request $request){
         $datos = [];
-        if($request->empresa == 1){
+        if($request->empresa == 1 || $request->empresa == 5){
             $array1 = DB::SELECT("SELECT fp.prof_id, fp.emp_id, dpr.det_prof_id, dpr.pro_codigo, dpr.det_prof_cantidad, dpr.det_prof_cantidad AS cantidad,dpr.det_prof_valor_u,
                 ls.nombre, s.nombre_serie, fp.pro_des_por, fp.prof_iva_por, p.pro_stock as facturas_prolipa, p.pro_stockCalmed as facturas_calmed,
                 p.pro_deposito as bodega_prolipa, p.pro_depositoCalmed as bodega_calmed, p.pro_reservar, l.descripcionlibro, ls.id_serie
@@ -164,7 +164,7 @@ class ProformaController extends Controller
                 INNER JOIN libro l ON ls.idLibro = l.idlibro
                 WHERe dpr.prof_id='$request->prof_id'
             ");
-        }else if($request->empresa == 3){
+        }else if($request->empresa == 3 || $request->empresa == 4){
             $array1 = DB::SELECT("SELECT fp.prof_id, fp.emp_id, dpr.det_prof_id, dpr.pro_codigo, dpr.det_prof_cantidad, dpr.det_prof_cantidad AS cantidad,dpr.det_prof_valor_u,
                 ls.nombre, s.nombre_serie, fp.pro_des_por, fp.prof_iva_por, p.pro_stock as facturas_prolipa, p.pro_stockCalmed as facturas_calmed,
                 p.pro_deposito as bodega_prolipa, p.pro_depositoCalmed as bodega_calmed, p.pro_reservar, l.descripcionlibro, ls.id_serie
@@ -441,6 +441,10 @@ class ProformaController extends Controller
             $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
         }else if ($request->id==3){
             $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+        }else if ($request->id==5){
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+        }else if ($request->id==4){
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
         }
         $getSecuencia = 1;
         $secuencia = "0000001"; // Valor por defecto
@@ -476,6 +480,12 @@ class ProformaController extends Controller
         }else if ($empresa==3){
             $letra = "C";
             $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+        }else if ($empresa==4){
+            $letra = "C26";
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+        }else if ($empresa==5){
+            $letra = "P26";
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
         }
         $getSecuencia = 1;
         $secuencia = "0000001"; // Valor por defecto
@@ -542,6 +552,10 @@ class ProformaController extends Controller
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             } else if ($request->emp_id == 3) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+            } else if ($request->emp_id == 4) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+            } else if ($request->emp_id == 5) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             }
     
             if (!empty($query1)) {
@@ -553,6 +567,10 @@ class ProformaController extends Controller
                     $tipo_doc->tdo_secuencial_Prolipa = $co;
                 } else if ($request->emp_id == 3) {
                     $tipo_doc->tdo_secuencial_calmed = $co;
+                } else if ($request->emp_id == 4) {
+                    $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                } else if ($request->emp_id == 5) {
+                    $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                 }
                 $tipo_doc->save();
             }
@@ -684,6 +702,10 @@ class ProformaController extends Controller
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             } else if ($request->emp_id == 3) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+            } else if ($request->emp_id == 4) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+            } else if ($request->emp_id == 5) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             }
     
             if (!empty($query1)) {
@@ -695,6 +717,10 @@ class ProformaController extends Controller
                     $tipo_doc->tdo_secuencial_Prolipa = $co;
                 } else if ($request->emp_id == 3) {
                     $tipo_doc->tdo_secuencial_calmed = $co;
+                } else if ($request->emp_id == 4) {
+                    $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                } else if ($request->emp_id == 5) {
+                    $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                 }
                 $tipo_doc->save();
             }
@@ -839,6 +865,10 @@ class ProformaController extends Controller
                             $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
                         }else if($request->emp_id==3){
                             $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+                        }else if($request->emp_id==4){
+                            $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+                        }else if($request->emp_id==5){
+                            $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
                         }
                         if(!empty($query1)){
                             $id=$query1[0]->id;
@@ -849,6 +879,10 @@ class ProformaController extends Controller
                                 $tipo_doc->tdo_secuencial_Prolipa = $co;
                             }else if($request->emp_id==3){
                                 $tipo_doc->tdo_secuencial_calmed = $co;
+                            }else if($request->emp_id==4){
+                                $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                            }else if($request->emp_id==5){
+                                $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                             }
                             $tipo_doc->save();
                         }
@@ -948,6 +982,10 @@ class ProformaController extends Controller
                             $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
                         }else if($request->emp_id==3){
                             $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+                        }else if($request->emp_id==4){
+                            $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+                        }else if($request->emp_id==5){
+                            $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
                         }
                         if(!empty($query1)){
                             $id=$query1[0]->id;
@@ -958,6 +996,10 @@ class ProformaController extends Controller
                                 $tipo_doc->tdo_secuencial_Prolipa = $co;
                             }else if($request->emp_id==3){
                                 $tipo_doc->tdo_secuencial_calmed = $co;
+                            }else if($request->emp_id==4){
+                                $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                            }else if($request->emp_id==5){
+                                $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                             }
                             $tipo_doc->save();
                         }
@@ -1205,7 +1247,7 @@ class ProformaController extends Controller
                                 }
                 
                                 // Ajustar el stock según la empresa
-                                if ($venta->id_empresa == 1) {
+                                if ($venta->id_empresa == 1 || $venta->id_empresa == 5) {
                                     if($venta->idtipodoc == 1){
                                         DB::table('1_4_cal_producto')
                                             ->where('pro_codigo', $detalle->pro_codigo)
@@ -1219,7 +1261,7 @@ class ProformaController extends Controller
                                                 'pro_deposito' => $producto->pro_deposito + (int)$detalle->det_ven_cantidad,
                                             ]);
                                     }
-                                } elseif ($venta->id_empresa == 3) {
+                                } elseif ($venta->id_empresa == 3 || $venta->id_empresa == 4) {
                                     if($venta->idtipodoc == 1){
                                         DB::table('1_4_cal_producto')
                                             ->where('pro_codigo', $detalle->pro_codigo)
@@ -1643,6 +1685,10 @@ class ProformaController extends Controller
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             } else if ($request->emp_id == 3) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+            } else if ($request->emp_id == 4) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+            } else if ($request->emp_id == 5) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             }
     
             if (!empty($query1)) {
@@ -1654,6 +1700,10 @@ class ProformaController extends Controller
                     $tipo_doc->tdo_secuencial_Prolipa = $co;
                 } else if ($request->emp_id == 3) {
                     $tipo_doc->tdo_secuencial_calmed = $co;
+                } else if ($request->emp_id == 4) {
+                    $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                } else if ($request->emp_id == 5) {
+                    $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                 }
                 $tipo_doc->save();
             }
@@ -1806,6 +1856,10 @@ class ProformaController extends Controller
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             } else if ($request->emp_id == 3) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+            }else if ($request->emp_id == 4) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+            } else if ($request->emp_id == 5) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             }
     
             if (!empty($query1)) {
@@ -1817,6 +1871,10 @@ class ProformaController extends Controller
                     $tipo_doc->tdo_secuencial_Prolipa = $co;
                 } else if ($request->emp_id == 3) {
                     $tipo_doc->tdo_secuencial_calmed = $co;
+                } else if ($request->emp_id == 4) {
+                    $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                } else if ($request->emp_id == 5) {
+                    $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                 }
                 $tipo_doc->save();
             }
@@ -2129,6 +2187,174 @@ class ProformaController extends Controller
     }
     
     /**
+     * Actualizar proforma de Perseo con sistema de reservas mejorado
+     * Recibe información de diferencias calculadas en el frontend para mejor control
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function Proforma_Perseo_Actualizar_Con_Reservas(Request $request)
+    {
+        try {
+            $miarray = json_decode($request->data_detalle);
+            $proforma_id = $request->proforma_id;
+            
+            if (!$proforma_id) {
+                return response()->json([
+                    "status" => 400,
+                    "message" => "El ID de la proforma es requerido"
+                ], 400);
+            }
+            
+            // Array para registrar cambios de reservas
+            $reservas_modificadas = [];
+            
+            DB::beginTransaction();
+    
+            // Buscar la proforma existente
+            $proforma = Proforma::findOrFail($proforma_id);
+    
+            // Actualizar datos de la proforma
+            $proforma->prof_observacion = $request->prof_observacion;
+            $proforma->prof_observacion_libreria = $request->prof_observacion_libreria ?? '';
+            $proforma->prof_com = $request->prof_com;
+            $proforma->prof_descuento = $request->prof_descuento;
+            $proforma->pro_des_por = $request->pro_des_por;
+            $proforma->prof_iva = $request->prof_iva;
+            $proforma->prof_iva_por = $request->prof_iva_por;
+            $proforma->prof_total = $request->prof_total;
+            $proforma->prof_estado = $request->prof_estado;
+            
+            // Actualizar lugar de despacho y cliente si vienen
+            if ($request->has('id_ins_depacho')) {
+                $proforma->id_ins_depacho = $request->id_ins_depacho;
+            }
+            if ($request->has('ven_cliente')) {
+                $proforma->ven_cliente = $request->ven_cliente;
+            }
+            if ($request->has('ruc_cliente')) {
+                $proforma->ruc_cliente = $request->ruc_cliente;
+            }
+            if ($request->has('clientesidPerseo')) {
+                $proforma->clientesidPerseo = $request->clientesidPerseo;
+            }
+            if ($request->has('emp_id')) {
+                $proforma->emp_id = $request->emp_id;
+            }
+            
+            $proforma->save();
+            
+            // Eliminar todos los detalles antiguos
+            DetalleProforma::where('prof_id', $proforma_id)->delete();
+            
+            // Procesar cada producto y actualizar reservas
+            foreach ($miarray as $item) {
+                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo : null;
+                $cantidad_nueva = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad : 0;
+                $precio = isset($item->det_prof_valor_u) ? $item->det_prof_valor_u : 0;
+                $diferencia_cantidad = isset($item->diferencia_cantidad) ? $item->diferencia_cantidad : 0;
+                $stock_perseo_actual = isset($item->stock_perseo_actual) ? $item->stock_perseo_actual : 0;
+                $contrato_detalle = isset($item->contrato) ? $item->contrato : ($request->contrato ? $request->contrato : null);
+                
+                if (!$pro_codigo || (int)$cantidad_nueva == 0) {
+                    continue;
+                }
+                
+                // Actualizar reserva_perseo según la diferencia
+                if ($diferencia_cantidad != 0) {
+                    // Obtener reserva anterior del producto
+                    $producto = DB::selectOne(
+                        'SELECT reserva_perseo FROM 1_4_cal_producto WHERE pro_codigo = ?',
+                        [$pro_codigo]
+                    );
+                    $reserva_anterior = $producto && $producto->reserva_perseo != null ? $producto->reserva_perseo : 0;
+                    
+                    if ($diferencia_cantidad > 0) {
+                        // Aumentó: validar stock disponible
+                        if ($stock_perseo_actual < $diferencia_cantidad) {
+                            DB::rollback();
+                            return response()->json([
+                                'status' => 400,
+                                'error' => 'STOCK_INSUFICIENTE',
+                                'message' => 'Stock insuficiente para el producto: ' . $pro_codigo,
+                                'productos_invalidos' => [[
+                                    'pro_codigo' => $pro_codigo,
+                                    'pro_nombre' => $item->nombre_libro ?? $pro_codigo,
+                                    'stock_actual' => $stock_perseo_actual,
+                                    'solicitado' => $cantidad_nueva,
+                                    'cantidad_original' => isset($item->cantidad_original) ? $item->cantidad_original : 0,
+                                    'aumento_requerido' => $diferencia_cantidad,
+                                    'faltante' => $diferencia_cantidad - $stock_perseo_actual,
+                                    'es_nuevo' => false
+                                ]]
+                            ], 400);
+                        }
+                        
+                        // Incrementar reserva
+                        DB::statement(
+                            'UPDATE 1_4_cal_producto 
+                             SET reserva_perseo = COALESCE(reserva_perseo, 0) + ? 
+                             WHERE pro_codigo = ?',
+                            [$diferencia_cantidad, $pro_codigo]
+                        );
+                    } else {
+                        // Disminuyó: liberar reserva
+                        DB::statement(
+                            'UPDATE 1_4_cal_producto 
+                             SET reserva_perseo = GREATEST(COALESCE(reserva_perseo, 0) - ?, 0) 
+                             WHERE pro_codigo = ?',
+                            [abs($diferencia_cantidad), $pro_codigo]
+                        );
+                    }
+                    
+                    // Registrar cambio
+                    $reservas_modificadas[] = [
+                        'pro_codigo' => $pro_codigo,
+                        'reserva_anterior' => $reserva_anterior,
+                        'reserva_nueva' => $reserva_anterior + $diferencia_cantidad,
+                        'diferencia' => $diferencia_cantidad
+                    ];
+                }
+                
+                // Crear nuevo detalle
+                $DetalleProforma = new DetalleProforma;
+                $DetalleProforma->prof_id = $proforma_id;
+                $DetalleProforma->pro_codigo = $pro_codigo;
+                $DetalleProforma->det_prof_cantidad = (int)$cantidad_nueva;
+                $DetalleProforma->det_prof_valor_u = $precio;
+                $DetalleProforma->stock_perseo = (int)$stock_perseo_actual;
+                
+                if ($contrato_detalle) {
+                    $DetalleProforma->contrato = $contrato_detalle;
+                }
+                
+                $DetalleProforma->save();
+            }
+    
+            DB::commit();
+    
+            return response()->json([
+                'status' => 200,
+                'message' => 'Proforma de Perseo actualizada correctamente. Reservas ajustadas.',
+                'proforma_id' => $proforma_id,
+                'prof_id' => $proforma->prof_id,
+                'productos_actualizados' => count($miarray),
+                'reservas_modificadas' => $reservas_modificadas,
+                'tipo' => 'perseo'
+            ], 200);
+            
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json([
+                "status" => 500,
+                "error" => $e->getMessage(),
+                "message" => "No se pudo actualizar la proforma Perseo",
+                "line" => $e->getLine()
+            ], 500);
+        }
+    }
+    
+    /**
      * Obtener libros proformados por contrato
      * Retorna la cantidad, descuento y totales de cada libro en las proformas del contrato
      */
@@ -2361,6 +2587,122 @@ class ProformaController extends Controller
                 "status" => 500,
                 "error" => $e->getMessage(),
                 "message" => "Error al obtener la proforma",
+                "line" => $e->getLine()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Obtener proforma para edición - Versión específica para Perseo con sistema de reservas
+     * Incluye información de reservas (reserva_perseo) y stock histórico (stock_perseo)
+     * 
+     * @param int $id ID de la proforma
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function get_proforma_para_editar_perseo($id, Request $request)
+    {
+        try {
+            $proforma_id = $id;
+            
+            // Obtener datos completos de la proforma incluyendo información de cupo
+            $proforma = DB::SELECT("
+                SELECT 
+                    fpr.id,
+                    fpr.prof_id,
+                    fpr.usu_codigo,
+                    fpr.pedido_id,
+                    fpr.emp_id,
+                    fpr.idPuntoventa,
+                    fpr.prof_observacion,
+                    fpr.prof_observacion_libreria,
+                    fpr.prof_com,
+                    fpr.prof_descuento,
+                    fpr.pro_des_por,
+                    fpr.prof_iva,
+                    fpr.prof_iva_por,
+                    fpr.prof_total,
+                    fpr.prof_estado,
+                    fpr.prof_tipo_proforma,
+                    fpr.idtipodoc,
+                    fpr.id_ins_depacho,
+                    fpr.ven_cliente,
+                    fpr.clientesidPerseo,
+                    fpr.ruc_cliente,
+                    fpr.contrato,
+                    fpr.created_at,
+                    em.id as empresa_id,
+                    em.nombre as empresa_nombre,
+                    i.idInstitucion as despacho_id,
+                    i.nombreInstitucion as despacho_nombre,
+                    i.ruc as despacho_ruc,
+                    i.direccionInstitucion as despacho_direccion,
+                    c.nombre as despacho_ciudad,
+                    CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, '')) AS cliente_nombre,
+                    uc.cedula as cliente_cedula,
+                    uc.email as cliente_email,
+                    uc.idusuario as cliente_idusuario,
+                    ffp.ffp_id,
+                    ffp.ffp_credito,
+                    ffp.ffp_cupo,
+                    ffp.ffp_descuento,
+                    ffp.if_distribuidor,
+                    p.tipo_venta
+                FROM f_proforma fpr
+                LEFT JOIN empresas em ON fpr.emp_id = em.id
+                LEFT JOIN usuario uc ON fpr.ven_cliente = uc.idusuario
+                LEFT JOIN institucion i ON fpr.id_ins_depacho = i.idInstitucion
+                LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
+                LEFT JOIN f_formulario_proforma ffp ON fpr.id_ins_depacho = ffp.idInstitucion
+                LEFT JOIN pedidos p ON fpr.pedido_id = p.id_pedido 
+                WHERE fpr.id = ?
+            ", [$proforma_id]);
+            
+            if (empty($proforma)) {
+                return response()->json([
+                    "status" => 404,
+                    "message" => "Proforma no encontrada"
+                ], 404);
+            }
+            
+            // Obtener detalles de la proforma con información de reservas de Perseo
+            $detalles = DB::SELECT("
+                SELECT 
+                    dp.det_prof_id,
+                    dp.prof_id,
+                    dp.pro_codigo,
+                    dp.det_prof_cantidad,
+                    dp.det_prof_valor_u,
+                    dp.contrato,
+                    dp.stock_perseo,
+                    p.pro_nombre as nombre_libro,
+                    p.pro_nombre as nombrelibro,
+                    p.reserva_perseo,
+                    p.pro_estado,
+                    dp.det_prof_valor_u as precio
+                FROM f_detalle_proforma dp
+                LEFT JOIN 1_4_cal_producto p ON dp.pro_codigo = p.pro_codigo
+                WHERE dp.prof_id = ?
+                ORDER BY dp.det_prof_id
+            ", [$proforma_id]);
+            
+            // Verificar si es la primera proforma del pedido
+            $esPrimera = $this->esPrimeraProforma($proforma[0]->pedido_id, $proforma_id);
+            
+            return response()->json([
+                "status" => 200,
+                "data" => [
+                    "proforma" => $proforma[0],
+                    "detalles" => $detalles,
+                    "es_primera_proforma" => $esPrimera
+                ]
+            ], 200);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                "status" => 500,
+                "error" => $e->getMessage(),
+                "message" => "Error al obtener la proforma de Perseo",
                 "line" => $e->getLine()
             ], 500);
         }
@@ -3113,7 +3455,8 @@ class ProformaController extends Controller
         try {
             // 1. Obtener información completa del tipo de documento CON BLOQUEO DE FILA
             // Esto previene que dos procesos obtengan el mismo secuencial simultáneamente
-            $tipoDoc = DB::SELECT("SELECT tdo_id, tdo_nombre, tdo_letra, tdo_secuencial_Prolipa, tdo_secuencial_calmed, tdo_secuencial_SinEmpresa 
+            $tipoDoc = DB::SELECT("SELECT tdo_id, tdo_nombre, tdo_letra, 
+                tdo_secuencial_Prolipa, tdo_secuencial_calmed, tdo_secuencial_SinEmpresa, tdo_secuencial_Prolipa2026, tdo_secuencial_calmed2026
                 FROM f_tipo_documento 
                 WHERE tdo_id = ?
                 FOR UPDATE", [$tipoDocumento]);
@@ -3135,6 +3478,12 @@ class ProformaController extends Controller
             } else if ($empresa == 3) {
                 $letraEmpresa = 'C';
                 $secuenciaActual = $tipoDoc[0]->tdo_secuencial_calmed;
+            } else if ($empresa == 4) {
+                $letraEmpresa = 'C26';
+                $secuenciaActual = $tipoDoc[0]->tdo_secuencial_calmed2026;
+            } else if ($empresa == 5) {
+                $letraEmpresa = 'P26';
+                $secuenciaActual = $tipoDoc[0]->tdo_secuencial_Prolipa2026;
             } else {
                 $letraEmpresa = 'SE';
                 $secuenciaActual = $tipoDoc[0]->tdo_secuencial_SinEmpresa;
@@ -3272,12 +3621,13 @@ class ProformaController extends Controller
                     fv.ven_transporte,
                     fv.ven_valor,
                     fv.ven_observacion,
+                    fv.ven_desc_por,
                     fv.user_created,
                     fv.ven_fecha,
                     fv.periodo_id,
                     fv.ven_tipo_inst,
-                    fpr.contrato,
-                    fpr.prof_id,
+                    fv.contrato,
+                    fv.ven_p_libros_obsequios,
                     em.id as empresa_id,
                     em.nombre as empresa_nombre,
                     em.img_base64 as empresa_logo,
@@ -3305,28 +3655,47 @@ class ProformaController extends Controller
                     CONCAT(COALESCE(ua.nombres, ''), ' ', COALESCE(ua.apellidos, '')) AS anulado_por,
                     fv.user_anulado,
                     fv.estadoPerseo,
-                    fv.anuladoEnPerseo
+                    fv.anuladoEnPerseo,
+                    fv.pedido_codigo,
+                    fv.fecha_envio_perseo
                 FROM f_venta fv
-                LEFT JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma
                 LEFT JOIN empresas em ON fv.id_empresa = em.id
-                LEFT JOIN institucion i ON fpr.id_ins_depacho = i.idInstitucion
-                LEFT JOIN usuario uc ON fpr.ven_cliente = uc.idusuario
+                LEFT JOIN institucion i ON fv.institucion_id = i.idInstitucion
+                LEFT JOIN usuario uc ON fv.ven_cliente = uc.idusuario
                 LEFT JOIN usuario usr ON fv.user_created = usr.idusuario
                 LEFT JOIN usuario ua ON fv.user_anulado = ua.idusuario
                 LEFT JOIN f_detalle_venta dfv ON fv.ven_codigo = dfv.ven_codigo AND fv.id_empresa = dfv.id_empresa
                 LEFT JOIN f_tipo_documento td ON fv.idtipodoc = td.tdo_id
-                WHERE fpr.contrato = ?
-                GROUP BY fv.ven_codigo, fv.id_empresa, fv.ven_idproforma, fv.est_ven_codigo, 
+                WHERE fv.contrato = ?
+                GROUP BY fv.ven_codigo, fv.id_empresa, fv.est_ven_codigo, 
                          fv.idtipodoc, fv.ven_subtotal, fv.ven_descuento, fv.ven_iva, 
-                         fv.ven_transporte, fv.ven_valor, fv.ven_observacion, fv.user_created,
-                         fv.ven_fecha, fv.periodo_id,
-                         fpr.contrato, fpr.prof_id, em.id, em.nombre, em.img_base64,
+                         fv.ven_transporte, fv.ven_valor, fv.ven_observacion, fv.ven_desc_por, fv.user_created,
+                         fv.ven_fecha, fv.periodo_id, fv.ven_tipo_inst, fv.ven_idproforma,
+                         fv.contrato, em.id, em.nombre, em.img_base64,
                          uc.nombres, uc.apellidos, uc.cedula, uc.email,
                          i.idInstitucion, i.nombreInstitucion, i.ruc, i.direccionInstitucion, i.telefonoInstitucion,
                          usr.nombres, usr.apellidos, usr.cedula, td.tdo_id, td.tdo_nombre,
-                         ua.nombres, ua.apellidos, fv.user_anulado, fv.estadoPerseo, fv.anuladoEnPerseo
+                         ua.nombres, ua.apellidos, fv.user_anulado, fv.estadoPerseo, fv.anuladoEnPerseo,
+                         fv.pedido_codigo, fv.fecha_envio_perseo,fv.ven_p_libros_obsequios
                 ORDER BY fv.ven_fecha DESC
             ", [$contrato]);
+            
+            // Calcular total del pedido (suma de ventas no anuladas)
+            $totalPedido = array_reduce($ventas, function($carry, $venta) {
+                if ($venta->est_ven_codigo != 3) { // No incluir anuladas
+                    return $carry + floatval($venta->ven_valor);
+                }
+                return $carry;
+            }, 0);
+            
+            // Agregar porcentaje a cada venta
+            foreach ($ventas as $venta) {
+                if ($totalPedido > 0 && $venta->est_ven_codigo != 3) {
+                    $venta->porcentaje_pedido = round((floatval($venta->ven_valor) / $totalPedido) * 100, 2);
+                } else {
+                    $venta->porcentaje_pedido = 0;
+                }
+            }
             
             return response()->json([
                 "status" => 200,
@@ -3375,8 +3744,7 @@ class ProformaController extends Controller
                 FROM f_detalle_venta dv
                 INNER JOIN f_venta fv ON dv.ven_codigo = fv.ven_codigo AND dv.id_empresa = fv.id_empresa
                 INNER JOIN 1_4_cal_producto p ON dv.pro_codigo = p.pro_codigo
-                INNER JOIN f_proforma fp ON fv.ven_idproforma = fp.prof_id
-                WHERE fp.contrato = ?
+                WHERE fv.contrato = ?
                 AND fv.est_ven_codigo <> 3
                 GROUP BY dv.pro_codigo, fv.ven_desc_por
                 ORDER BY MAX(p.pro_nombre), fv.ven_desc_por
@@ -3478,9 +3846,9 @@ class ProformaController extends Controller
         // Determinar el campo de stock principal según empresa y tipo de documento
         $campoPrincipal = '';
         
-        if ($empresa == 1) { // PROLIPA
+        if ($empresa == 1 || $empresa == 5) { // PROLIPA
             $campoPrincipal = ($tipoDocumento == 1) ? 'pro_stock' : 'pro_deposito';
-        } elseif ($empresa == 3) { // CALMED
+        } elseif ($empresa == 3 || $empresa == 4) { // CALMED
             $campoPrincipal = ($tipoDocumento == 1) ? 'pro_stockCalmed' : 'pro_depositoCalmed';
         }
         
@@ -3562,7 +3930,7 @@ class ProformaController extends Controller
         $pro = _14Producto::findOrFail($item->pro_codigo);
         
         // PROLIPA (empresa 1)
-        if($id_empresa == 1){
+        if($id_empresa == 1 || $id_empresa == 5){
             if($tipo == 1){
                 // Factura → devolver a pro_stock
                 $pro->pro_stock = $co;
@@ -3574,7 +3942,7 @@ class ProformaController extends Controller
         }
         
         // CALMED (empresa 3)
-        if($id_empresa == 3){
+        if($id_empresa == 3 || $id_empresa == 4){
             if($tipo == 1){
                 // Factura → devolver a pro_stockCalmed
                 $pro->pro_stockCalmed = $co;
@@ -3690,7 +4058,7 @@ class ProformaController extends Controller
             // Regresar el stock de cada producto
             foreach ($detalleVenta as $item) {
                 // Obtener el stock actual del campo correspondiente
-                if ($request->empresa == 1) {
+                if ($request->empresa == 1 || $request->empresa == 5) {
                     if ($request->tipodoc == 1) {
                         // PROLIPA Factura → pro_stock
                         $query1 = DB::SELECT("SELECT pro_stock as stoc FROM 1_4_cal_producto WHERE pro_codigo='$item->pro_codigo'");
@@ -3700,7 +4068,7 @@ class ProformaController extends Controller
                     }
                 }
                 
-                if ($request->empresa == 3) {
+                if ($request->empresa == 3 || $request->empresa == 4) {
                     if ($request->tipodoc == 1) {
                         // CALMED Factura → pro_stockCalmed
                         $query1 = DB::SELECT("SELECT pro_stockCalmed as stoc FROM 1_4_cal_producto WHERE pro_codigo='$item->pro_codigo'");

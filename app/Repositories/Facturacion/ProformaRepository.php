@@ -158,6 +158,10 @@ class  ProformaRepository extends BaseRepository
             $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-FACTURA'");
         }else if ($empresa==3){
             $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-FACTURA'");
+        }else if ($empresa==4){
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-FACTURA'");
+        }else if ($empresa==5){
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-FACTURA'");
         }
         $getSecuencia = 1;
         if(!empty($query1)){
@@ -212,7 +216,7 @@ class  ProformaRepository extends BaseRepository
             $stockAnteriorReserva       = $getStock->pro_reservar;
 
             // Prolipa
-            if ($proforma_empresa == 1) {
+            if ($proforma_empresa == 1 || $proforma_empresa == 5) {
                 if ($documentoPrefactura == 0) {
                     $stockEmpresa = $getStock->pro_stock;
                 }
@@ -222,7 +226,7 @@ class  ProformaRepository extends BaseRepository
             }
 
             // Calmed
-            if ($proforma_empresa == 3) {
+            if ($proforma_empresa == 3 || $proforma_empresa == 4) {
                 if ($documentoPrefactura == 0) {
                     $stockEmpresa = $getStock->pro_stockCalmed;
                 }
@@ -263,7 +267,7 @@ class  ProformaRepository extends BaseRepository
             $stockAnteriorReserva       = $getStock->pro_reservar;
 
             // Prolipa
-            if ($proforma_empresa == 1) {
+            if ($proforma_empresa == 1 || $proforma_empresa == 5) {
                 if ($documentoPrefactura == 0) {
                     $stockEmpresa = $getStock->pro_stock;
                 }
@@ -273,7 +277,7 @@ class  ProformaRepository extends BaseRepository
             }
 
             // Calmed
-            if ($proforma_empresa == 3) {
+            if ($proforma_empresa == 3 || $proforma_empresa == 4) {
                 if ($documentoPrefactura == 0) {
                     $stockEmpresa = $getStock->pro_stockCalmed;
                 }

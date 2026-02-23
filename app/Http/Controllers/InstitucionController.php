@@ -347,7 +347,7 @@ class InstitucionController extends Controller
         $instituciones = DB::SELECT("SELECT i.*, c.nombre as nombre_ciudad,
         concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad,
          sc.fecha_inicio, sc.fecha_fin, sc.ver_respuestas, sc.observaciones,
-         sc.cant_evaluaciones
+         sc.cant_evaluaciones, sc.intentos_ventana
          FROM institucion i
          INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
          LEFT JOIN salle_configuracion sc ON i.id_configuracion = sc.id_configuracion
@@ -372,6 +372,7 @@ class InstitucionController extends Controller
                     "cant_evaluaciones" => $query[0]->cant_evaluaciones,
                     "ver_respuestas"    => $query[0]->ver_respuestas,
                     "observaciones"     => $query[0]->observaciones,
+                    "intentos_ventana"  => $query[0]->intentos_ventana,
                     "n_evaluacion"      => $query[0]->n_evaluacion
                 ];
             }else{
@@ -388,7 +389,7 @@ class InstitucionController extends Controller
                     "cant_evaluaciones" => null,
                     "ver_respuestas"    => null,
                     "observaciones"     => null,
-                    "n_evaluacion"      => null
+                    "intentos_ventana"  => null,
                 ];
             }
             $contador++;
@@ -447,6 +448,7 @@ class InstitucionController extends Controller
         $configuracion->ver_respuestas      = $request->ver_respuestas;
         $configuracion->observaciones       = $request->observaciones;
         $configuracion->cant_evaluaciones   = $request->cant_evaluaciones;
+        $configuracion->intentos_ventana    = $request->intentos_ventana;
         $configuracion->save();
         if( $request->id_configuracion == 0 ){
             DB::UPDATE("UPDATE `institucion` SET `id_configuracion` = $configuracion->id_configuracion

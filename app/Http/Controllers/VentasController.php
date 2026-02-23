@@ -465,10 +465,16 @@ class VentasController extends Controller
         return $query;
     }
     public function Get_CodVenta(Request $request){
+        $query1 = [];
+        $array  = null;
         if($request->id==1){
             $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_Prolipa as cod from  f_tipo_documento where tdo_letra='$request->letra'");
         }else if ($request->id==3){
             $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed as cod from  f_tipo_documento where tdo_letra='$request->letra'");
+        }else if ($request->id==4){
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed2026 as cod from  f_tipo_documento where tdo_letra='$request->letra'");
+        }else if ($request->id==5){
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_Prolipa2026 as cod from  f_tipo_documento where tdo_letra='$request->letra'");
         }
         $pre="$request->letra";
         $getSecuencia = 1;
@@ -708,6 +714,10 @@ class VentasController extends Controller
                     $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from  f_tipo_documento where tdo_letra='$request->letra'");
                 }else if ($request->id_empresa==3){
                     $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from  f_tipo_documento where tdo_letra='$request->letra'");
+                }else if ($request->id_empresa==4){
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from  f_tipo_documento where tdo_letra='$request->letra'");
+                }else if ($request->id_empresa==5){
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from  f_tipo_documento where tdo_letra='$request->letra'");
                 }
                 $id=$query1[0]->id;
                 $codi=$query1[0]->cod;
@@ -717,6 +727,10 @@ class VentasController extends Controller
                     $tipo_doc->tdo_secuencial_Prolipa = $co;
                 }else if ($request->id_empresa==3){
                     $tipo_doc->tdo_secuencial_calmed = $co;
+                }else if ($request->id_empresa==4){
+                    $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                }else if ($request->id_empresa==5){
+                    $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                 }
                 $tipo_doc->save();
                 foreach($miarray as $key => $item){
@@ -726,7 +740,7 @@ class VentasController extends Controller
                         //l 1 => facturas; 3 y 4 notas
                         //id_empresa 1 => Prolipa; 2 = Iluminar; 3 = Grupo Calmed
                         //si es prolipa id_empresa=1
-                        if($id_empresa==1){
+                        if($id_empresa==1 || $id_empresa==5){
                             if($request->l==1){
                                 $query2 = DB::SELECT("SELECT pro_stock as stoc from 1_4_cal_producto where pro_codigo='$item->pro_codigo'");
                             }else{
@@ -734,7 +748,7 @@ class VentasController extends Controller
                             }
                         }
                         //grupo calmed
-                        if($id_empresa==3){
+                        if($id_empresa==3 || $id_empresa==4){
                             if($request->l==1){
                                 $query2 = DB::SELECT("SELECT pro_stockCalmed as stoc from 1_4_cal_producto where pro_codigo='$item->pro_codigo'");
                             }else{
@@ -849,7 +863,7 @@ class VentasController extends Controller
     public function descontarStock($codi, $item, $tipo, $id_empresa)
     {
         $pro_codigo_recibido = _14Producto::findOrFail($item->pro_codigo);
-        if (!in_array($id_empresa, [1, 3])) {
+        if (!in_array($id_empresa, [1, 3, 4, 5])) {
             return 'Empresa no controlada';
         }
         // Guardar valores antes de actualizar (old_values)
@@ -862,7 +876,7 @@ class VentasController extends Controller
             'pro_depositoCalmed' => $pro_codigo_recibido->pro_depositoCalmed,
         ];
         // Definir los campos en el orden correcto según empresa y tipo
-        if ($id_empresa == 1) {
+        if ($id_empresa == 1 || $id_empresa == 5) {
             if ($tipo == 1) {
                 $campos = ['pro_stock', 'pro_deposito', 'pro_stockCalmed', 'pro_depositoCalmed'];
             } else if ($tipo == 3 || $tipo == 4) {
@@ -870,7 +884,7 @@ class VentasController extends Controller
             } else {
                 return 'Tipo no controlado';
             }
-        } else { // id_empresa == 3
+        } else if ($id_empresa == 3 || $id_empresa == 4) {
             if ($tipo == 1) {
                 $campos = ['pro_stockCalmed', 'pro_depositoCalmed', 'pro_stock', 'pro_deposito'];
             } else if ($tipo == 3 || $tipo == 4) {
@@ -955,7 +969,7 @@ class VentasController extends Controller
                     ]);
                     foreach($miarray as $key => $item){
                         //con pro_stock y  pro_reservar
-                        if($request->empresa==1){
+                        if($request->empresa==1 || $request->empresa==5){
                             if($request->tipodoc==1){
                                 $query1 = DB::SELECT("SELECT pro_stock as stoc, pro_reservar as res from 1_4_cal_producto where pro_codigo='$item->pro_codigo'");
                             }else{
@@ -963,13 +977,14 @@ class VentasController extends Controller
                             }
                         }
                         //grupo calmed
-                        if($request->empresa==3){
+                        if($request->empresa==3 || $request->empresa==4){
                             if($request->tipodoc==1){
                                 $query1 = DB::SELECT("SELECT pro_stockCalmed as stoc, pro_reservar as res from 1_4_cal_producto where pro_codigo='$item->pro_codigo'");
                             }else{
                                 $query1 = DB::SELECT("SELECT pro_depositoCalmed as stoc, pro_reservar as res from 1_4_cal_producto where pro_codigo='$item->pro_codigo'");
                             }
                         }
+                        
                         //obtener stock y reservar o bodega general
                         $codi       = $query1[0]->stoc;
                         // $res        = $query1[0]->res;
@@ -1028,7 +1043,7 @@ class VentasController extends Controller
         $co         = (int)$codi+(int)$item->det_ven_cantidad;
         $pro        = _14Producto::findOrFail($item->pro_codigo);
         //PROLIPA
-        if($id_empresa ==1){
+        if($id_empresa ==1 || $id_empresa == 5){
             // $pro->pro_reservar          = $re;
             if($tipo==1){
                 $pro->pro_stock         = $co;
@@ -1038,7 +1053,7 @@ class VentasController extends Controller
             $pro->save();
         }
         //CALMED
-        if($id_empresa ==3){
+        if($id_empresa ==3 || $id_empresa == 4){
             // $pro->pro_reservar          = $re;
             if($tipo==1){
                 $pro->pro_stockCalmed   = $co;
@@ -1622,6 +1637,10 @@ class VentasController extends Controller
                     $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from  f_tipo_documento where tdo_id=11");
                 }else if ($request->id_empresa==3){
                     $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from  f_tipo_documento where tdo_id=11");
+                }else if ($request->id_empresa==4){
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from  f_tipo_documento where tdo_id=11");
+                }else if ($request->id_empresa==5){
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from  f_tipo_documento where tdo_id=11");
                 }
                 $id=$query1[0]->id;
                 $codi=$query1[0]->cod;
@@ -1631,6 +1650,10 @@ class VentasController extends Controller
                     $tipo_doc->tdo_secuencial_Prolipa = $co;
                 }else if ($request->id_empresa==3){
                     $tipo_doc->tdo_secuencial_calmed = $co;
+                }else if ($request->id_empresa==4){
+                    $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                }else if ($request->id_empresa==5){
+                    $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                 }
                 $tipo_doc->save();
                 foreach($miarray as $key => $item){
@@ -1725,7 +1748,12 @@ class VentasController extends Controller
                         $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_id=11");
                     }else if ($request->id_empresa==3){
                         $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_id=11");
+                    }else if ($request->id_empresa==4){
+                        $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_id=11");
+                    }else if ($request->id_empresa==5){
+                        $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_id=11");
                     }
+                    
                     $id=$query1[0]->id;
                     $codi=$query1[0]->cod;
                     $co=(int)$codi+1;
@@ -1734,6 +1762,10 @@ class VentasController extends Controller
                         $tipo_doc->tdo_secuencial_Prolipa = $co;
                     }else if ($request->id_empresa==3){
                         $tipo_doc->tdo_secuencial_calmed = $co;
+                    }else if ($request->id_empresa==4){
+                        $tipo_doc->tdo_secuencial_calmed2026 = $co;
+                    }else if ($request->id_empresa==5){
+                        $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
                     }
                     $tipo_doc->save();
 
@@ -1789,6 +1821,12 @@ class VentasController extends Controller
             $siguienteSecuencial = $query[0]->secuencial + 1;
         } else if($request->id_empresa == 3){
             $query = DB::SELECT("SELECT tdo_secuencial_calmed as secuencial FROM f_tipo_documento WHERE tdo_id = 11");
+            $siguienteSecuencial = $query[0]->secuencial + 1;
+        } else if($request->id_empresa == 4){
+            $query = DB::SELECT("SELECT tdo_secuencial_calmed2026 as secuencial FROM f_tipo_documento WHERE tdo_id = 11");
+            $siguienteSecuencial = $query[0]->secuencial + 1;
+        } else if($request->id_empresa == 5){
+            $query = DB::SELECT("SELECT tdo_secuencial_Prolipa2026 as secuencial FROM f_tipo_documento WHERE tdo_id = 11");
             $siguienteSecuencial = $query[0]->secuencial + 1;
         }
 
@@ -3179,12 +3217,12 @@ class VentasController extends Controller
         // Procesamos cada producto recibido
         foreach ($datos as $producto) {
             // Verificamos según la empresa
-            if ($producto['empresa'] == 1) {
+            if ($producto['empresa'] == 1 || $producto['empresa'] == 5) {
                 // Verificamos el stock de la empresa 1
                 $stockDisponible = DB::table('1_4_cal_producto')
                     ->where('pro_codigo', $producto['codigo'])
                     ->value('pro_stock');
-            } elseif ($producto['empresa'] == 3) {
+            } elseif ($producto['empresa'] == 3 || $producto['empresa'] == 4) {
                 // Verificamos el stock de la empresa 3
                 $stockDisponible = DB::table('1_4_cal_producto')
                     ->where('pro_codigo', $producto['codigo'])
@@ -3579,6 +3617,20 @@ class VentasController extends Controller
                 }else if ($tipoVenta==2){
                     $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from  f_tipo_documento where tdo_id=3");
                 }
+            }else if ($empresa==4){
+                if($tipoVenta==1){
+
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from  f_tipo_documento where tdo_id=4");
+                }else if ($tipoVenta==2){
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from  f_tipo_documento where tdo_id=3");
+                }
+            }else if ($empresa==5){
+                if($tipoVenta==1){
+
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from  f_tipo_documento where tdo_id=4");
+                }else if ($tipoVenta==2){
+                    $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from  f_tipo_documento where tdo_id=3");
+                }
             }
 
             $id=$query1[0]->id;
@@ -3589,6 +3641,10 @@ class VentasController extends Controller
                 $tipo_doc->tdo_secuencial_Prolipa = $co;
             }else if ($empresa==3){
                 $tipo_doc->tdo_secuencial_calmed = $co;
+            }else if ($empresa==4){
+                $tipo_doc->tdo_secuencial_calmed2026 = $co;
+            }else if ($empresa==5){
+                $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
             }
             $tipo_doc->save();
 
@@ -3684,6 +3740,10 @@ class VentasController extends Controller
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from  f_tipo_documento where tdo_id=16");
             } else if ($empresa == 3) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from  f_tipo_documento where tdo_id=16");
+            } else if ($empresa == 4) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed2026 as cod from  f_tipo_documento where tdo_id=16");
+            } else if ($empresa == 5) {
+                $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from  f_tipo_documento where tdo_id=16");
             }
 
             $id = $query1[0]->id;
@@ -3694,6 +3754,10 @@ class VentasController extends Controller
                 $tipo_doc->tdo_secuencial_Prolipa = $co;
             } else if ($empresa == 3) {
                 $tipo_doc->tdo_secuencial_calmed = $co;
+            } else if ($empresa == 4) {
+                $tipo_doc->tdo_secuencial_calmed2026 = $co;
+            } else if ($empresa == 5) {
+                $tipo_doc->tdo_secuencial_Prolipa2026 = $co;
             }
             $tipo_doc->save();
 
