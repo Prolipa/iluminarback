@@ -11,6 +11,7 @@ use App\Models\Pedidos;
 use App\Models\Pedidos_val_area_new;
 use App\Models\PedidoValArea;
 use App\Models\Ventas;
+use App\Models\Usuario;
 use App\Repositories\BaseRepository;
 use App\Repositories\Codigos\CodigosRepository;
 use DB;
@@ -53,9 +54,6 @@ class  GuiaRepository extends BaseRepository
         return 'A-' . $letra . '-' . $request->codigo_contrato . '-' . $request->codigo_usuario_fact . '-' . $format_id_pedido;
     }
 
-    /**
-     * Actualizar los datos del pedido.
-     */
     public function actualizarGuia($request, $codigo_ven, $secuenciaData, $tipo)
     {
         try {
@@ -82,6 +80,68 @@ class  GuiaRepository extends BaseRepository
             f_tipo_documento::updateSecuencia("GUIA", $request->empresa_id, $secuencia);
         } catch (\Exception $e) {
             // Manejar la excepción
+            throw new \Exception("Error al actualizar la guía: " . $e->getMessage());
+        }
+    }
+    /**
+     * Actualizar los datos del pedido.
+     */
+    public function actualizarGuiaPerseo($guias_send, $empresa_id, $id_pedido, $secuenciaData)
+    {
+        try {
+
+            if (empty($guias_send)) {
+                throw new \Exception("No se enviaron guías para procesar.");
+            }
+
+            $isCompleted = 1; // 1 = completado, 0 = con pendientes
+
+            foreach ($guias_send as $guia) {
+
+                if (!isset($guia->codigoFact) || !isset($guia->cantidad_solicitada)) {
+                    throw new \Exception("Datos incompletos en la guía enviada.");
+                }
+
+                if (!is_numeric($guia->cantidad_solicitada)) {
+                    throw new \Exception("La cantidad_solicitada para el producto {$guia->codigoFact} no es válido.");
+                }
+
+                $cantidadAutorizada =  DetalleVentas::join('f_venta', function($join) {
+                    $join->on('f_venta.id_empresa', '=', 'f_detalle_venta.id_empresa')
+                        ->on('f_venta.ven_codigo', '=', 'f_detalle_venta.ven_codigo');
+                })
+                ->where('f_detalle_venta.pro_codigo', $guia->codigoFact)
+                ->where('f_venta.est_ven_codigo', '<>', 3)
+                ->where('f_venta.id_pedido_guia', $id_pedido)
+                ->sum('f_detalle_venta.det_ven_cantidad');
+
+                if ($cantidadAutorizada <= 0) {
+                    throw new \Exception("No existe detalle de venta autorizado para el producto {$guia->codigoFact}.");
+                }
+
+                $totalPedida     = (int) $guia->cantidad_solicitada;
+                $totalAutorizado = (int) $cantidadAutorizada;
+
+                // Si no coincide exactamente, queda como pendiente
+                if ($totalPedida !== $totalAutorizado) {
+                    $isCompleted = 0;
+                }
+            }
+
+            $estadoEntrega = $isCompleted === 1 ? 1 : 3;
+
+            // Actualizar secuencia
+            $secuencia = $secuenciaData['secuencia'] + 1;
+            f_tipo_documento::updateSecuencia("GUIA", $empresa_id, $secuencia);
+
+            // Actualizar pedido (lanza excepción si no existe)
+            $pedido = Pedidos::findOrFail($id_pedido);
+            $pedido->estado_entrega = $estadoEntrega;
+            $pedido->save();
+
+            return true;
+
+        } catch (\Exception $e) {
             throw new \Exception("Error al actualizar la guía: " . $e->getMessage());
         }
     }
@@ -201,7 +261,7 @@ class  GuiaRepository extends BaseRepository
                         'psh_old_values'                        => json_encode($groupedOldValues),
                         'psh_new_values'                        => json_encode($groupedNewValues),
                         'psh_tipo'                              => 13,
-                        'id_pedido_guias'                       => $id_pedido,
+                        'id_pedido'                             => $id_pedido,
                         'user_created'                          => $user_created,
                         'created_at'                            => now(),
                         'updated_at'                            => now(),
@@ -261,7 +321,70 @@ class  GuiaRepository extends BaseRepository
         return array_values($grouped);
     }
 
-    public function crearVenta($codigo_ven, $id_empresa, $id_periodo, $user_created, $idPadre)
+    public function crearVentaPerseo($codigo_ven, $id_empresa, $id_periodo, $user_created, $idPadre,$ven_cliente,$ruc_cliente,$id_cliente_perseo, $ven_observacion, $ven_concepto_perseo)
+    {
+        try {
+            // Verificar si ya existe un registro con el mismo ven_codigo
+            $ventaExistente = Ventas::where('ven_codigo', $codigo_ven)->where('id_empresa', $id_empresa)->first();
+
+            if ($ventaExistente) {
+                return ["status" => "0", "message" => "La venta con el código ya existe."];
+            }
+
+            // Crear una nueva venta si no existe
+            $venta                          = new Ventas();
+            $venta->ven_codigo              = $codigo_ven;
+            $venta->id_empresa              = $id_empresa;
+            $venta->est_ven_codigo          = '2';
+            $venta->periodo_id              = $id_periodo;
+            $venta->idtipodoc               = 12;
+            $venta->tip_ven_codigo          = 1;
+            $venta->ven_fecha               = now();
+            $venta->user_created            = $user_created;
+            $venta->id_pedido_guia          = $idPadre;
+            $venta->ven_cliente             = $ven_cliente; // Asignar el valor correspondiente si es necesario
+            $venta->ruc_cliente             = $ruc_cliente; // Asignar el valor correspondiente si es necesario
+            $venta->clientesidPerseo        = $id_cliente_perseo;
+            $venta->ven_observacion         = $ven_observacion;
+            $venta->ven_concepto_perseo     = $ven_concepto_perseo;
+            $venta->save();
+            if(!$venta){
+                throw new \Exception("No se pudo guardar la venta");
+            }
+
+            return ["status" => "1", "message" => "Venta creada exitosamente."];
+        } catch (\Exception $e) {
+            throw new \Exception("Error al crear la venta: " . $e->getMessage());
+        }
+    }
+
+    public function crearDetalleVentaPerseo($guias_send, $codigo_ven, $id_empresa)
+    {
+        try {
+            foreach ($guias_send as $guia) {
+                // Verificar si ya existe un registro con el mismo ven_codigo
+                $pro_CodigoExists = DetalleVentas::where('ven_codigo', $codigo_ven)->where('pro_codigo', $guia->codigoFact)->where('id_empresa', $id_empresa)->first();
+                if (!$pro_CodigoExists) {
+                    //NO HAGO NADA
+                }
+                $detalleVenta                          = new DetalleVentas();
+                $detalleVenta->ven_codigo              = $codigo_ven;
+                $detalleVenta->id_empresa              = $id_empresa;
+                $detalleVenta->pro_codigo              = $guia->codigoFact;
+                $detalleVenta->det_ven_cantidad        = $guia->cantidadAutorizar;
+                $detalleVenta->det_ven_valor_u         = 1; // Por defecto las guias valdran 1 dolar
+                $detalleVenta->save();
+                if(!$detalleVenta){
+                    throw new \Exception("No se pudo guardar el detalle de venta");
+                }
+            }
+            return ["status" => "1", "message" => "Detalle de venta creada exitosamente."];
+        } catch (\Exception $e) {
+            throw new \Exception("Error al crear los detalles de venta: " . $e->getMessage());
+        }
+    }
+
+     public function crearVenta($codigo_ven, $id_empresa, $id_periodo, $user_created, $idPadre)
     {
         try {
             // Verificar si ya existe un registro con el mismo ven_codigo
@@ -331,6 +454,68 @@ class  GuiaRepository extends BaseRepository
         ", [$id_pedido]);
 
         return $query;
+    }
+
+    public function crearUsuario($cedula, $email, $nombres, $apellidos){
+        try {
+            $usuario                              = new Usuario();
+            $usuario->cedula                      = $cedula;
+            $usuario->email                       = $email;
+            $usuario->nombres                     = $nombres;
+            $usuario->apellidos                   = $apellidos;
+            $usuario->id_group                    = 33;
+            $usuario->password                    = sha1(md5($cedula));
+            $usuario->estado_idEstado             = 1;
+            $usuario->institucion_idInstitucion   = 66;
+            $usuario->save();
+            if (!$usuario->idusuario) {
+                throw new \Exception("No se pudo guardar el usuario");
+            }
+            return $usuario;
+        } catch (\Exception $e) {
+            throw new \Exception("Error al crear el usuario: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Actualiza ven_valor, ven_subtotal, ven_desc_por y ven_descuento en f_venta
+     * sumando el detalle de venta ya guardado (det_ven_cantidad × det_ven_valor_u).
+     *
+     * @param string $codigo_ven      Código de la venta (ven_codigo)
+     * @param int    $id_empresa      ID de la empresa
+     * @param float  $porcentaje_desc Porcentaje de descuento (0–100). Por defecto 0.
+     */
+    public function actualizarTotalesVenta($codigo_ven, $id_empresa, $porcentaje_desc = 0)
+    {
+        try {
+            // Sumar det_ven_cantidad * det_ven_valor_u del detalle de esta venta
+            $ven_valor = DetalleVentas::where('ven_codigo', $codigo_ven)
+                ->where('id_empresa', $id_empresa)
+                ->sum(\DB::raw('det_ven_cantidad * det_ven_valor_u'));
+
+            $ven_desc_por   = (float) $porcentaje_desc;
+            $ven_descuento  = round($ven_valor * $ven_desc_por / 100, 2);
+            $ven_subtotal   = round($ven_valor - $ven_descuento, 2);
+
+            Ventas::where('ven_codigo', $codigo_ven)
+                ->where('id_empresa', $id_empresa)
+                ->update([
+                    'ven_valor'     => $ven_valor,
+                    'ven_subtotal'  => $ven_subtotal,
+                    'ven_desc_por'  => $ven_desc_por,
+                    'ven_descuento' => $ven_descuento,
+                ]);
+
+            return [
+                'status'        => '1',
+                'ven_valor'     => $ven_valor,
+                'ven_subtotal'  => $ven_subtotal,
+                'ven_desc_por'  => $ven_desc_por,
+                'ven_descuento' => $ven_descuento,
+            ];
+        } catch (\Exception $e) {
+            throw new \Exception("Error al actualizar totales de la venta: " . $e->getMessage());
+        }
     }
 
 }

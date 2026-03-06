@@ -154,11 +154,12 @@ class InstitucionController extends Controller
             // 'idciudad' => 'required',
             // 'zona_id' => 'required', se debe quitar cuando la zona sea obligatoria
             'tipo_institucion' => 'required',
-        ]);
-        if(!empty($request->idInstitucion)){
-            // $institucion = Institucion::find($request->idInstitucion)->update($request->all());
-            $cambio = Institucion::find($request->idInstitucion);
-            $archivo = $cambio->imgenInstitucion;
+            ]);
+            if(!empty($request->idInstitucion)){
+                // $institucion = Institucion::find($request->idInstitucion)->update($request->all());
+                $cambio = Institucion::find($request->idInstitucion);
+                $archivo = $cambio->imgenInstitucion;
+                $cambio->ideditor           = $request->idcreadorinstitucion; //se obtiene el usurio q esta logueado
             if($request->enviarArchivo){
                 //eliminar el archivo anterior si existe
                 if($archivo == "" || $archivo == null || $archivo == 0){
@@ -178,6 +179,7 @@ class InstitucionController extends Controller
         }
         else{
             $cambio = new Institucion();
+            $cambio->idcreadorinstitucion           = $request->idcreadorinstitucion;
             if($request->enviarArchivo){
                 $ruta = public_path('/archivos/instituciones_logos/');
                 if(!empty($request->file('imagenInstitucion'))){
@@ -188,7 +190,6 @@ class InstitucionController extends Controller
                 $cambio->imgenInstitucion       = $fileName;
             }
         }
-        $cambio->idcreadorinstitucion           = $request->idcreadorinstitucion;
         $cambio->codigo_amie                    = $request->codigo_amie == null || $request->codigo_amie == "null" ? null : $request->codigo_amie;
         $cambio->nombreInstitucion              = $request->nombreInstitucion;
         $cambio->direccionInstitucion           = $request->direccionInstitucion;
@@ -609,24 +610,41 @@ class InstitucionController extends Controller
 
     public function listaInsitucionAsesor(Request $request)
     {
-        if($request->porCedula){
-            $lista = Institucion::select('institucion.idInstitucion','institucion.nombreInstitucion','institucion.aplica_matricula','institucion.solicitudInstitucion','estado.nombreestado as estado','ciudad.nombre as ciudad','usuario.idusuario as asesor_id','usuario.nombres as nombre_asesor', 'usuario.apellidos as apellido_asesor', 'institucion.fecha_registro', 'region.nombreregion' )
-            ->leftjoin('ciudad','institucion.ciudad_id','=','ciudad.idciudad')
-            ->leftjoin('region','institucion.region_idregion','=','region.idregion')
-            ->leftjoin('usuario','institucion.vendedorInstitucion','=','usuario.cedula')
+        if ($request->porCedula) {
+            // build the select columns with a raw concatenation for later use
+            $lista = Institucion::select([
+                'institucion.idInstitucion',
+                'institucion.nombreInstitucion',
+                'institucion.aplica_matricula',
+                'institucion.solicitudInstitucion',
+                'estado.nombreestado as estado',
+                'ciudad.nombre as ciudad',
+                'usuario.idusuario as asesor_id',
+                'usuario.nombres as nombre_asesor',
+                'usuario.apellidos as apellido_asesor',
+                'institucion.fecha_registro',
+                'region.nombreregion',
+            ])
+            ->selectRaw("CONCAT(usuario.nombres,' ',usuario.apellidos) AS asesor")
+            ->leftJoin('ciudad','institucion.ciudad_id','=','ciudad.idciudad')
+            ->leftJoin('region','institucion.region_idregion','=','region.idregion')
+            ->leftJoin('usuario','institucion.vendedorInstitucion','=','usuario.cedula')
             ->join('estado','institucion.estado_idEstado','=','estado.idEstado')
-            ->where('institucion.vendedorInstitucion','=',$request->cedula)
+            ->where('institucion.vendedorInstitucion',$request->cedula)
             ->orderBy('institucion.fecha_registro','desc')
             ->get();
+            return $lista;
         }
         //traer las instituciones temporales  creadas por el asesor
-        if($request->temporales){
+        else if($request->temporales){
             $instituciones = DB::SELECT("SELECT t.institucion_temporal_id,
             IF(t.region = 2,'Costa','Sierra') AS nombreregion,
             t.nombre_institucion AS nombreInstitucion,
-            t.periodo_id,t.asesor_id,t.ciudad,pe.periodoescolar AS periodo
+            t.periodo_id,t.asesor_id,t.ciudad,pe.periodoescolar AS periodo,
+            u.nombres AS nombre_asesor, u.apellidos AS apellido_asesor
             FROM seguimiento_institucion_temporal t
          	LEFT JOIN periodoescolar pe ON t.periodo_id = pe.idperiodoescolar
+            LEFT JOIN usuario u ON t.asesor_id = u.idusuario
             WHERE t.asesor_id = '$request->asesor_id'
             ORDER BY t.institucion_temporal_id DESC
 
@@ -634,7 +652,7 @@ class InstitucionController extends Controller
             return $instituciones;
         }
         //traer la agenda por instituciones de prolipa o temporales
-        if($request->todo){
+        else if($request->todo){
             $todoAgenda = DB::SELECT("SELECT i.nombreInstitucion,
             c.*,
            CONCAT(u.nombres, ' ', u.apellidos) AS asesor,
@@ -682,7 +700,7 @@ class InstitucionController extends Controller
                 return $data;
             }
         }
-        if($request->todasInstituciones){
+        else if($request->todasInstituciones){
             $lista = Institucion::select('institucion.idInstitucion','institucion.nombreInstitucion','institucion.aplica_matricula','institucion.solicitudInstitucion','estado.nombreestado as estado','ciudad.nombre as ciudad','usuario.idusuario as asesor_id','usuario.nombres as nombre_asesor', 'usuario.apellidos as apellido_asesor', 'institucion.fecha_registro', 'region.nombreregion' )
             ->leftjoin('ciudad','institucion.ciudad_id','=','ciudad.idciudad')
             ->leftjoin('region','institucion.region_idregion','=','region.idregion')

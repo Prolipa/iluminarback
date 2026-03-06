@@ -594,11 +594,14 @@ class CodigoLibrosController extends Controller
                         //si ingresa correctamente
                         if($ingreso == 1){
                             $porcentaje++;
+                            //Obtener los nuevos valores después de la actualización
+                            $newValuesPrimero = CodigosLibros::Where('codigo',$item->codigo)->get();
+                            $newValuesUnion   = CodigosLibros::Where('codigo',$codigo_union)->get();
                             //====CODIGO====
                             //ingresar en el historico codigo
-                            $this->GuardarEnHistorico($user,$institucion,$periodo_id,$item->codigo,$usuario_editor,$comentario,$getcodigoPrimero,null);
+                            $this->GuardarEnHistorico($user,$institucion,$periodo_id,$item->codigo,$usuario_editor,$comentario,$getcodigoPrimero,$newValuesPrimero);
                             //====CODIGO UNION=====
-                            $this->GuardarEnHistorico($user,$institucion,$periodo_id,$codigo_union,$usuario_editor,$comentario,$getcodigoUnion,null);
+                            $this->GuardarEnHistorico($user,$institucion,$periodo_id,$codigo_union,$usuario_editor,$comentario,$getcodigoUnion,$newValuesUnion);
                         }else{
                             $codigosNoCambiados[$contadorNoCambiado] =[
                                 "codigo"        => $item->codigo,
@@ -612,8 +615,10 @@ class CodigoLibrosController extends Controller
                         $ingreso = $this->procesoGestionBodega($numeroProceso,$item->codigo,null,$request,null,$factura,$ifChangeProforma,$datosProforma);
                         if($ingreso == 1){
                             $porcentaje++;
+                            //Obtener los nuevos valores después de la actualización
+                            $newValuesPrimero = CodigosLibros::Where('codigo',$item->codigo)->get();
                             //ingresar en el historico
-                            $this->GuardarEnHistorico($user,$institucion,$periodo_id,$item->codigo,$usuario_editor,$comentario,$getcodigoPrimero,null);
+                            $this->GuardarEnHistorico($user,$institucion,$periodo_id,$item->codigo,$usuario_editor,$comentario,$getcodigoPrimero,$newValuesPrimero);
                             $codigosSinCodigoUnion[] = $validar[0];
                         }
                         else{
@@ -824,10 +829,18 @@ class CodigoLibrosController extends Controller
                         if(($ifid_periodoD  == $periodo_id || $ifid_periodoD == 0 ||  $ifid_periodoD == null  ||  $ifid_periodoD == "") && $ifventa_estadoD == 0 && ($ifBcEstadoD == '1')  && $ifLiquidadoD == '1' && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == "" || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0') && $ifNotPaqueteD && $ifErrorProformaD == false ){
                         //Ingresar Union a codigo de activacion
                         $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
-                        if($codigoA){ $contadorA++; $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
+                        if($codigoA){
+                            $contadorA++;
+                            $new_valuesA = CodigosLibros::Where('codigo',$codigoActivacion)->get();
+                            $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,$new_valuesA);
+                        }
                         //Ingresar Union a codigo de prueba diagnostico
                         $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
-                        if($codigoB){  $contadorD++; $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
+                        if($codigoB){
+                            $contadorD++;
+                            $new_valuesD = CodigosLibros::Where('codigo',$codigoDiagnostico)->get();
+                            $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,$new_valuesD);
+                        }
                         }else{
                             if($ifSetProforma == 1 && $ifErrorProformaD){
                                 $validarD[0]->errorProforma      = 1;
@@ -866,10 +879,18 @@ class CodigoLibrosController extends Controller
                         //Cambiar a regalado a codigo de activacion
                         //(numeroProceso,codigo,$request)
                         $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
-                        if($codigoA){  $contadorA++; $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
+                        if($codigoA){
+                            $contadorA++;
+                            $new_valuesA = CodigosLibros::Where('codigo',$codigoActivacion)->get();
+                            $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,$new_valuesA);
+                        }
                         //Cambiar a regalado a codigo de diagnostico
                         $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
-                        if($codigoB){  $contadorD++; $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
+                        if($codigoB){
+                            $contadorD++;
+                            $new_valuesD = CodigosLibros::Where('codigo',$codigoDiagnostico)->get();
+                            $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,$new_valuesD);
+                        }
                         }else{
                             if($ifSetProforma == 1 && $ifErrorProformaD){
                                 $validarD[0]->errorProforma      = 1;
@@ -907,10 +928,18 @@ class CodigoLibrosController extends Controller
                         //Cambiar a regalado a codigo de activacion
                         //(numeroProceso,codigo,$request)
                         $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
-                        if($codigoA){  $contadorA++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
+                        if($codigoA){
+                            $contadorA++;
+                            $new_valuesA = CodigosLibros::Where('codigo',$codigoActivacion)->get();
+                            $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,$new_valuesA);
+                        }
                         //Cambiar a regalado a codigo de diagnostico
                         $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
-                        if($codigoB){  $contadorD++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
+                        if($codigoB){
+                            $contadorD++;
+                            $new_valuesD = CodigosLibros::Where('codigo',$codigoDiagnostico)->get();
+                            $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,$new_valuesD);
+                        }
                         }else{
                             if($ifSetProforma == 1 && $ifErrorProformaD){
                                 $validarD[0]->errorProforma      = 1;
@@ -948,10 +977,18 @@ class CodigoLibrosController extends Controller
                         //Cambiar a regalado a codigo de activacion
                         //(numeroProceso,codigo,$request)
                         $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
-                        if($codigoA){  $contadorA++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
+                        if($codigoA){
+                            $contadorA++;
+                            $new_valuesA = CodigosLibros::Where('codigo',$codigoActivacion)->get();
+                            $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,$new_valuesA);
+                        }
                         //Cambiar a regalado a codigo de diagnostico
                         $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
-                        if($codigoB){  $contadorD++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
+                        if($codigoB){
+                            $contadorD++;
+                            $new_valuesD = CodigosLibros::Where('codigo',$codigoDiagnostico)->get();
+                            $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,$new_valuesD);
+                        }
                         }else{
                             if($ifSetProforma == 1 && $ifErrorProformaD){
                                 $validarD[0]->errorProforma      = 1;
@@ -989,10 +1026,18 @@ class CodigoLibrosController extends Controller
                         //Cambiar a regalado a codigo de activacion
                         //(numeroProceso,codigo,$request)
                         $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
-                        if($codigoA){  $contadorA++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
+                        if($codigoA){
+                            $contadorA++;
+                            $new_valuesA = CodigosLibros::Where('codigo',$codigoActivacion)->get();
+                            $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,$new_valuesA);
+                        }
                         //Cambiar a regalado a codigo de diagnostico
                         $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
-                        if($codigoB){  $contadorD++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
+                        if($codigoB){
+                            $contadorD++;
+                            $new_valuesD = CodigosLibros::Where('codigo',$codigoDiagnostico)->get();
+                            $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,$new_valuesD);
+                        }
                         }else{
                             if($ifSetProforma == 1 && $ifErrorProformaD){
                                 $validarD[0]->errorProforma      = 1;

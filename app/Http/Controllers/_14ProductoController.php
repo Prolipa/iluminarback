@@ -666,6 +666,7 @@ class _14ProductoController extends Controller {
                     'updated_at' => now(),
                     'ifcombo'           => $request->ifcombo,
                     'codigos_combos'    => $request->codigos_combos ?? null,
+                    'codigos_combos_regalado' => $request->codigos_combos_regalado ?? null,
                     'id_pro_codigo_padre' => $request->id_pro_codigo_padre ?? null,
                     'grupo_codigo_para_v3' => $request->grupo_codigo_para_v3 ?? null,
                 ]

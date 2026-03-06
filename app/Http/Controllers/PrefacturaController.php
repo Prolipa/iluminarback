@@ -347,11 +347,13 @@ class PrefacturaController extends Controller
             CONCAT(u.nombres,' ',u.apellidos) AS usuarioIntercambio,
             CONCAT(cli.nombres,' ',cli.apellidos) AS cliente,
             cli.cedula AS cliente_cedula,
-            v.id_empresa, v.ven_codigo, v.doc_intercambio, v.fecha_intercambio
+            v.id_empresa, v.ven_codigo, v.doc_intercambio, v.fecha_intercambio,
+            emp.descripcion_corta as descripcion_empresa
             FROM f_venta v
             LEFT JOIN institucion i ON i.idInstitucion = v.institucion_id
             LEFT JOIN usuario u ON u.idusuario = v.user_intercambio
             LEFT JOIN usuario cli ON cli.idusuario = v.ven_cliente
+            LEFT JOIN empresas emp on emp.id = v.id_empresa
             WHERE v.periodo_id = '$periodoId'
             AND v.doc_intercambio IS NOT NULL
             AND v.idtipodoc IN (3,4)

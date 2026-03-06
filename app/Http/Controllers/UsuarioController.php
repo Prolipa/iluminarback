@@ -743,16 +743,33 @@ class UsuarioController extends Controller
         ]);
     }
 
-      public function restaurarPasswordXIdUser(Request $request){
-
-        $encontrarEmail = Usuario::where('idusuario','=',$request->idusuario)->first();
-        $codigo = $encontrarEmail->cedula;
-        $res = DB::table('usuario')
-        ->where('idusuario',$request->idusuario)
-        ->update([
-            'password' => sha1(md5($codigo)),
-            'change_password' => 1,
-            'fecha_change_password' => null
+      public function restaurarPasswordXIdUser(Request $request)
+    {
+        $usuario = Usuario::findOrFail($request->idusuario);
+        // ── 1. Obtener contraseña actual (ANTES de resetear) ────────────────────
+        $passwordActual = $usuario->password;
+        // ── 2. Cargar historial existente ───────────────────────────────────────
+        $historial = [];
+        if (!empty($usuario->password_history)) {
+            $decoded = json_decode($usuario->password_history, true);
+            $historial = is_array($decoded) ? array_values($decoded) : [];
+        }
+        // ── 3. Agregar la contraseña actual al historial ─────────────────────────
+        array_unshift($historial, $passwordActual);
+        // Mantener solo las últimas 10 contraseñas
+        $historial = array_slice($historial, 0, 5);
+        // ── 4. Generar la contraseña por defecto (la del reset) ──────────────────
+        $codigo = $usuario->cedula;
+        $hashNuevo = sha1(md5($codigo));
+        // ── 5. Guardar todo correctamente ────────────────────────────────────────
+        $usuario->password = $hashNuevo;
+        $usuario->password_history = json_encode(array_values($historial));
+        $usuario->change_password = 1;          // Forzar cambio al iniciar sesión
+        $usuario->fecha_change_password = null; // Aún no tiene fecha porque debe cambiarla
+        $usuario->save();
+        return response()->json([
+            'status' => 1,
+            'message' => 'Contraseña restablecida correctamente.'
         ]);
     }
 
@@ -1817,19 +1834,62 @@ class UsuarioController extends Controller
         return $dato;
     }
     public function changePassword(Request $request){
-        $fechaActual = date('Y-m-d');
-        $fecha30dias = date('Y-m-d', strtotime($fechaActual . '+30 days'));
         $usuario = Usuario::findOrFail($request->idusuario);
-        if($request->tipo == 1){
-            $usuario->password              = sha1(md5($request->password));
-            $usuario->fecha_change_password = null;
-            $usuario->change_password       = "0";
+
+        $passwordNuevo = $request->password;
+
+        // ── Validación de política de seguridad ──────────────────────────────
+        if (strlen($passwordNuevo) < 8) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos 8 caracteres.'], 200);
         }
-        if($request->tipo == 0){
-            $usuario->fecha_change_password = $fecha30dias;
+        if (strlen($passwordNuevo) > 64) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña no puede superar los 64 caracteres.'], 200);
         }
+        if (!preg_match('/[A-Z]/', $passwordNuevo)) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos una letra mayúscula.'], 200);
+        }
+        if (!preg_match('/[a-z]/', $passwordNuevo)) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos una letra minúscula.'], 200);
+        }
+        if (!preg_match('/[0-9]/', $passwordNuevo)) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos un número.'], 200);
+        }
+        if (!preg_match('/[!@#$%^&*\-_=+<>?]/', $passwordNuevo)) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos un carácter especial (!@#$%^&*-_=+<>?).'], 200);
+        }
+
+        // ── Calcular el hash de la nueva contraseña ──────────────────────────
+        $hashNuevo = sha1(md5($passwordNuevo));
+
+        // ── Validar historial (últimas 10 contraseñas) ───────────────────────
+        $historial = [];
+        if (!empty($usuario->password_history)) {
+            $decoded = json_decode($usuario->password_history, true);
+            $historial = is_array($decoded) ? array_values($decoded) : [];
+        }
+
+        // Incluir también la contraseña actual en la validación
+        $todasAnteriores = array_merge([$usuario->password], $historial);
+        if (in_array($hashNuevo, $todasAnteriores)) {
+            return response()->json(['status' => 0, 'message' => 'No puedes usar una contraseña que ya hayas utilizado anteriormente (últimas 5 contraseñas).'], 200);
+        }
+
+        // ── Actualizar historial: agregar la contraseña actual al inicio ─────
+        array_unshift($historial, $usuario->password);
+        // Mantener máximo 10 entradas en el historial
+        $historial = array_slice($historial, 0, 5);
+
+        // ── Guardar cambios ──────────────────────────────────────────────────
+        // Calcular la próxima fecha de vencimiento (90 días desde hoy)
+        $fechaProximoCambio = date('Y-m-d', strtotime(date('Y-m-d') . ' +90 days'));
+
+        $usuario->password_history      = json_encode(array_values($historial));
+        $usuario->password              = $hashNuevo;
+        $usuario->fecha_change_password = $fechaProximoCambio; // Próximo vencimiento en 90 días
+        $usuario->change_password       = "0";                 // 0 = contraseña fue cambiada
         $usuario->save();
-        return $usuario;
+
+        return response()->json(['status' => 1, 'message' => 'Contraseña actualizada correctamente.', 'usuario' => $usuario]);
     }
     public function buscarXCedula($cedula){
         $dato = DB::table('usuario as u')
@@ -2071,48 +2131,79 @@ class UsuarioController extends Controller
     }
     public function actualizarPassword_PerfilUser(Request $request)
     {
-        // 🔹 Validar datos básicos (solo por seguridad mínima)
         $request->validate([
-            'idusuario' => 'required',
-            'password_actual' => 'required',
-            'password_nuevo' => 'required',
+            'idusuario'        => 'required',
+            'password_actual'  => 'required',
+            'password_nuevo'   => 'required',
         ]);
 
         // 🔹 Buscar el usuario
         $usuario = Usuario::find($request->idusuario);
-
         if (!$usuario) {
-            return response()->json([
-                'status' => 0,
-                'message' => 'Usuario no encontrado.',
-            ]);
+            return response()->json(['status' => 0, 'message' => 'Usuario no encontrado.']);
         }
 
         // 🔹 Verificar contraseña actual
-        $hashIngresado = sha1(md5($request->password_actual));
-        if ($hashIngresado !== $usuario->password) {
-            return response()->json([
-                'status' => 2,
-                'message' => 'La contraseña actual no es correcta.',
-            ]);
+        $hashActual = sha1(md5($request->password_actual));
+        if ($hashActual !== $usuario->password) {
+            return response()->json(['status' => 2, 'message' => 'La contraseña actual no es correcta.']);
         }
 
-        // 🔹 Validar que la nueva contraseña no sea igual a la actual
-        $hashNueva = sha1(md5($request->password_nuevo));
-        if ($hashNueva === $usuario->password) {
-            return response()->json([
-                'status' => 3,
-                'message' => 'La nueva contraseña no puede ser igual a la anterior.',
-            ]);
+        $passwordNuevo = $request->password_nuevo;
+
+        // ── Validación de política de seguridad ──────────────────────────────
+        if (strlen($passwordNuevo) < 8) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos 8 caracteres.']);
+        }
+        if (strlen($passwordNuevo) > 64) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña no puede superar los 64 caracteres.']);
+        }
+        if (!preg_match('/[A-Z]/', $passwordNuevo)) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos una letra mayúscula.']);
+        }
+        if (!preg_match('/[a-z]/', $passwordNuevo)) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos una letra minúscula.']);
+        }
+        if (!preg_match('/[0-9]/', $passwordNuevo)) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos un número.']);
+        }
+        if (!preg_match('/[!@#$%^&*\-_=+<>?]/', $passwordNuevo)) {
+            return response()->json(['status' => 0, 'message' => 'La contraseña debe tener al menos un carácter especial (!@#$%^&*-_=+<>?).']);
         }
 
-        // 🔹 Actualizar con la nueva contraseña encriptada
-        $usuario->password = sha1(md5($request->password_nuevo));
+        // ── Calcular el hash de la nueva contraseña ──────────────────────────
+        $hashNuevo = sha1(md5($passwordNuevo));
+
+        // ── Validar historial (últimas 10 contraseñas + actual) ──────────────
+        $historial = [];
+        if (!empty($usuario->password_history)) {
+            $decoded  = json_decode($usuario->password_history, true);
+            $historial = is_array($decoded) ? array_values($decoded) : [];
+        }
+
+        $todasAnteriores = array_merge([$usuario->password], $historial);
+        if (in_array($hashNuevo, $todasAnteriores)) {
+            return response()->json(['status' => 3, 'message' => 'No puedes usar una contraseña que ya hayas utilizado anteriormente (últimas 5 contraseñas).']);
+        }
+
+        // ── Actualizar historial: agregar la actual al inicio (máx. 10) ──────
+        array_unshift($historial, $usuario->password);
+        $historial = array_slice($historial, 0, 5);
+
+        // ── Calcular próxima fecha de vencimiento (90 días) ──────────────────
+        $fechaProximoCambio = date('Y-m-d', strtotime(date('Y-m-d') . ' +90 days'));
+
+        // ── Guardar cambios ───────────────────────────────────────────────────
+        $usuario->password_history      = json_encode(array_values($historial));
+        $usuario->password              = $hashNuevo;
+        $usuario->fecha_change_password = $fechaProximoCambio; // Próximo vencimiento en 90 días
+        $usuario->change_password       = "0";                 // 1 = contraseña fue cambiada
         $usuario->save();
 
         return response()->json([
-            'status' => 1,
+            'status'  => 1,
             'message' => 'La contraseña ha sido actualizada correctamente.',
+            'usuario' => $usuario,
         ]);
     }
     //Fin Metodos Jeyson

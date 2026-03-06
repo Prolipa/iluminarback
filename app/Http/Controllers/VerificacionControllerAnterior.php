@@ -2918,6 +2918,7 @@ class VerificacionControllerAnterior extends Controller
                     'CombosTotalDevolucionSueltosPorcentaje' => $item->CombosTotalDevolucionSueltosPorcentaje ?? null,
                     'nombre_institucion_bc'     => $item->nombre_institucion_bc ?? null,
                     'nombre_institucion_venta'  => $item->nombre_institucion_venta ?? null,
+                    'descripcion_empresa'       => $item->descripcion_empresa ?? null
                 ];
                 $contador++;
             }
@@ -3884,17 +3885,13 @@ class VerificacionControllerAnterior extends Controller
 
         $query = DB::SELECT(" SELECT c.codigo, c.codigo_proforma, c.proforma_empresa, c.estado_liquidacion,
             c.contrato, ls.codigo_liquidacion, ls.nombre AS nombrelibro, c.factura,
-            CASE
-                WHEN c.proforma_empresa IS NULL OR c.proforma_empresa = '' THEN 'SIN EMPRESA'
-                WHEN c.proforma_empresa = '1' THEN 'PROLIPA'
-                WHEN c.proforma_empresa = '3' THEN 'CALMED'
-                ELSE 'OTRA'
-            END AS empresa_documento,
+            COALESCE(emp.descripcion_corta, 'SIN EMPRESA') AS empresa_documento,
             c.venta_estado
             FROM codigoslibros c
 
             $joinPedidos
             LEFT JOIN libros_series ls ON ls.idLibro = c.libro_idlibro
+            LEFT JOIN empresas emp ON emp.id = c.proforma_empresa
             WHERE c.bc_periodo = '$id_periodo'
             AND c.prueba_diagnostica = '0'
             $condicionInstitucion
@@ -3919,12 +3916,7 @@ class VerificacionControllerAnterior extends Controller
             l.nombrelibro,
             ls.codigo_liquidacion,
 
-            CASE
-                WHEN vc.empresa_documento = 1 THEN 'Prolipa'
-                WHEN vc.empresa_documento = 3 THEN 'Calmed'
-                WHEN vc.empresa_documento IS NULL THEN 'Sin Empresa'
-                ELSE 'Otra'
-            END AS empresa_documento_descr,
+            COALESCE(emp.descripcion_corta, 'Sin Empresa') AS empresa_documento_descr,
 
             CONCAT('verif', v.num_verificacion) AS codigo_verificacion,
 
@@ -3942,6 +3934,7 @@ class VerificacionControllerAnterior extends Controller
         LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
         LEFT JOIN verificaciones v ON v.id = vc.id_verificacion
         LEFT JOIN codigoslibros cl ON cl.codigo = vc.codigo
+        LEFT JOIN empresas emp ON emp.id = vc.empresa_documento
 
         WHERE vc.contrato = ?
         AND vc.id_verificacion = ?

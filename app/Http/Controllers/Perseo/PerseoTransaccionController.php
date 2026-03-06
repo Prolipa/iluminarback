@@ -202,8 +202,16 @@ class PerseoTransaccionController extends Controller
                 $productoBuscar = $this->perseoProduccion == 0 ? 'id_perseo_prolipa' : 'id_perseo_prolipa_produccion';
             } elseif ($id_empresa == 3) {
                 $productoBuscar = $this->perseoProduccion == 0 ? 'id_perseo_calmed' : 'id_perseo_calmed_produccion';
-            } else {
+            } else if ($id_empresa == 5) {
+                $productoBuscar = 'id_perseo_prolipa2026_produccion';
+            } elseif ($id_empresa == 4) {
+                $productoBuscar = 'id_perseo_calmed2026_produccion';
+            } else{
                 throw new \Exception('ID de empresa no válido');
+            }
+
+            if(!$productoBuscar) {
+                throw new \Exception('No se pudo determinar la columna de producto Perseo a usar');
             }
 
             // Construir la consulta usando el query builder

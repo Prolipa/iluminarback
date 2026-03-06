@@ -132,6 +132,14 @@ Route::group(['prefix' => 'perseo/ventas'], function () {
     Route::post('enviar-perseo','Perseo\VentaPerseoController@enviarAPerseo');
     // Anular venta
     Route::post('anular','Perseo\VentaPerseoController@anularVenta');
+    // Obtener ventas por despachar
+    Route::get('por-despachar','Perseo\VentaPerseoController@vetasXDespachar');
+    // Consultar pedido en Perseo
+    Route::post('pedidos-consulta','Perseo\VentaPerseoController@pedidos_consulta');
+    // Verificar y enlazar facturas en Perseo
+    Route::post('facturas-verificar','Perseo\VentaPerseoController@facturas_verificar');
+    // Marcar como despachado venta con factura Perseo
+    Route::post('marcar-despachado','Perseo\VentaPerseoController@marcarComoDespachadoPerseo');
 });
 //moderna
 Route::group(['prefix' => 'perseo/moderna'], function () {

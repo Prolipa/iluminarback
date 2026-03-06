@@ -2564,7 +2564,7 @@ class PedidosController extends Controller
 
     public function get_pedidos_asesor($periodo, $asesor)
     {
-        $pedidos = DB::SELECT("SELECT
+        $guias = DB::SELECT("SELECT
         p.*, CONCAT(u.nombres, ' ', u.apellidos, ' CI: ', u.cedula) AS asesor,u.iniciales,
         i.nombreInstitucion, c.nombre AS nombre_ciudad,
         CONCAT(u.nombres,' ',u.apellidos) as responsable, u.cedula,
@@ -2581,9 +2581,61 @@ class PedidosController extends Controller
         AND p.tipo = '1'
         ORDER BY p.id_pedido DESC
         ");
-        return $pedidos;
+         foreach($guias as $key => $item){
+            //traer Pendientes
+            $getPendientes = DB::SELECT("SELECT  v.ven_codigo,v.id_empresa, v.ven_fecha, v.est_ven_codigo, v.fecha_proceso_despacho,
+            v.estadoPerseo
+             FROM f_venta  v
+            WHERE v.id_pedido_guia = $item->id_pedido
+            ");
+            $guias[$key]->pendientes = $getPendientes;
+
+            // Calcular despachado_bodega
+            if(count($getPendientes) > 0) {
+                // Verificar si todos los pendientes tienen est_ven_codigo == 1
+                $todosDespachados = true;
+                foreach($getPendientes as $pendiente) {
+                    if($pendiente->est_ven_codigo != 1) {
+                        $todosDespachados = false;
+                        break;
+                    }
+                }
+                $guias[$key]->despachado_bodega = $todosDespachados ? 1 : 0;
+            } else {
+                $guias[$key]->despachado_bodega = 0;
+            }
+        }
+        return $guias;
     }
     public function get_pedidos_guias(Request $request){
+        $id_group = $request->id_group;
+        $tipo_filtro = $request->tipo_filtro; // Parámetro para filtrar por tipo
+        $excluirModuloPerseo = '';
+        $filtroFecha = '';
+        $filtroTipo = '';
+
+        if($id_group == 17 || $id_group == 27){
+            $excluirModuloPerseo = "AND p.guias_version_perseo = '0'";
+        }
+
+        // Filtro de fechas
+        if($request->fecha_inicio && $request->fecha_fin){
+            $fecha_inicio = $request->fecha_inicio . ' 00:00:00';
+            $fecha_fin = $request->fecha_fin . ' 23:59:59';
+            $filtroFecha = "AND p.created_at BETWEEN '$fecha_inicio' AND '$fecha_fin'";
+        }
+
+        // Filtro por tipo
+        // Si tipo_filtro = 3 (entregados), traer todo para calcular despachado_bodega
+        // Si es otro valor, excluir entregados (estado_entrega = 2) para optimizar carga
+        if($tipo_filtro == '3'){
+            // No aplicar filtro, necesitamos calcular despachado_bodega
+            $filtroTipo = "";
+        } else if($tipo_filtro !== null && $tipo_filtro != '3'){
+            // Excluir entregados para los demás filtros (0,1,2,4,5,6)
+            $filtroTipo = "AND p.estado_entrega != '2'";
+        }
+
         $guias = DB::SELECT("SELECT
         p.id_pedido, p.estado_entrega, p.estado, p.empresa_id, p.ven_codigo,p.id_periodo, p.id_asesor,
         p.fecha_envio, p.total_unidades_guias, p.fecha_aprobado_facturacion,p.fecha_entrega_bodega, p.observacion,
@@ -2594,7 +2646,7 @@ class PedidosController extends Controller
         pe.pedido_facturacion, pe.pedido_bodega, pe.pedido_asesor, e.nombre as empresa,
         p.facturacion_vee,
         CONCAT(ua.nombres,' ',ua.apellidos) as usuario_anulado,
-        p.message_anulado
+        p.message_anulado, p.guias_version_perseo, p.created_at
         FROM pedidos p
         LEFT JOIN usuario u ON p.id_asesor = u.idusuario
         LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
@@ -2602,15 +2654,34 @@ class PedidosController extends Controller
         LEFT JOIN empresas e ON p.empresa_id = e.id
         LEFT JOIN usuario ua on ua.idusuario = p.user_anulado
         WHERE p.tipo = '1'
+        $excluirModuloPerseo
+        $filtroFecha
+        $filtroTipo
         ORDER BY p.id_pedido DESC
         ");
         foreach($guias as $key => $item){
             //traer Pendientes
-            $getPendientes = DB::SELECT("SELECT  v.ven_codigo,v.id_empresa, v.ven_fecha
+            $getPendientes = DB::SELECT("SELECT  v.ven_codigo,v.id_empresa, v.ven_fecha, v.est_ven_codigo, v.fecha_proceso_despacho,
+            v.estadoPerseo, v.pedido_codigo
              FROM f_venta  v
-            WHERE v.id_pedido = $item->id_pedido
+            WHERE v.id_pedido_guia = $item->id_pedido
             ");
             $guias[$key]->pendientes = $getPendientes;
+
+            // Calcular despachado_bodega
+            if(count($getPendientes) > 0) {
+                // Verificar si todos los pendientes tienen est_ven_codigo == 1
+                $todosDespachados = true;
+                foreach($getPendientes as $pendiente) {
+                    if($pendiente->est_ven_codigo != 1) {
+                        $todosDespachados = false;
+                        break;
+                    }
+                }
+                $guias[$key]->despachado_bodega = $todosDespachados ? 1 : 0;
+            } else {
+                $guias[$key]->despachado_bodega = 0;
+            }
         }
         return $guias;
     }
@@ -3071,6 +3142,7 @@ class PedidosController extends Controller
         $pedido->facturacion_vee        = $request->facturacion_vee;
         $pedido->id_usuario_verif       = 0; //$request->id_usuario_verif; //facturador se guarda al generar el pedido
         $pedido->tipo                   = 1;
+        $pedido->guias_version_perseo   = 1; // por defecto perseo
         $pedido->save();
         if($pedido){
             return [
@@ -6252,6 +6324,126 @@ class PedidosController extends Controller
         }
     }
 
+    /**
+     * Aprobar Libros Obsequios (Solo Estado) - Nuevo Flujo sin generar venta
+     * Determina el estado según el id_group del usuario
+     * POST: AprobarLibrosObsequiosSoloEstado
+     */
+    public function AprobarLibrosObsequiosSoloEstado(Request $request)
+    {
+        try {
+            DB::beginTransaction();
+
+            // Validar parámetros requeridos
+            if (!$request->id || !$request->user_created) {
+                return [
+                    "status" => "0",
+                    "message" => "Faltan parámetros requeridos: id y user_created"
+                ];
+            }
+
+            // Buscar el pedido de libros obsequios
+            $pedidoLibroObsequio = DB::table('p_libros_obsequios')
+                ->where('id', $request->id)
+                ->first();
+
+            if (!$pedidoLibroObsequio) {
+                DB::rollBack();
+                return [
+                    "status" => "0",
+                    "message" => "Pedido de libros obsequios no encontrado"
+                ];
+            }
+
+            // Obtener el id_group del usuario desde la tabla usuario
+            $usuario = DB::table('usuario')
+                ->select('id_group', 'nombres', 'apellidos')
+                ->where('idusuario', $request->user_created)
+                ->first();
+
+            if (!$usuario) {
+                DB::rollBack();
+                return [
+                    "status" => "0",
+                    "message" => "Usuario no encontrado"
+                ];
+            }
+
+            // Determinar el estado según el id_group del usuario
+            $nuevoEstado = 0;
+            $tipoAprobacion = '';
+
+            if ($usuario->id_group == 23 || $usuario->id_group == 1 || $usuario->id_group == 22) {
+                $nuevoEstado = 5;
+                $tipoAprobacion = 'Facturador Admin';
+            } else {
+                DB::rollBack();
+                return [
+                    "status" => "0",
+                    "message" => "El usuario no tiene permisos para aprobar este pedido (id_group: {$usuario->id_group})"
+                ];
+            }
+
+            // Actualizar el estado del pedido de libros obsequios
+            DB::table('p_libros_obsequios')
+                ->where('id', $request->id)
+                ->update([
+                    'estado_libros_obsequios' => $nuevoEstado,
+                    'usuario_aprobacion' => $usuario->nombres . ' ' . $usuario->apellidos,
+                    'usuario_aprobacion_id' => $request->user_created
+                ]);
+
+            // Registrar en histórico
+            $datosAdicionales = [
+                'usuario_aprobacion' => $usuario->nombres . ' ' . $usuario->apellidos,
+                'usuario_aprobacion_id' => $request->user_created,
+                'fecha_aprobacion' => now(),
+                'tipo_aprobacion' => $tipoAprobacion,
+                'id_group' => $usuario->id_group,
+                'flujo' => 'nuevo_sin_venta'
+            ];
+
+            $datosCombinados = [
+                'complementos' => $datosAdicionales,
+            ];
+
+            DB::table('p_historico_libros_obsequios')->insert([
+                'p_lo_ven_codigo' => $pedidoLibroObsequio->ven_codigo ?? null,
+                'p_lo_ven_observacion' => $request->observacion_asesor ?? 'Aprobado desde nuevo flujo (solo estado)',
+                'p_lo_fecha' => now(),
+                'p_lo_idpedidoLibrosObsequios' => $pedidoLibroObsequio->id,
+                'p_lo_detalles_aprobacion' => json_encode($datosCombinados)
+            ]);
+
+            // Actualizar estado en tabla pedidos si existe relación
+            if ($pedidoLibroObsequio->id_pedido) {
+                DB::table('pedidos')
+                    ->where('id_pedido', $pedidoLibroObsequio->id_pedido)
+                    ->update(['estado_librosObsequios' => $nuevoEstado]);
+            }
+
+            DB::commit();
+
+            return [
+                "status" => "1",
+                "message" => "Pedido aprobado correctamente como {$tipoAprobacion} (Estado: {$nuevoEstado})",
+                "data" => [
+                    'estado_libros_obsequios' => $nuevoEstado,
+                    'tipo_aprobacion' => $tipoAprobacion,
+                    'id_group' => $usuario->id_group,
+                    'usuario_aprobacion' => $pedidoLibroObsequio->usuario_aprobacion
+                ]
+            ];
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return [
+                "status" => "0",
+                "message" => "Error al aprobar el pedido: " . $e->getMessage()
+            ];
+        }
+    }
+
     public function Acta_LibrosObsequios_Registrar_modificar(Request $request)
     {
         try {
@@ -7185,34 +7377,35 @@ class PedidosController extends Controller
                         ->where('pvn_tipo', $request->pvn_tipo)
                         ->first();
                     if ($pedidosvalarea_new) {
-                        if ($request->guias) {
-                            $this->procesoGuias_new($request);
-                            if(isset($this->procesoGuias_new($request)["status"])){
-                                $estatus = $this->procesoGuias_new($request)["status"];
-                                if($estatus == 0){
-                                    $message = $this->procesoGuias_new($request)["message"];
-                                    DB::rollback();
-                                    return response()->json(["status" => "0", "message" => $message], 200);
-                                }
-                            }
-                        }
+                        // se comenta porque ya no se va a validar el stock
+                        // if ($request->guias) {
+                        //     $this->procesoGuias_new($request);
+                        //     if(isset($this->procesoGuias_new($request)["status"])){
+                        //         $estatus = $this->procesoGuias_new($request)["status"];
+                        //         if($estatus == 0){
+                        //             $message = $this->procesoGuias_new($request)["message"];
+                        //             DB::rollback();
+                        //             return response()->json(["status" => "0", "message" => $message], 200);
+                        //         }
+                        //     }
+                        // }
                         $pedidosvalarea_new->pvn_cantidad = $request->pvn_cantidad;
                         $pedidosvalarea_new->updated_at = now();
                         $pedidosvalarea_new->save();
                         DB::commit();
                         return response()->json(["status" => "1", 'message' => 'Datos actualizados correctamente'], 200);
                     }else {
-                        if ($request->guias) {
-                            $this->procesoGuias_new($request);
-                            if(isset($this->procesoGuias_new($request)["status"])){
-                                $estatus = $this->procesoGuias_new($request)["status"];
-                                if($estatus == 0){
-                                    $message = $this->procesoGuias_new($request)["message"];
-                                    DB::rollback();
-                                    return response()->json(["status" => "0", "message" => $message], 200);
-                                }
-                            }
-                        }
+                        // if ($request->guias) {
+                        //     $this->procesoGuias_new($request);
+                        //     if(isset($this->procesoGuias_new($request)["status"])){
+                        //         $estatus = $this->procesoGuias_new($request)["status"];
+                        //         if($estatus == 0){
+                        //             $message = $this->procesoGuias_new($request)["message"];
+                        //             DB::rollback();
+                        //             return response()->json(["status" => "0", "message" => $message], 200);
+                        //         }
+                        //     }
+                        // }
                         $pedidosvalarea_new = new Pedidos_val_area_new([
                             'id_pedido' => $request->id_pedido,
                             'idlibro' => $request->idlibro,
@@ -7974,7 +8167,6 @@ class PedidosController extends Controller
             return ["status" => "0", "message" => $ex->getMessage()];
         }
     }
-
 
 
     public function get_val_pedidoLibrosObsequiosInfoTodo_new($pedido){

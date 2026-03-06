@@ -11,7 +11,7 @@ use DateTime;
 class PlanificacionAgendaController extends Controller
 {
     public function index(Request $request)
-    {   
+    {
         $areas = DB::SELECT("SELECT * FROM salle_areas");
 
         return $areas;
@@ -34,8 +34,9 @@ class PlanificacionAgendaController extends Controller
         $agenda->title = $request->title;
         $agenda->label = $request->label;
         $agenda->classes = $request->classes;
-        $agenda->startDate = $request->startDate;
-        $agenda->endDate = $request->endDate;
+        // Asegurar que las fechas se guarden en formato Y-m-d sin timezone
+        $agenda->startDate = date('Y-m-d', strtotime($request->startDate));
+        $agenda->endDate = date('Y-m-d', strtotime($request->endDate));
         $agenda->hora_inicio = $request->hora_inicio;
         $agenda->hora_fin = $request->hora_fin;
         $agenda->clasificacion = $request->clasificacion;
@@ -43,12 +44,21 @@ class PlanificacionAgendaController extends Controller
         $agenda->url = $request->url;
 
         $agenda->save();
+
+        // Formatear las fechas en la respuesta
+        if ($agenda->startDate) {
+            $agenda->startDate = date('Y-m-d', strtotime($agenda->startDate));
+        }
+        if ($agenda->endDate) {
+            $agenda->endDate = date('Y-m-d', strtotime($agenda->endDate));
+        }
+
         return $agenda;
 
     }
 
     public function show($id)
-    {   
+    {
         $date = new DateTime();
         $fecha_actual = $date->format('Y-m-d H:i:s');
         $planificaciones = DB::SELECT("SELECT * FROM planificacion_agenda p WHERE `id_usuario` = $id AND `progreso` != 'finalizado' AND `endDate` > '$fecha_actual'");
@@ -63,7 +73,7 @@ class PlanificacionAgendaController extends Controller
         return $planificaciones;
     }
     public function get_incomplete_events($id)
-    {   
+    {
         $date = new DateTime();
         $fecha_actual = $date->format('Y-m-d H:i:s');
         $planificaciones = DB::SELECT("SELECT * FROM planificacion_agenda p WHERE `id_usuario` = $id AND `progreso` != 'finalizado' AND `endDate` < '$fecha_actual'");
@@ -78,7 +88,7 @@ class PlanificacionAgendaController extends Controller
 
     public function update(Request $request, $id)
     {
-        
+
     }
 
     public function delete_agenda_planificacion($id)

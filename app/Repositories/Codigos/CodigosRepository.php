@@ -31,7 +31,8 @@ class  CodigosRepository extends BaseRepository
         $tipoComboImportacion       = $request->tipoComboImportacion;
         $arrayInstitucionGestion    = [];
         if($venta_estado == 1){
-            $arrayInstitucionGestion = ["bc_institucion" => $request->institucion_id ,"venta_lista_institucion" => 0];
+            $arrayInstitucionGestion = ["venta_lista_institucion" => $request->institucion_id ,"bc_institucion" => $request->id_institucionPedido];
+            // $arrayInstitucionGestion = ["bc_institucion" => $request->institucion_id ,"venta_lista_institucion" => 0];
         }
         if($venta_estado == 2){
             $arrayInstitucionGestion = ["venta_lista_institucion" => $request->institucion_id ,"bc_institucion" => 0];
@@ -811,6 +812,7 @@ class  CodigosRepository extends BaseRepository
                     'v.idtipodoc',
                     'ibc.nombreInstitucion as nombre_institucion_bc',
                     'iventa.nombreInstitucion as nombre_institucion_venta',
+                    'emp.descripcion_corta as descripcion_empresa',
                     DB::raw("
                         CASE
                             WHEN c.porcentaje_personalizado_regalado = 0 THEN
@@ -825,6 +827,13 @@ class  CodigosRepository extends BaseRepository
                                 LIMIT 1)
                             ELSE NULL
                         END AS descuento
+                    "),
+                    DB::raw("
+                        CASE
+                            WHEN v.idtipodoc = 1 THEN 'Prefactura'
+                            WHEN v.idtipodoc = 2 THEN 'Nota'
+                            ELSE NULL
+                        END AS tipo_documento_descr
                     "),
                     // DB::raw("(SELECT v.ven_desc_por FROM f_venta v WHERE v.ven_codigo = c.codigo_proforma AND v.id_empresa = c.proforma_empresa LIMIT 1) AS descuento"),
                     DB::raw('
@@ -851,6 +860,7 @@ class  CodigosRepository extends BaseRepository
                 ->leftJoin('asignatura as a_plus', 'lib_plus.asignatura_idasignatura', '=', 'a_plus.idasignatura')
                 ->leftJoin('institucion as ibc','ibc.idinstitucion','=','c.bc_institucion')
                 ->leftJoin('institucion as iventa','iventa.idinstitucion','=','c.venta_lista_institucion')
+                ->leftJoin('empresas as emp','emp.id','c.proforma_empresa')
                 ->leftJoin('f_venta as v', function ($join) {
                     $join->on('v.ven_codigo', '=', 'c.codigo_proforma')
                          ->on('v.id_empresa', '=', 'c.proforma_empresa');

@@ -75,7 +75,7 @@ class PlanificacionController extends Controller
     {
         $idLibro = 0;
         //validar si no es un libro plus
-        $validatePlus = DB::SELECT("SELECT * FROM libros_series ls
+        $validatePlus = DB::SELECT("SELECT id_libro_serie, idLibro, id_libro_plus FROM libros_series ls
         WHERE ls.id_libro_plus = '$id'
         ");
         if(count($validatePlus) > 0){

@@ -38,7 +38,6 @@ trait TraitPedidosGeneral
     //===PERSEO PROLIPA===
     public function tr_PerseoPost($endpoint,$data,$empresa=1){
         try {
-            //empresa 1 => prolipa; 3 => calmed
             $dato = [];
             //Obtener la empresa desde la base de datos
             $empresaData = _14Empresa::find($empresa);

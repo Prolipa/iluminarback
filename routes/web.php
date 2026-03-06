@@ -242,6 +242,10 @@ Route::get('sumarEncuestasDescargadas', 'SeminarioController@sumarEncuestasDesca
 Route::get('institucionesTemporalesWebinar', 'SeminarioController@institucionesTemporalesWebinar');
 //=======================FIN APIS PARA WEBINAR================
 
+//======================APIS PARA PLANIFICACIONES==============
+Route::get('verificarCedulaAsesor', 'AuthController@verificarCedulaAsesor');
+//=======================FIN APIS PARA PLANIFICACIONES=========
+
 //========================APIS PARA MATRICULAS=================================
 Route::get('cursosInstitucion', 'CursoController@cursosInstitucion');
 Route::get('estudiante/matricula', 'CursoController@estudianteMatricula');
@@ -1083,6 +1087,17 @@ Route::get('get_finished_events/{id}', 'PlanificacionAgendaController@get_finish
 Route::get('get_incomplete_events/{id}', 'PlanificacionAgendaController@get_incomplete_events');
 Route::resource('planificacion_agenda', 'PlanificacionAgendaController');
 
+// Rutas para el nuevo módulo de planificaciones
+Route::prefix('agenda-planificacion')->group(function () {
+    Route::get('/', 'AgendaPlanificacionController@index');
+    Route::post('/', 'AgendaPlanificacionController@store');
+    Route::get('/calendario', 'AgendaPlanificacionController@calendario');
+    Route::get('/{id}', 'AgendaPlanificacionController@show');
+    Route::put('/{id}', 'AgendaPlanificacionController@update');
+    Route::delete('/{id}', 'AgendaPlanificacionController@destroy');
+    Route::post('/{id}/cambiar-estado', 'AgendaPlanificacionController@cambiarEstado');
+});
+
 //ingrsos masivos
 Route::get('ingresos_masivos', 'UsuarioController@ingresos_masivos');
 Route::get('modificar_codigos_masivos', 'UsuarioController@modificar_codigos_masivos');
@@ -1140,6 +1155,7 @@ Route::post('eliminarRegistroDetallePedidoLibro', 'PedidosController@eliminarReg
 Route::post('eliminarRegistroDetallesPedidoACTA', 'PedidosController@eliminarRegistroDetallesPedidoACTA');
 Route::post('AceptarLibrosObsequios', 'PedidosController@AceptarLibrosObsequios');
 Route::post('AceptarLibrosObsequiosFacturador', 'PedidosController@AceptarLibrosObsequiosFacturador');
+Route::post('AprobarLibrosObsequiosSoloEstado', 'PedidosController@AprobarLibrosObsequiosSoloEstado');
 Route::post('changeEstadoPedidoLibrosObsequios', 'PedidosController@changeEstadoPedidoLibrosObsequios');
 Route::post('CambiarEstadoLibrosObsequios', 'PedidosController@CambiarEstadoLibrosObsequios');
 Route::post('Acta_LibrosObsequios_Registrar_modificar', 'PedidosController@Acta_LibrosObsequios_Registrar_modificar');
@@ -2157,6 +2173,7 @@ Route::post('Venta_Perseo_Actualizar','Perseo\VentaPerseoController@actualizarVe
 Route::get('obtener_pedidos_obsequios_por_contrato','Perseo\VentaPerseoController@obtenerPedidosObsequiosPorContrato');
 Route::get('api/perseo/ventas/obtenerDatosDetalleLibros/{id}','Perseo\VentaPerseoController@obtenerDatosDetalleLibros');
 Route::post('Venta_Obsequios_Perseo_Generar','Perseo\VentaPerseoController@generarVentaObsequios');
+Route::post('Venta_Obsequios_Perseo_Anular','Perseo\VentaPerseoController@anularVentaObsequios');
 
 //venta
 Route::get('Get_CodVenta','VentasController@Get_CodVenta');

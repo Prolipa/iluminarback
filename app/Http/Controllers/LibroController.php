@@ -706,8 +706,8 @@ class LibroController extends Controller
         $query = DB::table('libro as l')
         ->select('l.*', 'a.nombreasignatura as asignatura',
                 'ls.iniciales', 'ls.codigo_liquidacion', 'ls.year', 'ls.version', 'ls.id_libro_plus',
-                's.id_serie', 's.nombre_serie', 'ls.nombre', 'p.ifcombo', 'p.codigos_combos',
-                'folleto.nombrelibro as folleto_nombre','folleto_ls.id_serie as folleto_id_serie',
+                's.id_serie', 's.nombre_serie', 'ls.nombre', 'p.ifcombo', 'p.codigos_combos', 'p.codigos_combos_regalado',
+                'folleto.nombrelibro as folleto_nombre','folleto.weblibro as folleto_weblibro','folleto_ls.id_serie as folleto_id_serie',
                 'libro_plus.nombrelibro as libro_plus_nombre','libro_plus_ls.id_serie as libro_plus_id_serie',
                 'gpv3.gru_pro_nombre as nombre_grupo_v3','p.grupo_codigo_para_v3',
                 'p.id_pro_codigo_padre','pdr.pro_nombre AS nombre_producto_padre'
@@ -723,26 +723,26 @@ class LibroController extends Controller
         ->leftJoin('1_4_grupo_productos as gpv3', 'p.grupo_codigo_para_v3', '=', 'gpv3.gru_pro_codigo')
         ->leftJoin('1_4_cal_producto AS pdr','pdr.pro_codigo','=','p.id_pro_codigo_padre');
 
-    // Determine the WHERE clause based on the 'tipo' parameter
-    switch ($request->tipo) {
-        case '0':
-            $query->where('l.nombrelibro', 'LIKE', '%' . $request->busqueda . '%');
-            break;
-        case '1':
-            $query->where('s.nombre_serie', 'LIKE', '%' . $request->busqueda . '%');
-            break;
-        case '2':
-            $query->where('ls.codigo_liquidacion', 'LIKE', '%' . $request->busqueda . '%');
-            break;
-        default:
-            // Handle unexpected 'tipo' values if necessary
-            return [];
-    }
+        // Determine the WHERE clause based on the 'tipo' parameter
+        switch ($request->tipo) {
+            case '0':
+                $query->where('l.nombrelibro', 'LIKE', '%' . $request->busqueda . '%');
+                break;
+            case '1':
+                $query->where('s.nombre_serie', 'LIKE', '%' . $request->busqueda . '%');
+                break;
+            case '2':
+                $query->where('ls.codigo_liquidacion', 'LIKE', '%' . $request->busqueda . '%');
+                break;
+            default:
+                // Handle unexpected 'tipo' values if necessary
+                return [];
+        }
 
-    // Order by 'l.nombrelibro' in ascending order
-    $libros = $query->orderBy('l.nombrelibro', 'asc')->get();
+        // Order by 'l.nombrelibro' in ascending order
+        $libros = $query->orderBy('l.nombrelibro', 'asc')->get();
 
-    return $libros;
+        return $libros;
     }
     public function getLibroP(){
         $libros = DB::SELECT("SELECT l.*, a.nombreasignatura as asignatura,
@@ -848,7 +848,8 @@ class LibroController extends Controller
                         'pro_nombre'        => $libro->nombrelibro,
                         'pro_descripcion'   => $libro->descripcionlibro,
                         'ifcombo'           => $request->ifcombo,
-                        'codigos_combos'    => $request->codigos_combos ?? null,
+                        'codigos_combos'    => ($request->codigos_combos === 'null' || trim($request->codigos_combos) === '') ? null : $request->codigos_combos,
+                        'codigos_combos_regalado' => ($request->codigos_combos_regalado === 'null' || trim($request->codigos_combos_regalado) === '') ? null : $request->codigos_combos_regalado,
                         'grupo_codigo_para_v3' => $request->grupo_codigo_para_v3 ?? null,
                         'id_pro_codigo_padre'   => $request->id_pro_codigo_padre ?? null
                     ]);

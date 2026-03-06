@@ -57,29 +57,29 @@ class LoginController extends Controller
             if ($encontrarEstado == 2 || $encontrarEstado == 3 || $encontrarEstado == 4 || $encontrarEstado == null) {
                 return response()->json(['errors' => 'Su usuario se encuentra bloqueado, por favor envíe un correo a soporte@prolipa.com.ec, para reestablecer su acceso.'], 412);
             }
-            $password2 = $user->password2;
+            $password2 = $user->password;
             //si el password2 es null creo el hash a bcrypt
-            if ($password2 == null) {
-                $password2       = Hash::make($request->password);
-                $user->password2 = $password2;
-                $user->save();
-            }
+            // if ($password2 == null) {
+            //     $password2       = Hash::make($request->password);
+            //     $user->password2 = $password2;
+            //     $user->save();
+            // }
             // Verifica la contraseña contra el hash SHA1-MD5
             $sha1md5Password = sha1(md5($request->password));
 
             if ($user->password === $sha1md5Password) {
                 // Autenticación exitosa para el hash SHA1-MD5
                 Auth::login($user);
-            } elseif (Hash::check($request->password, $user->password2)) {
+            } elseif (Hash::check($request->password, $user->password)) {
                 // Autenticación exitosa para el hash bcrypt
                 Auth::login($user);
             } else {
                 // Contraseña incorrecta
-                return response()->json(['errors' => 'Su contraseña es incorrecta'], 412);
+                return response()->json(['errors' => 'Su contraseña es incorrecta', 'tipo' => 'password'], 412);
             }
         } else {
             // Usuario no encontrado
-            return response()->json(['errors' => 'Su usuario no existe'], 412);
+            return response()->json(['errors' => 'Su usuario no existe', 'tipo' => 'user'], 412);
         }
 
 

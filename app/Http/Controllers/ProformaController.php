@@ -3657,7 +3657,9 @@ class ProformaController extends Controller
                     fv.estadoPerseo,
                     fv.anuladoEnPerseo,
                     fv.pedido_codigo,
-                    fv.fecha_envio_perseo
+                    fv.fecha_envio_perseo,
+                    fv.factura_perseo,
+                    fv.id_factura_perseo
                 FROM f_venta fv
                 LEFT JOIN empresas em ON fv.id_empresa = em.id
                 LEFT JOIN institucion i ON fv.institucion_id = i.idInstitucion

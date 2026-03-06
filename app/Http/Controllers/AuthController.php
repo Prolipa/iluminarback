@@ -135,6 +135,30 @@ class AuthController extends Controller {
         }
     }
 
+    //api:get>//verificarCedulaAsesor
+    public function verificarCedulaAsesor(Request $request){
+        $buscarCedula = DB::SELECT("SELECT u.idusuario, u.cedula, u.nombres, u.apellidos, u.name_usuario, u.email
+            FROM usuario u
+            WHERE u.cedula = ? 
+            AND u.id_group = 11
+            AND u.estado_idEstado = 1
+            LIMIT 1
+        ", [$request->cedula]);
+
+        if(count($buscarCedula) > 0){
+            return [
+                "status" => 1,
+                "message" => "Asesor encontrado",
+                "usuario" => $buscarCedula[0]
+            ];
+        }else{
+            return [
+                "status" => 0,
+                "message" => "No se encontró un asesor con esta cédula"
+            ];
+        }
+    }
+
     // public function login(Request $request)
     // {
     //     $request->validate([

@@ -15,6 +15,7 @@ use App\Models\CodigosLibrosDevolucionSonFacturador;
 use App\Models\DetalleVentas;
 use App\Models\f_tipo_documento;
 use App\Models\LibroSerie;
+use App\Models\Pedidos;
 use App\Models\Periodo;
 use App\Models\User;
 use App\Models\Ventas;
@@ -51,6 +52,7 @@ class DevolucionController extends Controller
     public function index(Request $request)
     {
         if($request->listadoProformasAgrupadas)                 { return $this->listadoProformasAgrupadas($request); }
+        if($request->buscarDocumentoVenta)                      { return $this->buscarDocumentoVenta($request); }
         if($request->filtroDocumentosDevueltos)                 { return $this->filtroDocumentosDevueltos($request); }
         if($request->getCodigosDevolucionTodos)                 { return $this->getCodigosDevolucionTodos($request); }
         if($request->getCodigosxDocumentoDevolucion)            { return $this->getCodigosxDocumentoDevolucion($request); }
@@ -100,9 +102,125 @@ class DevolucionController extends Controller
                 1
             );
             $proformas[$key]->combos = count($detalleCombos);
+            $id_institucionPedido = null;
+            // consulta el pedido por contrato
+            $getPedido = Pedidos::where('contrato_generado', $proforma->contrato)->where('estado','1')->first();
+            if ($getPedido) {
+                $id_institucionPedido = $getPedido->id_institucion;
+            }
+            $proformas[$key]->id_institucionPedido = $id_institucionPedido;
         }
 
         return $proformas;
+    }
+
+    //api:get/devoluciones?buscarDocumentoVenta=1&documento=PF-C26-C26-ASWNM-1830
+    public function buscarDocumentoVenta(Request $request)
+    {
+        $documento = $request->input('documento');
+
+        if (!$documento) {
+            return response()->json(['status' => 0, 'message' => 'Documento requerido'], 400);
+        }
+
+        // Buscar documentos con LIKE y filtrar por idtipodoc = 1
+        $query = DB::table('f_venta as v')
+            ->leftJoin('institucion as i', 'v.institucion_id', '=', 'i.idInstitucion')
+            ->leftJoin('periodoescolar as p', 'v.periodo_id', '=', 'p.idperiodoescolar')
+            ->leftJoin('ciudad as c', 'i.ciudad_id', '=', 'c.idciudad')
+            ->leftJoin('pedidos as ped', function($join) {
+                $join->on('ped.contrato_generado', '=', 'v.contrato')
+                     ->where('ped.estado', '=', '1');
+            })
+            ->where('v.ven_codigo', 'LIKE', '%' . $documento . '%')
+            ->where('v.idtipodoc', '=', 1)
+            ->select(
+                'v.ven_codigo',
+                'v.contrato',
+                'v.ven_concepto_perseo',
+                'v.tip_ven_codigo',
+                'v.est_ven_codigo',
+                'v.ven_idproforma',
+                'v.ven_tipo_inst',
+                'v.ven_comision',
+                'v.ven_com_porcentaje',
+                'v.ven_valor',
+                'v.ven_subtotal',
+                'v.ven_pagado',
+                'v.ven_desc_por',
+                'v.ven_descuento',
+                'v.ven_iva_por',
+                'v.ven_iva',
+                'v.ven_fecha',
+                'v.ven_transporte',
+                'v.ven_devolucion',
+                'v.ven_remision',
+                'v.ven_fech_remision',
+                'v.institucion_id',
+                'v.periodo_id',
+                'v.updated_at',
+                'v.user_created',
+                'v.id_empresa',
+                'v.id_ins_depacho',
+                'v.id_sucursal',
+                'v.impresion',
+                'v.ven_observacion',
+                'v.idtipodoc',
+                'v.ven_p_libros_obsequios',
+                'v.ven_cliente',
+                'v.estadoPerseo',
+                'v.idPerseo',
+                'v.proformas_codigo',
+                'v.fecha_envio_perseo',
+                'v.clientesidPerseo',
+                'v.id_factura',
+                'v.ruc_cliente',
+                'v.anuladoEnPerseo',
+                'v.doc_intercambio',
+                'v.user_intercambio',
+                'v.fecha_intercambio',
+                'v.observacion_intercambio',
+                'v.user_anulado',
+                'v.fecha_anulacion',
+                'v.observacionAnulacion',
+                'v.id_pedido',
+                'v.id_pedido_guia',
+                'v.fecha_notaCredito',
+                'v.fecha_sri',
+                'v.documento_sri',
+                'v.observacionRegresarAPendiente',
+                'v.fecha_update_sri',
+                'v.usuario_update_sri',
+                'v.user_despacha',
+                'v.fecha_proceso_despacho',
+                'v.destino',
+                'v.pedido_codigo',
+                'i.nombreInstitucion',
+                'p.periodoescolar as periodo',
+                'p.estado as statusPeriodo',
+                'c.nombre as ciudad',
+                'ped.id_institucion as id_institucionPedido'
+            )
+            ->orderBy('v.ven_fecha', 'desc')
+            ->limit(50)
+            ->get();
+
+        if ($query->isEmpty()) {
+            return [];
+        }
+
+        // Agregar información de combos para cada documento
+        foreach ($query as $key => $proforma) {
+            $detalleCombos = $this->devolucionRepository->detallePrefactura(
+                $proforma->ven_codigo,
+                $proforma->id_empresa,
+                $proforma->institucion_id,
+                1
+            );
+            $query[$key]->combos = count($detalleCombos);
+        }
+
+        return $query;
     }
 
     //api:get/devoluciones?getCodigosDevolucionTodos=1&idDevolucion=41
@@ -1106,12 +1224,13 @@ class DevolucionController extends Controller
     }
     public function CargarDocumentosDetalles(Request $request){
         $query = DB::SELECT("SELECT dv.det_ven_codigo, dv.pro_codigo, dv.det_ven_dev, dv.det_ven_cantidad, dv.det_ven_valor_u,dv.detalle_notaCreditInterna,
-            l.descripcionlibro, ls.nombre, s.nombre_serie, ls.id_serie
+            l.descripcionlibro,s.nombre_serie, ls.id_serie, p.pro_nombre as nombre
             FROM f_detalle_venta AS dv
             LEFT JOIN f_venta AS fv ON dv.ven_codigo=fv.ven_codigo
             LEFT JOIN libros_series AS ls ON dv.pro_codigo=ls.codigo_liquidacion
             LEFT JOIN series AS s ON ls.id_serie=s.id_serie
             LEFT JOIN libro l ON ls.idLibro = l.idlibro
+            LEFT JOIN 1_4_cal_producto AS p ON dv.pro_codigo = p.pro_codigo
             WHERE dv.ven_codigo='$request->codigo'
             AND dv.id_empresa=fv.id_empresa
             AND fv.id_empresa= $request->empresa

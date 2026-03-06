@@ -9,6 +9,7 @@ use App\Models\CodigosLibros;
 use App\Models\CodigosPaquete;
 use App\Models\HistoricoPaquetes;
 use App\Http\Controllers\Controller;
+use App\Models\_14Producto;
 use App\Models\Rol;
 use App\Traits\Codigos\TraitCodigosGeneral;
 use App\Repositories\Codigos\CodigosRepository;
@@ -504,7 +505,16 @@ class PaqueteController extends Controller
                 $mensajePadre = "";
                 $comboIndividual = null;
                 $msgComboIndividual = '';
+                $codigos_combos_regalado = null;
                 $codigoPaquete = strtoupper($item->codigoPaquete);
+                // combos
+                if($tipoBodega == 4){
+                    $informacionCombo = _14Producto::where('pro_codigo', $item->combo)->first();
+                    if(!$informacionCombo){
+                        return ["status" => "0", "message" => "No se encontró información del combo $item->combo en la tabla producto"];
+                    }
+                    $codigos_combos_regalado = $informacionCombo->codigos_combos_regalado??null;
+                }
                 if($ifSetCombo  == 1){
                     if($tipoComboImportacion == 1){
                         //combo del excel
@@ -521,6 +531,7 @@ class PaqueteController extends Controller
                 if($tipoBodega == 3){
                     $getExistsPaquete = $this->getExistsPaquete($codigoPaquete);
                 }
+                // combo
                 else{
                     $getExistsPaquete = $this->getExistsCombo($codigoPaquete);
                 }
@@ -528,7 +539,6 @@ class PaqueteController extends Controller
                 if (!empty($getExistsPaquete)) {
                     // TipoBodega => 3 paquete; 4 = combo
                     $codigosHijos = $this->getCodigos($codigoPaquete, 0, $tipoBodega == 3 ? 3 : 5);
-
                     if(count($codigosHijos) > 0){
                         foreach($codigosHijos as $key2 => $tr){
                             $validarA = [];
@@ -588,6 +598,7 @@ class PaqueteController extends Controller
 
                                 // Si ambos códigos pasan la validación, guardo
                                 if($errorA == 0 && $errorD == 0){
+
                                     $old_valuesA = CodigosLibros::Where('codigo',$codigoActivacion)->get();
                                     $old_valuesD = CodigosLibros::findOrFail($codigoDiagnostico);
                                     $ingreso = $this->paqueteRepository->procesoGestionBodega($tipoProceso, $codigoActivacion, $codigoDiagnostico, $request, $factura, $item->codigoPaquete, $ifChangeProforma, $datosProforma, $comboIndividual);
@@ -596,10 +607,32 @@ class PaqueteController extends Controller
                                     if($ingreso == 1){
                                         $contadorA++;
                                         $contadorD++;
+
+                                        // ======== cambiar a regalados los codigos de activacion y diagnostica que tenga codigo_liquidacion==========
+                                        if($codigos_combos_regalado && $tipoBodega == 4){
+                                            $arrayRegalados = array_map('trim', explode(',', $codigos_combos_regalado));
+                                            // Verificar código de activación
+                                            $codigoLiquidacionA = $tr->codigo_liquidacion ?? null;
+                                            if($codigoLiquidacionA && in_array($codigoLiquidacionA, $arrayRegalados)){
+                                                // Actualizar código de activación
+                                                CodigosLibros::where('codigo', $codigoActivacion)
+                                                    ->update(['estado_liquidacion' => 2]);
+                                                // Actualizar código de diagnóstico solo si existe
+                                                if($codigoDiagnostico){
+                                                    CodigosLibros::where('codigo', $codigoDiagnostico)
+                                                        ->update(['estado_liquidacion' => 2]);
+                                                }
+                                            }
+                                        }
+
+                                        // NUEVOS VALORES PARA HISTORICO
+                                        $new_valuesA = CodigosLibros::Where('codigo',$codigoActivacion)->get();
+                                        $new_valuesD = CodigosLibros::Where('codigo',$codigoDiagnostico)->get();
                                         // === Código ===
-                                        $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoActivacion, $usuario_editor, $comentario, $old_valuesA, null);
+                                        $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoActivacion, $usuario_editor, $comentario, $old_valuesA, $new_valuesA);
                                         // === Código Unión ===
-                                        $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoDiagnostico, $usuario_editor, $comentario, $old_valuesD, null);
+                                        $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoDiagnostico, $usuario_editor, $comentario, $old_valuesD, $new_valuesD);
+
                                     }else{
                                         $problemasconCodigo[$contadorProblemasCodigos] = [
                                             "codigoActivacion" => $codigoActivacion,

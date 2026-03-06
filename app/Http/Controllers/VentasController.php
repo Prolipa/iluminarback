@@ -1226,6 +1226,7 @@ class VentasController extends Controller
             LEFT JOIN f_venta camb ON camb.doc_intercambio = f.ven_codigo  AND camb.id_empresa = f.id_empresa
             WHERE f.est_ven_codigo " . (is_array($estado) ? 'IN (' . implode(',', $estado) . ')' : '= ' . $estado) . "
             AND NOT (f.idtipodoc IN (3, 4) AND f.doc_intercambio IS NOT NULL)
+            AND f.idtipodoc in (1, 2, 3, 4)
             $condicionFecha
             GROUP BY f.ven_codigo, f.id_empresa, f.tip_ven_codigo, i.nombreInstitucion, us.cedula, us.email,
                     us.telefono, i.telefonoInstitucion, i.direccionInstitucion, i.asesor_id,

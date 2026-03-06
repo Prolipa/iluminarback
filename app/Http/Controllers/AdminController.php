@@ -3110,50 +3110,99 @@ class AdminController extends Controller
         try {
             $contadorProlipa = 0;
             $contadorCalmed  = 0;
+            $contadorProlipa2026 = 0;
+            $contadorCalmed2026  = 0;
             $arrayProblemasProlipa  = [];
             $arrayProblemasCalmed  = [];
+            $arrayProblemasProlipa2026  = [];
+            $arrayProblemasCalmed2026  = [];
 
             //PROLIPA
-            $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            WHERE p.id_perseo_prolipa_produccion IS NULL
-            AND  (p.gru_pro_codigo = '1' OR p.gru_pro_codigo = '2')
-            LIMIT 25
+            // $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+            // WHERE p.id_perseo_prolipa_produccion IS NULL
+            // AND  (p.gru_pro_codigo = '1' OR p.gru_pro_codigo = '2')
+            // LIMIT 25
+            // ");
+            // foreach($queryProlipa as $key => $item){
+            //     $formData = [
+            //         "productocodigo"=> $item->pro_codigo,
+            //     ];
+            //     $url                = "productos_consulta";
+            //     $processProlipa     = $this->tr_PerseoPost($url, $formData,1);
+            //     if(isset($processProlipa["informacion"])){
+            //         array_push($arrayProblemasProlipa,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Prolipa']);
+            //     }
+            //     $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa_produccion");
+            //     //contadorProlipa + getContador
+            //     $contadorProlipa    = $contadorProlipa + $getContador;
+            // }
+            // //CALMED
+            // $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+            // WHERE p.id_perseo_calmed_produccion IS NULL
+            // AND  (p.gru_pro_codigo = '1' OR p.gru_pro_codigo = '2')
+            // LIMIT 25
+            // ");
+            // foreach($queryCalmed as $key => $item){
+            //     $formData = [
+            //         "productocodigo"=> $item->pro_codigo,
+            //     ];
+            //     $url                = "productos_consulta";
+            //     $processCalmed      = $this->tr_PerseoPost($url, $formData,3);
+            //     if(isset($processCalmed["informacion"])){
+            //         array_push($arrayProblemasCalmed,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Calmed']);
+            //     }
+            //     $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed_produccion");
+            //     //contadorCalmed + getContador
+            //     $contadorCalmed     = $contadorCalmed + $getContador;
+            // }
+            //PROLIPA 26
+            $queryProlipa2026 = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+            WHERE p.id_perseo_prolipa2026_produccion IS NULL
+            AND  (p.gru_pro_codigo = '1' OR p.gru_pro_codigo = '2' OR p.gru_pro_codigo = '7' OR p.gru_pro_codigo = '14' OR p.gru_pro_codigo = '15' OR p.gru_pro_codigo = '16' OR p.gru_pro_codigo = '17')
+            LIMIT 30
             ");
-            foreach($queryProlipa as $key => $item){
+            foreach($queryProlipa2026 as $key => $item){
                 $formData = [
                     "productocodigo"=> $item->pro_codigo,
                 ];
                 $url                = "productos_consulta";
-                $processProlipa     = $this->tr_PerseoPost($url, $formData,1);
+                $processProlipa     = $this->tr_PerseoPost($url, $formData,5);
                 if(isset($processProlipa["informacion"])){
-                    array_push($arrayProblemasProlipa,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Prolipa']);
-                    continue;
+                    array_push($arrayProblemasProlipa2026,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Prolipa']);
                 }
-                $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa_produccion");
-                //contadorProlipa + getContador
-                $contadorProlipa    = $contadorProlipa + $getContador;
+                $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa2026_produccion");
+                //contadorProlipa2026 + getContador
+                $contadorProlipa2026    = $contadorProlipa2026 + $getContador;
             }
-            //CALMED
-            $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            WHERE p.id_perseo_calmed_produccion IS NULL
-            AND  (p.gru_pro_codigo = '1' OR p.gru_pro_codigo = '2')
-            LIMIT 25
+            //CALMED 26
+            $queryCalmed2026 = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+            WHERE p.id_perseo_calmed2026_produccion IS NULL
+            AND  (p.gru_pro_codigo = '1' OR p.gru_pro_codigo = '2' OR p.gru_pro_codigo = '7' OR p.gru_pro_codigo = '14' OR p.gru_pro_codigo = '15' OR p.gru_pro_codigo = '16' OR p.gru_pro_codigo = '17')
+            LIMIT 30
             ");
-            foreach($queryCalmed as $key => $item){
+            foreach($queryCalmed2026 as $key => $item){
                 $formData = [
                     "productocodigo"=> $item->pro_codigo,
                 ];
                 $url                = "productos_consulta";
-                $processCalmed      = $this->tr_PerseoPost($url, $formData,3);
+                $processCalmed      = $this->tr_PerseoPost($url, $formData,4);
                 if(isset($processCalmed["informacion"])){
-                    array_push($arrayProblemasCalmed,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Calmed']);
-                    continue;
+                    array_push($arrayProblemasCalmed2026,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Calmed']);
+                    // continue;
                 }
-                $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed_produccion");
-                //contadorCalmed + getContador
-                $contadorCalmed     = $contadorCalmed + $getContador;
+                $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed2026_produccion");
+                //contadorCalmed2026 + getContador
+                $contadorCalmed2026     = $contadorCalmed2026 + $getContador;
             }
-            return ["contadorProlipa" => $contadorProlipa, "arrayProblemasProlipa" => $arrayProblemasProlipa, "contadorCalmed" => $contadorCalmed, "arrayProblemasCalmed" => $arrayProblemasCalmed];
+            return [
+                "contadorProlipa" => $contadorProlipa,
+                "arrayProblemasProlipa" => $arrayProblemasProlipa,
+                "contadorCalmed" => $contadorCalmed,
+                "arrayProblemasCalmed" => $arrayProblemasCalmed,
+                "contadorProlipa2026" => $contadorProlipa2026,
+                "arrayProblemasProlipa2026" => $arrayProblemasProlipa2026,
+                "contadorCalmed2026" => $contadorCalmed2026,
+                "arrayProblemasCalmed2026" => $arrayProblemasCalmed2026];
         } catch (\Exception $e) {
             return response()->json([
                 'error' => $e->getMessage()
