@@ -1043,7 +1043,7 @@ Route::get('eliminarPeriodosInstitucion/{id}', 'PeriodoInstitucionController@eli
 //elimina areas de salle
 Route::get('eliminaArea/{id}', 'SalleAreasController@eliminaArea');
 //elimina asignaturas de salle
-Route::get('eliminaAsignatura/{id}', 'SalleAsignaturasController@eliminaAsignatura');
+Route::get('eliminaAreaSalle/{id}', 'SalleAsignaturasController@eliminaAreaSalle');
 //asignaturas por docente
 Route::post('asignaturasDocent', 'AsignaturaDocenteController@asignaturas_x_docente');
 //asignaturas por docente X PERIDOO
@@ -1420,6 +1420,7 @@ Route::get('f_venta_audits_revision','VentasController@f_venta_audits_revision')
 Route::get('GetProducto_ParaCaracteristicas','_14ProductoController@GetProducto_ParaCaracteristicas');
 Route::get('Get_Detallexprocodigo','OrdenTrabajoController@Get_Detallexprocodigo');
 Route::get('Todo_Libros_Individuales_pedido_alcance_formatoprecio','LibroSerieController@Todo_Libros_Individuales_pedido_alcance_formatoprecio');
+Route::get('Procesar_MetodosGet_ProformaController','ProformaController@Procesar_MetodosGet_ProformaController');
 Route::post('VerifcarMetodosPost_Institucion_Autoridades','Institucion_AutoridadesController@VerifcarMetodosPost_Institucion_Autoridades');
 Route::post('VerifcarMetodosPost_Editoriales','EditorialesController@VerifcarMetodosPost_Editoriales');
 Route::post('actualizarPassword_PerfilUser','UsuarioController@actualizarPassword_PerfilUser');
@@ -2383,7 +2384,10 @@ Route::post('change_asesor_en_pedido', 'PedidosController@change_asesor_en_pedid
 Route::get('validarTipoInstitucion/{id}', 'InstitucionController@validarTipoInstitucion');
 Route::get('limpiarCeroParallenarIdsPerseo','AdminController@limpiarCeroParallenarIdsPerseo');
 Route::get('llenarIdsPerseo','AdminController@llenarIdsPerseo');
+Route::get('llenarIdsPerseoGuias','AdminController@llenarIdsPerseoGuias');
+Route::get('llenarIdsPerseoLimpiar','AdminController@llenarIdsPerseoLimpiar');
 Route::get('llenarIdsPerseoxCodigo/{codigo}','AdminController@llenarIdsPerseoxCodigo');
+Route::get('llenarContratosDirecta/{periodo}','AdminController@llenarContratosDirecta');
 Route::get('verificarProductosPerseo/{codigo}/{empresa}','AdminController@llenarIdsPerseoxCodigoXEmpresa');
 
 

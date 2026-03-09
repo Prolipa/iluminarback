@@ -329,8 +329,11 @@ class UsuarioController extends Controller
                     "cedula"            => $documento->cedula,
                     "email"             => $documento->email,
                     "idusuario"         => $documento->idusuario,
-                    'created_at'        => $documento->created_at->format('Y-m-d H:i:s'),
-                    'updated_at'        => $documento->updated_at->format('Y-m-d H:i:s'),
+                    // 'created_at'        => $documento->created_at->format('Y-m-d H:i:s'),
+                    // 'updated_at'        => $documento->updated_at->format('Y-m-d H:i:s'),
+                    'created_at' => optional($documento->created_at)->format('Y-m-d H:i:s'),
+                    'updated_at' => optional($documento->updated_at)->format('Y-m-d H:i:s'),
+
                     "cargo"             => $documento->cargo,
                     "cargo_id"          => $documento->cargo_id,
                 ];

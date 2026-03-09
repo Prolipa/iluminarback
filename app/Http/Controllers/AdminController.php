@@ -3106,6 +3106,213 @@ class AdminController extends Controller
             ], 500);
         }
     }
+
+    //api:get>>llenarContratosDirecta/27
+    public function llenarContratosDirecta($periodo){
+        if(!$periodo){
+            return ["status" => "0", "message" => "El periodo es requerido"];
+        }
+
+        $arrayErroresActas = [];
+        $contadorActas = 0;
+        $arrayErroresPrefacturasNotas = [];
+        $contadorPrefacturasNotas = 0;
+
+        $actas = DB::SELECT("SELECT
+                v.ven_p_libros_obsequios,
+                v.idtipodoc,
+                p.contrato_generado,
+                v.*
+            FROM f_venta v
+            LEFT JOIN p_libros_obsequios o ON o.id = v.ven_p_libros_obsequios
+            LEFT JOIN pedidos p ON p.id_pedido = o.id_pedido
+            WHERE v.periodo_id = '$periodo'
+            AND v.est_ven_codigo <> '3'
+            AND v.tip_ven_codigo = '1'
+            AND v.idtipodoc IN (2)
+            AND v.contrato IS NULL
+        ");
+
+        // actualizar f_venta el campo contrato con el valor de contrato_generado
+        foreach($actas as $acta){
+
+            $contrato = $acta->contrato_generado;
+
+            if($contrato == null || $contrato == ""){
+                $messageError = "No se encontró contrato generado para el documento de venta con ven_codigo: " . $acta->ven_codigo;
+                $acta->messageError = $messageError;
+                $arrayErroresActas[] = $acta;
+                continue;
+            }
+
+            if($acta->ven_p_libros_obsequios == null || $acta->ven_p_libros_obsequios == ""){
+                $messageError = "No se encontró id_p_libros_obsequios para el documento de venta con ven_codigo: " . $acta->ven_codigo;
+                $acta->messageError = $messageError;
+                $arrayErroresActas[] = $acta;
+                continue;
+            }
+
+            DB::table('f_venta')
+            ->where('ven_codigo', $acta->ven_codigo)
+            ->where('id_empresa', $acta->id_empresa)
+            ->update(['contrato' => $acta->contrato_generado]);
+
+            $contadorActas++;
+        }
+
+        // documentos de venta prefactas y notas
+        $prefacturaNotas = DB::SELECT("SELECT
+                ped.contrato_generado,
+                pr.idPuntoventa,
+                v.ven_idproforma,
+                v.idtipodoc,
+                (
+                    SELECT COUNT(p.id_pedido)
+                    FROM pedidos p
+                    WHERE p.ca_codigo_agrupado = pr.idPuntoventa
+                    AND p.estado = '1'
+                ) AS contadorContratos,
+                v.*
+            FROM f_venta v
+            LEFT JOIN f_proforma pr ON pr.prof_id = v.ven_idproforma
+            LEFT JOIN pedidos ped ON ped.ca_codigo_agrupado = pr.idPuntoventa
+            WHERE v.periodo_id = '$periodo'
+            AND v.est_ven_codigo <> '3'
+            AND v.tip_ven_codigo = '1'
+            AND v.idtipodoc IN (1,3,4)
+            AND v.contrato IS NULL
+        ");
+
+        // actualizar f_venta el campo contrato con el valor de idPuntoventa si contadorContratos es mayor a 0
+        foreach($prefacturaNotas as $item){
+
+            if($item->contrato_generado == null || $item->contrato_generado == ""){
+                $messageError = "No se encontró contrato generado para el documento de venta con ven_codigo: " . $item->ven_codigo;
+                $item->messageError = $messageError;
+                $arrayErroresPrefacturasNotas[] = $item;
+                continue;
+            }
+
+            if($item->idPuntoventa == null || $item->idPuntoventa == ""){
+                $messageError = "No se encontró idPuntoventa para el documento de venta con ven_codigo: " . $item->ven_codigo;
+                $item->messageError = $messageError;
+                $arrayErroresPrefacturasNotas[] = $item;
+                continue;
+            }
+
+            // validar que tenga mas de 0 contratos asociados al idPuntoventa
+            if($item->contadorContratos == null || $item->contadorContratos == 0){
+                $messageError = "No se encontró contadorContratos para el documento de venta con ven_codigo: " . $item->ven_codigo;
+                $item->messageError = $messageError;
+                $arrayErroresPrefacturasNotas[] = $item;
+                continue;
+            }
+
+            // si tienes mas de 1 contrato asociados al idPuntoventa actualizar el campo contrato de f_venta con el valor de idPuntoventa
+            if($item->contadorContratos > 1){
+                $messageError = "Se encontró mas de un contrato asociado al idPuntoventa para el documento de venta con ven_codigo: " . $item->ven_codigo;
+                $item->messageError = $messageError;
+                $arrayErroresPrefacturasNotas[] = $item;
+                continue;
+            }
+
+            if($item->contadorContratos > 0){
+
+                DB::table('f_venta')
+                ->where('ven_codigo', $item->ven_codigo)
+                ->where('id_empresa', $item->id_empresa)
+                ->update(['contrato' => $item->contrato_generado]);
+
+                $contadorPrefacturasNotas++;
+            }
+        }
+
+        return [
+            "status" => "1",
+            "prefacturas_notas_registradas" => $contadorPrefacturasNotas,
+            "actas_registradas" => $contadorActas,
+            "errores_Prefacturas_Notas" => $arrayErroresPrefacturasNotas,
+            "errores_Actas" => $arrayErroresActas,
+        ];
+    }
+
+
+    public function llenarIdsPerseoLimpiar(){
+        $query = DB::UPDATE("UPDATE 1_4_cal_producto p
+        SET
+            p.id_perseo_calmed2026_produccion = NULL,
+            p.id_perseo_prolipa2026_produccion = NULL
+        WHERE p.gru_pro_codigo IN ('1','2')
+        AND p.id_perseo_calmed2026_produccion = 0
+        ;");
+        return "Se limpiaron a los ceros a null para proceder a llenar los ids de Perseo";
+    }
+    public function llenarIdsPerseoGuias(){
+        try {
+            $contadorProlipa = 0;
+            $contadorCalmed  = 0;
+            $contadorProlipa2026 = 0;
+            $contadorCalmed2026  = 0;
+            $arrayProblemasProlipa  = [];
+            $arrayProblemasCalmed  = [];
+            $arrayProblemasProlipa2026  = [];
+            $arrayProblemasCalmed2026  = [];
+
+
+            //PROLIPA 26
+            $queryProlipa2026 = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+            WHERE p.id_perseo_prolipa2026_produccion IS NULL
+            AND  (p.gru_pro_codigo = '2' OR p.gru_pro_codigo = '7' OR p.gru_pro_codigo = '14' OR p.gru_pro_codigo = '15' OR p.gru_pro_codigo = '16' OR p.gru_pro_codigo = '17')
+            LIMIT 30
+            ");
+            foreach($queryProlipa2026 as $key => $item){
+                $formData = [
+                    "productocodigo"=> $item->pro_codigo,
+                ];
+                $url                = "productos_consulta";
+                $processProlipa     = $this->tr_PerseoPost($url, $formData,5);
+                if(isset($processProlipa["informacion"])){
+                    array_push($arrayProblemasProlipa2026,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Prolipa']);
+                }
+                $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa2026_produccion");
+                //contadorProlipa2026 + getContador
+                $contadorProlipa2026    = $contadorProlipa2026 + $getContador;
+            }
+            //CALMED 26
+            $queryCalmed2026 = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+            WHERE p.id_perseo_calmed2026_produccion IS NULL
+            AND  (p.gru_pro_codigo = '2' OR p.gru_pro_codigo = '7' OR p.gru_pro_codigo = '14' OR p.gru_pro_codigo = '15' OR p.gru_pro_codigo = '16' OR p.gru_pro_codigo = '17')
+            LIMIT 30
+            ");
+            foreach($queryCalmed2026 as $key => $item){
+                $formData = [
+                    "productocodigo"=> $item->pro_codigo,
+                ];
+                $url                = "productos_consulta";
+                $processCalmed      = $this->tr_PerseoPost($url, $formData,4);
+                if(isset($processCalmed["informacion"])){
+                    array_push($arrayProblemasCalmed2026,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Calmed']);
+                    // continue;
+                }
+                $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed2026_produccion");
+                //contadorCalmed2026 + getContador
+                $contadorCalmed2026     = $contadorCalmed2026 + $getContador;
+            }
+            return [
+                "contadorProlipa" => $contadorProlipa,
+                "arrayProblemasProlipa" => $arrayProblemasProlipa,
+                "contadorCalmed" => $contadorCalmed,
+                "arrayProblemasCalmed" => $arrayProblemasCalmed,
+                "contadorProlipa2026" => $contadorProlipa2026,
+                "arrayProblemasProlipa2026" => $arrayProblemasProlipa2026,
+                "contadorCalmed2026" => $contadorCalmed2026,
+                "arrayProblemasCalmed2026" => $arrayProblemasCalmed2026];
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
     public function llenarIdsPerseo(){
         try {
             $contadorProlipa = 0;
@@ -3117,44 +3324,7 @@ class AdminController extends Controller
             $arrayProblemasProlipa2026  = [];
             $arrayProblemasCalmed2026  = [];
 
-            //PROLIPA
-            // $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            // WHERE p.id_perseo_prolipa_produccion IS NULL
-            // AND  (p.gru_pro_codigo = '1' OR p.gru_pro_codigo = '2')
-            // LIMIT 25
-            // ");
-            // foreach($queryProlipa as $key => $item){
-            //     $formData = [
-            //         "productocodigo"=> $item->pro_codigo,
-            //     ];
-            //     $url                = "productos_consulta";
-            //     $processProlipa     = $this->tr_PerseoPost($url, $formData,1);
-            //     if(isset($processProlipa["informacion"])){
-            //         array_push($arrayProblemasProlipa,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Prolipa']);
-            //     }
-            //     $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa_produccion");
-            //     //contadorProlipa + getContador
-            //     $contadorProlipa    = $contadorProlipa + $getContador;
-            // }
-            // //CALMED
-            // $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            // WHERE p.id_perseo_calmed_produccion IS NULL
-            // AND  (p.gru_pro_codigo = '1' OR p.gru_pro_codigo = '2')
-            // LIMIT 25
-            // ");
-            // foreach($queryCalmed as $key => $item){
-            //     $formData = [
-            //         "productocodigo"=> $item->pro_codigo,
-            //     ];
-            //     $url                = "productos_consulta";
-            //     $processCalmed      = $this->tr_PerseoPost($url, $formData,3);
-            //     if(isset($processCalmed["informacion"])){
-            //         array_push($arrayProblemasCalmed,["pro_codigo" => $item->pro_codigo,"message" => 'No encontrado en perseo empresa Calmed']);
-            //     }
-            //     $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed_produccion");
-            //     //contadorCalmed + getContador
-            //     $contadorCalmed     = $contadorCalmed + $getContador;
-            // }
+
             //PROLIPA 26
             $queryProlipa2026 = DB::SELECT("SELECT * FROM 1_4_cal_producto p
             WHERE p.id_perseo_prolipa2026_produccion IS NULL
