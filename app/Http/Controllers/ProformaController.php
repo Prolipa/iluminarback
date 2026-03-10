@@ -117,7 +117,7 @@ class ProformaController extends Controller
         return $datos;
     }
     public function Get_proformasCliente(Request $request){
-        $datos = DB::SELECT("SELECT 
+        $datos = DB::SELECT("SELECT
                 fp.id,
                 fp.prof_id,
                 fp.idPuntoventa,
@@ -126,25 +126,25 @@ class ProformaController extends Controller
                 fcg.ca_codigo_agrupado,
                 fcg.id_periodo,
                 pe.descripcion
-            FROM 
+            FROM
                 f_detalle_proforma AS dpr
-            INNER JOIN 
+            INNER JOIN
                 f_proforma AS fp ON dpr.prof_id = fp.id
-            INNER JOIN 
+            INNER JOIN
                 libros_series AS ls ON dpr.pro_codigo = ls.codigo_liquidacion
-            INNER JOIN 
+            INNER JOIN
                 1_4_cal_producto AS p ON dpr.pro_codigo = p.pro_codigo
-            INNER JOIN 
+            INNER JOIN
                 series AS s ON ls.id_serie = s.id_serie
-            INNER JOIN 
+            INNER JOIN
                 libro AS l ON ls.idLibro = l.idlibro
-            LEFT JOIN 
+            LEFT JOIN
                 f_contratos_agrupados AS fcg ON fcg.ca_codigo_agrupado = fp.idPuntoventa
-            LEFT JOIN 
+            LEFT JOIN
                 periodoescolar AS pe ON pe.idperiodoescolar = fcg.id_periodo
-            WHERE 
+            WHERE
                 fp.ven_cliente = '$request->usuario' OR fp.usuario_solicitud = '$request->usuario'
-            GROUP BY 
+            GROUP BY
                 fp.id, fp.prof_id, fp.idPuntoventa,fp.prof_estado,fcg.ca_codigo_agrupado,fcg.id_periodo;
         ");
         return $datos;
@@ -189,7 +189,7 @@ class ProformaController extends Controller
             WHERe dpr.prof_id='$request->prof_id'
         ");
         }
-       
+
         foreach($array1 as $key => $item){
             $cantidad = 0;
             if($item->prof_id&&$item->emp_id){
@@ -407,13 +407,13 @@ class ProformaController extends Controller
 
     public function GetProformasSolicitud(Request $request) {
         $query = DB::select("
-            SELECT 
-                fpr.*,  
-                em.nombre, 
+            SELECT
+                fpr.*,
+                em.nombre,
                 em.img_base64,
-                us.nombres AS username, 
-                us.apellidos AS lastname, 
-                COUNT(dpr.pro_codigo) AS total_items, 
+                us.nombres AS username,
+                us.apellidos AS lastname,
+                COUNT(dpr.pro_codigo) AS total_items,
                 SUM(dpr.det_prof_cantidad) AS total_libros,
                 CONCAT(COALESCE(usa.nombres, ''), ' ', COALESCE(usa.apellidos, '')) AS cliente,
                 i.nombreInstitucion,
@@ -424,16 +424,16 @@ class ProformaController extends Controller
             INNER JOIN f_detalle_proforma dpr ON dpr.prof_id = fpr.id
             LEFT JOIN usuario usa ON fpr.ven_cliente = usa.idusuario
             LEFT JOIN institucion i ON fpr.id_ins_depacho = i.idInstitucion
-            WHERE fpr.idPuntoventa = ? 
+            WHERE fpr.idPuntoventa = ?
             AND (fpr.ven_cliente = ? OR fpr.usuario_solicitud = ?)
-            GROUP BY fpr.id, fpr.prof_id, fpr.prof_observacion, em.nombre, em.img_base64, 
+            GROUP BY fpr.id, fpr.prof_id, fpr.prof_observacion, em.nombre, em.img_base64,
                      us.nombres, us.apellidos, i.nombreInstitucion, i.ruc
             ORDER BY fpr.created_at DESC
         ", [$request->prof_id, $request->usuario, $request->usuario]);
-    
+
         return $query;
     }
-    
+
 
     //generar codigo para la proforma
     public function Get_Cod_Pro(Request $request){
@@ -517,12 +517,12 @@ class ProformaController extends Controller
     {
         try {
 
-            
+
             $miarray = json_decode($request->data_detalle);
             DB::beginTransaction();
-    
+
             $proforma = new Proforma;
-    
+
             if ($request->id_group == 1 || $request->id_group == 22 || $request->id_group == 23) {
                 $id_empresa = $request->emp_id;
                 $iniciales = $request->iniciales;
@@ -530,7 +530,7 @@ class ProformaController extends Controller
                 $ven_codigo = "PP-" . $iniciales . "-" . $getNumeroDocumento;
                 $proforma->prof_id = $ven_codigo;
             }
-    
+
             // Asignación de valores al modelo Proforma
             $proforma->usu_codigo = $request->usu_codigo;
             $proforma->pedido_id = $request->pedido_id;
@@ -547,7 +547,7 @@ class ProformaController extends Controller
             $proforma->prof_estado = $request->prof_estado;
             $proforma->prof_tipo_proforma = $request->prof_tipo_proforma;
             $proforma->created_at = $request->created_at;
-    
+
             if ($request->emp_id == 1) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             } else if ($request->emp_id == 3) {
@@ -557,7 +557,7 @@ class ProformaController extends Controller
             } else if ($request->emp_id == 5) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             }
-    
+
             if (!empty($query1)) {
                 $id = $query1[0]->id;
                 $codi = $query1[0]->cod;
@@ -574,29 +574,29 @@ class ProformaController extends Controller
                 }
                 $tipo_doc->save();
             }
-    
+
             $proforma->idtipodoc = 5;
             $proforma->id_ins_depacho = $request->id_ins_depacho;
             $proforma->ven_cliente = $request->ven_cliente;
             $proforma->clientesidPerseo = $request->clientesidPerseo;
-            
+
             // Si el cliente está definido, obtener la cédula
             if ($request->ven_cliente) {
                 $user = User::where('idusuario', $request->ven_cliente)->first();
                 $getCedula = $user->cedula;
                 $proforma->ruc_cliente = $getCedula;
             }
-    
+
             // Guardar la proforma
             $proforma->save();
             $ultimo_id = $proforma->id;
-    
+
             $proformaGuardada = Proforma::find($proforma->id);
 
             if (!$proformaGuardada) {
                 throw new \Exception("No se pudo guardar la proforma", 500);
             }else{
-                
+
                 if($proformaGuardada->prof_id == null){
                     $proformaGuardada->usuario_solicitud = $request->idusuario;
                     $guardado = $proformaGuardada->save();
@@ -628,8 +628,8 @@ class ProformaController extends Controller
                     }
                 }
             }
-    
-    
+
+
             // Guardar los detalles de la proforma
             foreach ($miarray as $key => $item) {
                 if ((int)$item->cantidad != 0) {
@@ -639,7 +639,7 @@ class ProformaController extends Controller
                     $pro = _14Producto::findOrFail($item->codigo_liquidacion);
                     $pro->pro_reservar = $co;
                     $pro->save();
-    
+
                     // Crear y guardar el detalle de la proforma
                     $DetalleProforma = new DetalleProforma;
                     $DetalleProforma->prof_id = $ultimo_id;
@@ -649,10 +649,10 @@ class ProformaController extends Controller
                     $DetalleProforma->save();
                 }
             }
-    
+
             // Confirmar la transacción
             DB::commit();
-    
+
             return response()->json(['message' => 'Proforma y detalles guardados con éxito'], 200);
         } catch (\Exception $e) {
             DB::rollback();
@@ -664,12 +664,12 @@ class ProformaController extends Controller
     {
         try {
 
-            
+
             $miarray = json_decode($request->data_detalle);
             DB::beginTransaction();
-    
+
             $proforma = new Proforma;
-    
+
             if ($request->id_group == 1 || $request->id_group == 22 || $request->id_group == 23) {
                 if($request->prof_tipo_proforma != 0){
                     $id_empresa = $request->emp_id;
@@ -678,9 +678,9 @@ class ProformaController extends Controller
                     $ven_codigo = "PP-" . $iniciales . "-" . $getNumeroDocumento;
                     $proforma->prof_id = $ven_codigo;
                 }
-                
+
             }
-    
+
             // Asignación de valores al modelo Proforma
             $proforma->usu_codigo = $request->usu_codigo;
             $proforma->pedido_id = $request->pedido_id;
@@ -697,7 +697,7 @@ class ProformaController extends Controller
             $proforma->prof_estado = $request->prof_estado;
             $proforma->prof_tipo_proforma = $request->prof_tipo_proforma;
             $proforma->created_at = $request->created_at;
-    
+
             if ($request->emp_id == 1) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             } else if ($request->emp_id == 3) {
@@ -707,7 +707,7 @@ class ProformaController extends Controller
             } else if ($request->emp_id == 5) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             }
-    
+
             if (!empty($query1)) {
                 $id = $query1[0]->id;
                 $codi = $query1[0]->cod;
@@ -724,29 +724,29 @@ class ProformaController extends Controller
                 }
                 $tipo_doc->save();
             }
-    
+
             $proforma->idtipodoc = 5;
             $proforma->id_ins_depacho = $request->id_ins_depacho;
             $proforma->ven_cliente = $request->ven_cliente;
             $proforma->clientesidPerseo = $request->clientesidPerseo;
-            
+
             // Si el cliente está definido, obtener la cédula
             if ($request->ven_cliente) {
                 $user = User::where('idusuario', $request->ven_cliente)->first();
                 $getCedula = $user->cedula;
                 $proforma->ruc_cliente = $getCedula;
             }
-    
+
             // Guardar la proforma
             $proforma->save();
             $ultimo_id = $proforma->id;
-    
+
             $proformaGuardada = Proforma::find($proforma->id);
 
             if (!$proformaGuardada) {
                 throw new \Exception("No se pudo guardar la proforma", 500);
             }else{
-                
+
                 if($proformaGuardada->prof_id == null){
                     $proformaGuardada->usuario_solicitud = $request->idusuario;
                     $guardado = $proformaGuardada->save();
@@ -778,8 +778,8 @@ class ProformaController extends Controller
                     }
                 }
             }
-    
-    
+
+
             // Guardar los detalles de la proforma
             foreach ($miarray as $key => $item) {
                 if ((int)$item->cantidad != 0) {
@@ -789,7 +789,7 @@ class ProformaController extends Controller
                     $pro = _14Producto::findOrFail($item->codigo_liquidacion);
                     $pro->pro_reservar = $co;
                     $pro->save();
-    
+
                     // Crear y guardar el detalle de la proforma
                     $DetalleProforma = new DetalleProforma;
                     $DetalleProforma->prof_id = $ultimo_id;
@@ -799,17 +799,17 @@ class ProformaController extends Controller
                     $DetalleProforma->save();
                 }
             }
-    
+
             // Confirmar la transacción
             DB::commit();
-    
+
             return response()->json(['message' => 'Proforma y detalles guardados con éxito'], 200);
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json(["error" => "0", "message" => "No se pudo guardar", 'error' => $e->getMessage()], 500);
         }
     }
-    
+
     public function PostProforma_Editar_solicitud(Request $request)
        {
         try{
@@ -927,7 +927,7 @@ class ProformaController extends Controller
             return response()->json(["error"=>"0", "message" => "No se pudo actualizar", 'error' => $e->getMessage()], 500);
         }
     }
-    
+
     public function PostProforma_Editar(Request $request)
        {
         try{
@@ -1087,50 +1087,50 @@ class ProformaController extends Controller
     //     if (!$request->id) {
     //         return response()->json(["error" => "No está ingresando ningún prof_id"], 400);
     //     }
-    
+
     //     DB::beginTransaction();
-    
+
     //     try {
     //         // Obtener la proforma
     //         $proform = Proforma::findOrFail($request->id);
-            
+
     //         // Actualizar la proforma
     //         $oldvalue = clone $proform; // Crear copia del valor antiguo
     //         $proform->prof_estado = $request->prof_estado;
     //         $proform->user_editor = $request->id_usua;
     //         $proform->save();
-    
+
     //         // Verificar si el tipo es 'anular'
     //         if ($request->tipo === 'anular') {
     //             // Obtener las ventas asociadas
     //             $ventas = DB::table('f_venta')->where('ven_idproforma', $proform->prof_id)->get();
-    
+
     //             if ($ventas->isEmpty()) {
     //                 throw new \Exception('No se encontraron ventas asociadas');
     //             }
-    
+
     //             foreach ($ventas as $venta) {
     //                 // Verificar estado de la venta
     //                 if ($venta->est_ven_codigo != 2 && $venta->est_ven_codigo != 3) {
     //                     return response()->json([
-    //                         "status" => "0", 
+    //                         "status" => "0",
     //                         "message" => "El documento " . $venta->ven_codigo . " ya no se encuentra pendiente de despacho. No se puede anular."
     //                     ]);
     //                 }
-    
+
     //                 // Actualizar stock en los productos relacionados
     //                 $detalles = DB::table('f_detalle_venta')->where('ven_codigo', $venta->ven_codigo)->get();
     //                 if ($detalles->isEmpty()) {
     //                     return response()->json(["error" => "0", "message" => "No se encontró detalles del documento: " . $venta->ven_codigo]);
     //                 }
-    
+
     //                 foreach ($detalles as $detalle) {
     //                     $producto = DB::table('1_4_cal_producto')->where('pro_codigo', $detalle->pro_codigo)->first();
-    
+
     //                     if (!$producto) {
     //                         return response()->json(["status" => "0", "message" => "Producto no encontrado"]);
     //                     }
-    
+
     //                     // Ajustar stock según la empresa
     //                     if ($venta->id_empresa == 1) {
     //                         DB::table('1_4_cal_producto')
@@ -1154,20 +1154,20 @@ class ProformaController extends Controller
     //             try {
     //                 $oldvalue = Proforma::findOrFail($request->id);
     //                 $proform = Proforma::find($request->id);
-    
+
     //                 if (!$proform) {
     //                     return response()->json(['error' => 'El prof_id no existe en la base de datos'], 400);
     //                 }
-    
+
     //                 // Actualizar los campos de la proforma
     //                 $proform->prof_estado = $request->prof_estado;
     //                 $proform->user_editor = $request->id_usua;
     //                 $proform->save();
-    
+
     //                 // Registrar el cambio en el histórico
     //                 $newvalue = Proforma::findOrFail($request->id);
     //                 $this->tr_GuardarEnHistorico($request->id, $request->id_usua, $oldvalue, $newvalue);
-    
+
     //                 DB::commit();
     //                 return response()->json(['message' => 'Proforma actualizada con éxito'], 200);
     //             } catch (\Exception $e) {
@@ -1175,7 +1175,7 @@ class ProformaController extends Controller
     //                 return response()->json(["error" => "0", "message" => "No se pudo actualizar", 'error' => $e->getMessage()], 500);
     //             }
     //         }
-    
+
     //         // Si la operación fue de 'anular', retornar el mensaje respectivo
     //         DB::commit();
     //         return response()->json(['message' => 'Proforma ' . ($request->tipo === 'anular' ? 'anulada' : 'actualizada') . ' con éxito'], 200);
@@ -1192,7 +1192,7 @@ class ProformaController extends Controller
         try {
             // Obtener la proforma
             $proform = DB::table('f_proforma')->where('id', $proforma_id)->first();
-            
+
             if (!$proform) {
                 throw new \Exception('Proforma no encontrada');
             }
@@ -1209,7 +1209,7 @@ class ProformaController extends Controller
 
             // Obtener las ventas asociadas a la proforma
             $ventas = DB::table('f_venta')->where('ven_idproforma', $proform->prof_id)->get();
-            
+
             // if ($ventas->isEmpty()) {
             //     throw new \Exception('No se encontraron ventas asociadas a la proforma');
             // }
@@ -1218,7 +1218,7 @@ class ProformaController extends Controller
                     // Verificar si la venta está en estado pendiente de despacho (estado 2)
                     if ($venta->est_ven_codigo != 2 && $venta->est_ven_codigo != 3) {
                         return response()->json([
-                            "status" => "0", 
+                            "status" => "0",
                             "message" => "La venta " . $venta->ven_codigo . " ya fue despachada y no puede ser anulada."
                         ]);
                     }else{
@@ -1237,7 +1237,7 @@ class ProformaController extends Controller
                             if ($detalles->isEmpty()) {
                                 return response()->json(["error" => "0", "message" => "No se encontraron detalles para la venta: " . $venta->ven_codigo]);
                             }
-                
+
                             // Recorrer los detalles de la venta y restaurar el stock
                             foreach ($detalles as $detalle) {
                                 // Obtener el producto asociado al detalle
@@ -1245,7 +1245,7 @@ class ProformaController extends Controller
                                 if (!$producto) {
                                     return response()->json(["status" => "0", "message" => "Producto no encontrado en la venta"]);
                                 }
-                
+
                                 // Ajustar el stock según la empresa
                                 if ($venta->id_empresa == 1 || $venta->id_empresa == 5) {
                                     if($venta->idtipodoc == 1){
@@ -1296,11 +1296,11 @@ class ProformaController extends Controller
                 $pro->pro_reservar = $co;
                 $pro->save();
             }
-            
+
             DB::commit();  // Confirmamos la transacción
 
             return response()->json([
-                "status" => "1", 
+                "status" => "1",
                 "message" => "La proforma y las ventas asociadas han sido anuladas con éxito."
             ]);
 
@@ -1308,7 +1308,7 @@ class ProformaController extends Controller
             DB::rollBack();  // Si ocurre un error, deshacemos todos los cambios
 
             return response()->json([
-                "status" => "0", 
+                "status" => "0",
                 "message" => "Error: " . $e->getMessage(),
                 "line" => $e->getLine()
             ]);
@@ -1348,13 +1348,13 @@ class ProformaController extends Controller
         if (!$request->id) {
             return response()->json(["error" => "No está ingresando ningún prof_id"], 400);
         }
-    
+
         DB::beginTransaction();
-    
+
         try {
             // Obtener la proforma
             $proform = Proforma::findOrFail($request->id);
-            
+
             // Actualizar la proforma
             $oldvalue = clone $proform; // Crear copia del valor antiguo
             $proform->prof_estado = $request->prof_estado;
@@ -1383,7 +1383,7 @@ class ProformaController extends Controller
                 DB::rollback();
                 return response()->json(["error" => "0", "message" => "No se pudo actualizar", 'error' => $e->getMessage()], 500);
             }
-    
+
             // Si la operación fue de 'anular', retornar el mensaje respectivo
             DB::commit();
             return response()->json(['message' => 'Proforma actualizada con éxito'], 200);
@@ -1511,24 +1511,24 @@ class ProformaController extends Controller
 
         return $query;
     }
-    
+
     public function CambiarEmpresaPedido(Request $request)
     {
         $this->validate($request, [
             'id' => 'required',  // Validar que el pedido exista
             'empresa' => 'required',  // Validar que la empresa exista
         ]);
-    
+
         $id_proforma = $request->id;
         $id_empresa = $request->empresa;
-    
+
         // Iniciar la transacción
         DB::beginTransaction();
-    
+
         try {
             // Buscar el pedido
             $pedido = DB::table('f_proforma')->where('id', $id_proforma)->first();
-    
+
             if (!$pedido) {
                 // Si el pedido no existe, lanzar una excepción para que se haga rollback
                 return response()->json([
@@ -1536,10 +1536,10 @@ class ProformaController extends Controller
                     'message' => 'Pedido no encontrado',
                 ]);
             }
-    
+
             // Buscar la empresa
             $empresa = DB::table('empresas')->where('id', $id_empresa)->first();
-    
+
             if (!$empresa) {
                 // Si la empresa no existe, lanzar una excepción para que se haga rollback
                 return response()->json([
@@ -1547,12 +1547,12 @@ class ProformaController extends Controller
                     'message' => 'Empresa no encontrada',
                 ]);
             }
-    
+
             // Cambiar la empresa del pedido
             $updatedRows = DB::table('f_proforma')
                 ->where('id', $id_proforma)
                 ->update(['emp_id' => $empresa->id]);
-    
+
             // Verificar si la actualización se realizó con éxito
             if ($updatedRows === 0) {
                 // Si no se actualizó ningún registro, lanzar una excepción
@@ -1575,24 +1575,24 @@ class ProformaController extends Controller
 
             // Si todo es correcto, hacer commit de la transacción
             DB::commit();
-    
+
             return response()->json([
                 'status' => 200,
                 'message' => 'Pedido cambiado con éxito',
                 'data' => $pedidoActualizado
             ]);
-    
+
         } catch (\Exception $e) {
             // Si ocurre algún error, hacer rollback
             DB::rollback();
-    
+
             return response()->json([
                 'status' => 500,
                 'message' => $e->getMessage(),
             ]);
         }
     }
-    
+
     /**
      * Método específico para guardar proformas desde ProformaModal
      * Guarda el contrato en f_proforma y en cada f_detalle_proforma
@@ -1601,31 +1601,31 @@ class ProformaController extends Controller
     {
         try {
 
-            
+
             $miarray = json_decode($request->data_detalle);
-            
+
             // ======================================================
             // VALIDACIÓN DE STOCK EN TIEMPO REAL (ANTES DE GUARDAR)
             // ======================================================
             $productosInvalidos = [];
-            
+
             foreach ($miarray as $item) {
-                $cantidad = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad : 
+                $cantidad = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad :
                            (isset($item->cantidad) ? $item->cantidad : 0);
-                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo : 
+                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo :
                              (isset($item->codigo_liquidacion) ? $item->codigo_liquidacion : null);
-                
+
                 if (!$pro_codigo || (int)$cantidad == 0) {
                     continue;
                 }
-                
+
                 // Consultar stock ACTUAL en tiempo real
                 $stockQuery = DB::SELECT("SELECT pro_codigo, pro_nombre, pro_reservar FROM 1_4_cal_producto WHERE pro_codigo = ?", [$pro_codigo]);
-                
+
                 if (!empty($stockQuery)) {
                     $stockActual = (int)$stockQuery[0]->pro_reservar;
                     $cantidadRequerida = (int)$cantidad;
-                    
+
                     // Validar que haya suficiente stock
                     if ($stockActual < $cantidadRequerida) {
                         $productosInvalidos[] = [
@@ -1638,7 +1638,7 @@ class ProformaController extends Controller
                     }
                 }
             }
-            
+
             // Si hay productos sin stock suficiente, retornar error
             if (!empty($productosInvalidos)) {
                 return response()->json([
@@ -1648,12 +1648,12 @@ class ProformaController extends Controller
                     'productos_invalidos' => $productosInvalidos
                 ], 400);
             }
-            
+
             // Si todo está OK, proceder con la transacción
             DB::beginTransaction();
-    
+
             $proforma = new Proforma;
-    
+
             // Generar código de proforma si el usuario tiene permisos
             if ($request->id_group == 1 || $request->id_group == 22 || $request->id_group == 23) {
                 $id_empresa = $request->emp_id;
@@ -1662,7 +1662,7 @@ class ProformaController extends Controller
                 $ven_codigo = "PP-" . $iniciales . "-" . $getNumeroDocumento;
                 $proforma->prof_id = $ven_codigo;
             }
-    
+
             // Asignación de valores al modelo Proforma
             $proforma->usu_codigo = $request->usu_codigo;
             $proforma->pedido_id = $request->pedido_id;
@@ -1679,7 +1679,7 @@ class ProformaController extends Controller
             $proforma->prof_estado = $request->prof_estado;
             $proforma->prof_tipo_proforma = $request->prof_tipo_proforma;
             $proforma->created_at = $request->created_at;
-    
+
             // Actualizar secuencia de documento
             if ($request->emp_id == 1) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
@@ -1690,7 +1690,7 @@ class ProformaController extends Controller
             } else if ($request->emp_id == 5) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             }
-    
+
             if (!empty($query1)) {
                 $id = $query1[0]->id;
                 $codi = $query1[0]->cod;
@@ -1707,12 +1707,12 @@ class ProformaController extends Controller
                 }
                 $tipo_doc->save();
             }
-    
+
             $proforma->idtipodoc = 5;
             $proforma->id_ins_depacho = $request->id_ins_depacho;
             $proforma->ven_cliente = $request->ven_cliente;
             $proforma->clientesidPerseo = $request->clientesidPerseo;
-            
+
             // GUARDAR EL PERÍODO - Campo REQUERIDO
             if (!$request->id_periodo) {
                 return response()->json([
@@ -1722,7 +1722,7 @@ class ProformaController extends Controller
                 ], 400);
             }
             $proforma->id_periodo = $request->id_periodo;
-            
+
             // Obtener cédula del cliente si está definido
             if ($request->ven_cliente) {
                 $user = User::where('idusuario', $request->ven_cliente)->first();
@@ -1731,29 +1731,29 @@ class ProformaController extends Controller
                     $proforma->ruc_cliente = $getCedula;
                 }
             }
-            
+
             // GUARDAR EL CONTRATO en la proforma
             if ($request->contrato) {
                 $proforma->contrato = $request->contrato;
             }
-    
+
             // Guardar la proforma
             $proforma->save();
             $ultimo_id = $proforma->id;
-    
+
             // Guardar los detalles de la proforma
             foreach ($miarray as $key => $item) {
-                $cantidad = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad : 
+                $cantidad = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad :
                            (isset($item->cantidad) ? $item->cantidad : 0);
-                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo : 
+                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo :
                              (isset($item->codigo_liquidacion) ? $item->codigo_liquidacion : null);
-                $precio = isset($item->det_prof_valor_u) ? $item->det_prof_valor_u : 
+                $precio = isset($item->det_prof_valor_u) ? $item->det_prof_valor_u :
                          (isset($item->precio) ? $item->precio : 0);
-                
+
                 if (!$pro_codigo) {
                     continue; // Saltar si no hay código de producto
                 }
-                
+
                 if ((int)$cantidad != 0) {
                     // Actualizar stock reservado
                     $query1 = DB::SELECT("SELECT pro_reservar as stoc from 1_4_cal_producto where pro_codigo='$pro_codigo'");
@@ -1764,33 +1764,33 @@ class ProformaController extends Controller
                         $pro->pro_reservar = $co;
                         $pro->save();
                     }
-    
+
                     // Crear y guardar el detalle de la proforma
                     $DetalleProforma = new DetalleProforma;
                     $DetalleProforma->prof_id = $ultimo_id;
                     $DetalleProforma->pro_codigo = $pro_codigo;
                     $DetalleProforma->det_prof_cantidad = (int)$cantidad;
                     $DetalleProforma->det_prof_valor_u = $precio;
-                    
+
                     // GUARDAR EL CONTRATO también en el detalle
                     if ($request->contrato) {
                         $DetalleProforma->contrato = $request->contrato;
                     }
-                    
+
                     $DetalleProforma->save();
                 }
             }
-    
+
             // Confirmar la transacción
             DB::commit();
-    
+
             return response()->json([
                 'status' => 200,
                 'message' => 'Proforma guardada exitosamente',
                 'proforma_id' => $ultimo_id,
                 'prof_id' => $proforma->prof_id
             ], 200);
-            
+
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json([
@@ -1801,7 +1801,7 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Guardar Proforma desde Modal - VERSIÓN PERSEO
      * Este método es específico para proformas que usan el sistema de reservas de Perseo
@@ -1815,16 +1815,16 @@ class ProformaController extends Controller
     {
         try {
             $miarray = json_decode($request->data_detalle);
-            
+
             // ======================================================
             // NOTA: Para Perseo NO validamos stock tradicional (pro_reservar)
             // Solo consultamos el stock de Perseo que ya viene en los datos
             // ======================================================
-            
+
             DB::beginTransaction();
-    
+
             $proforma = new Proforma;
-    
+
             // Generar código de proforma si el usuario tiene permisos
             if ($request->id_group == 1 || $request->id_group == 22 || $request->id_group == 23) {
                 $id_empresa = $request->emp_id;
@@ -1833,7 +1833,7 @@ class ProformaController extends Controller
                 $ven_codigo = "PP-" . $iniciales . "-" . $getNumeroDocumento;
                 $proforma->prof_id = $ven_codigo;
             }
-    
+
             // Asignación de valores al modelo Proforma
             $proforma->usu_codigo = $request->usu_codigo;
             $proforma->pedido_id = $request->pedido_id;
@@ -1850,7 +1850,7 @@ class ProformaController extends Controller
             $proforma->prof_estado = $request->prof_estado;
             $proforma->prof_tipo_proforma = $request->prof_tipo_proforma;
             $proforma->created_at = $request->created_at;
-    
+
             // Actualizar secuencia de documento
             if ($request->emp_id == 1) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
@@ -1861,7 +1861,7 @@ class ProformaController extends Controller
             } else if ($request->emp_id == 5) {
                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
             }
-    
+
             if (!empty($query1)) {
                 $id = $query1[0]->id;
                 $codi = $query1[0]->cod;
@@ -1878,12 +1878,12 @@ class ProformaController extends Controller
                 }
                 $tipo_doc->save();
             }
-    
+
             $proforma->idtipodoc = 5;
             $proforma->id_ins_depacho = $request->id_ins_depacho;
             $proforma->ven_cliente = $request->ven_cliente;
             $proforma->clientesidPerseo = $request->clientesidPerseo;
-            
+
             // GUARDAR EL PERÍODO - Campo REQUERIDO
             if (!$request->id_periodo) {
                 return response()->json([
@@ -1893,7 +1893,7 @@ class ProformaController extends Controller
                 ], 400);
             }
             $proforma->id_periodo = $request->id_periodo;
-            
+
             // Obtener cédula del cliente si está definido
             if ($request->ven_cliente) {
                 $user = User::where('idusuario', $request->ven_cliente)->first();
@@ -1902,60 +1902,60 @@ class ProformaController extends Controller
                     $proforma->ruc_cliente = $getCedula;
                 }
             }
-            
+
             // ======================================================
             // CAMPO ESPECÍFICO DE PERSEO: proforma_perseo = 1
             // ======================================================
             $proforma->proforma_perseo = 1;
-            
+
             // GUARDAR EL CONTRATO en la proforma
             if ($request->contrato) {
                 $proforma->contrato = $request->contrato;
             }
-    
+
             // Guardar la proforma
             $proforma->save();
             $ultimo_id = $proforma->id;
-    
+
             // Guardar los detalles de la proforma
             foreach ($miarray as $key => $item) {
-                $cantidad = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad : 
+                $cantidad = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad :
                            (isset($item->cantidad) ? $item->cantidad : 0);
-                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo : 
+                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo :
                              (isset($item->codigo_liquidacion) ? $item->codigo_liquidacion : null);
-                $precio = isset($item->det_prof_valor_u) ? $item->det_prof_valor_u : 
+                $precio = isset($item->det_prof_valor_u) ? $item->det_prof_valor_u :
                          (isset($item->precio) ? $item->precio : 0);
-                
+
                 // Obtener stock_perseo del item (viene del frontend)
                 $stock_perseo = isset($item->stock_perseo) ? $item->stock_perseo : null;
-                
+
                 // Obtener contrato del item (viene del frontend)
-                $contrato_detalle = isset($item->contrato) ? $item->contrato : 
+                $contrato_detalle = isset($item->contrato) ? $item->contrato :
                                    ($request->contrato ? $request->contrato : null);
-                
+
                 if (!$pro_codigo) {
                     continue; // Saltar si no hay código de producto
                 }
-                
+
                 if ((int)$cantidad != 0) {
                     // ======================================================
-                    // LÓGICA ESPECÍFICA DE PERSEO: 
+                    // LÓGICA ESPECÍFICA DE PERSEO:
                     // INCREMENTAR reserva_perseo en lugar de decrementar pro_reservar
                     // ======================================================
                     DB::statement(
-                        'UPDATE 1_4_cal_producto 
-                         SET reserva_perseo = COALESCE(reserva_perseo, 0) + ? 
+                        'UPDATE 1_4_cal_producto
+                         SET reserva_perseo = COALESCE(reserva_perseo, 0) + ?
                          WHERE pro_codigo = ?',
                         [(int)$cantidad, $pro_codigo]
                     );
-    
+
                     // Crear y guardar el detalle de la proforma
                     $DetalleProforma = new DetalleProforma;
                     $DetalleProforma->prof_id = $ultimo_id;
                     $DetalleProforma->pro_codigo = $pro_codigo;
                     $DetalleProforma->det_prof_cantidad = (int)$cantidad;
                     $DetalleProforma->det_prof_valor_u = $precio;
-                    
+
                     // ======================================================
                     // CAMPOS ESPECÍFICOS DE PERSEO EN EL DETALLE
                     // ======================================================
@@ -1963,19 +1963,19 @@ class ProformaController extends Controller
                     if ($stock_perseo !== null) {
                         $DetalleProforma->stock_perseo = (int)$stock_perseo;
                     }
-                    
+
                     // Guardar el contrato en el detalle
                     if ($contrato_detalle) {
                         $DetalleProforma->contrato = $contrato_detalle;
                     }
-                    
+
                     $DetalleProforma->save();
                 }
             }
-    
+
             // Confirmar la transacción
             DB::commit();
-    
+
             return response()->json([
                 'status' => 200,
                 'message' => 'Proforma Perseo guardada exitosamente',
@@ -1983,7 +1983,7 @@ class ProformaController extends Controller
                 'prof_id' => $proforma->prof_id,
                 'tipo' => 'perseo'
             ], 200);
-            
+
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json([
@@ -1994,7 +1994,7 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Actualizar Proforma desde Modal - VERSIÓN PERSEO
      * Este método es específico para actualizar proformas que usan el sistema de reservas de Perseo
@@ -2008,27 +2008,27 @@ class ProformaController extends Controller
         try {
             $miarray = json_decode($request->data_detalle);
             $proforma_id = $request->proforma_id;
-            
+
             if (!$proforma_id) {
                 return response()->json([
                     "status" => 400,
                     "message" => "El ID de la proforma es requerido"
                 ], 400);
             }
-            
+
             // Obtener los detalles antiguos ANTES de modificar
             $detallesAntiguos = DetalleProforma::where('prof_id', $proforma_id)->get();
-            
+
             // ======================================================
             // NOTA: Para Perseo NO validamos stock tradicional (pro_reservar)
             // El stock de Perseo ya viene consultado en los datos
             // ======================================================
-            
+
             DB::beginTransaction();
-    
+
             // Buscar la proforma existente
             $proforma = Proforma::findOrFail($proforma_id);
-    
+
             // Actualizar datos de la proforma (NO se modifica prof_id ni created_at)
             $proforma->prof_observacion = $request->prof_observacion;
             $proforma->prof_observacion_libreria = $request->prof_observacion_libreria ?? '';
@@ -2039,7 +2039,7 @@ class ProformaController extends Controller
             $proforma->prof_iva_por = $request->prof_iva_por;
             $proforma->prof_total = $request->prof_total;
             $proforma->prof_estado = $request->prof_estado;
-            
+
             // Actualizar lugar de despacho y cliente (si vienen en el request)
             if ($request->has('id_ins_depacho')) {
                 $proforma->id_ins_depacho = $request->id_ins_depacho;
@@ -2056,57 +2056,57 @@ class ProformaController extends Controller
             if ($request->has('emp_id')) {
                 $proforma->emp_id = $request->emp_id;
             }
-            
+
             // Actualizar período si viene en el request (VALIDAR QUE NO SEA NULL)
             if ($request->has('id_periodo') && $request->id_periodo) {
                 $proforma->id_periodo = $request->id_periodo;
             }
-            
+
             // Guardar cambios en la proforma
             $proforma->save();
-            
+
             // ELIMINAR todos los detalles antiguos
             DetalleProforma::where('prof_id', $proforma_id)->delete();
-            
+
             // PROCESAR NUEVOS DETALLES Y AJUSTAR RESERVA_PERSEO
             foreach ($miarray as $key => $item) {
-                $cantidad_nueva = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad : 
+                $cantidad_nueva = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad :
                                  (isset($item->cantidad) ? $item->cantidad : 0);
-                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo : 
+                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo :
                              (isset($item->codigo_liquidacion) ? $item->codigo_liquidacion : null);
-                $precio = isset($item->det_prof_valor_u) ? $item->det_prof_valor_u : 
+                $precio = isset($item->det_prof_valor_u) ? $item->det_prof_valor_u :
                          (isset($item->precio) ? $item->precio : 0);
-                
+
                 // Obtener stock_perseo del item (viene del frontend)
                 $stock_perseo = isset($item->stock_perseo) ? $item->stock_perseo : null;
-                
+
                 // Obtener contrato del item (viene del frontend)
-                $contrato_detalle = isset($item->contrato) ? $item->contrato : 
+                $contrato_detalle = isset($item->contrato) ? $item->contrato :
                                    ($request->contrato ? $request->contrato : null);
-                
+
                 if (!$pro_codigo || (int)$cantidad_nueva == 0) {
                     continue;
                 }
-                
+
                 // Buscar si este libro existía en la proforma anterior
                 $detalleAntiguo = $detallesAntiguos->firstWhere('pro_codigo', $pro_codigo);
-                
+
                 if ($detalleAntiguo) {
                     // EL LIBRO YA EXISTÍA - Comparar cantidades
                     $cantidad_antigua = (int)$detalleAntiguo->det_prof_cantidad;
                     $cantidad_nueva_int = (int)$cantidad_nueva;
                     $diferencia = $cantidad_nueva_int - $cantidad_antigua;
-                    
+
                     if ($diferencia != 0) {
                         // ======================================================
-                        // LÓGICA ESPECÍFICA DE PERSEO: 
+                        // LÓGICA ESPECÍFICA DE PERSEO:
                         // AJUSTAR reserva_perseo según la diferencia
                         // ======================================================
                         if ($diferencia > 0) {
                             // Aumentó la cantidad → INCREMENTAR reserva_perseo
                             DB::statement(
-                                'UPDATE 1_4_cal_producto 
-                                 SET reserva_perseo = COALESCE(reserva_perseo, 0) + ? 
+                                'UPDATE 1_4_cal_producto
+                                 SET reserva_perseo = COALESCE(reserva_perseo, 0) + ?
                                  WHERE pro_codigo = ?',
                                 [$diferencia, $pro_codigo]
                             );
@@ -2114,8 +2114,8 @@ class ProformaController extends Controller
                             // Disminuyó la cantidad → DECREMENTAR reserva_perseo
                             $diferencia_positiva = abs($diferencia);
                             DB::statement(
-                                'UPDATE 1_4_cal_producto 
-                                 SET reserva_perseo = GREATEST(COALESCE(reserva_perseo, 0) - ?, 0) 
+                                'UPDATE 1_4_cal_producto
+                                 SET reserva_perseo = GREATEST(COALESCE(reserva_perseo, 0) - ?, 0)
                                  WHERE pro_codigo = ?',
                                 [$diferencia_positiva, $pro_codigo]
                             );
@@ -2124,49 +2124,49 @@ class ProformaController extends Controller
                 } else {
                     // ES UN LIBRO NUEVO - Incrementar reserva_perseo
                     DB::statement(
-                        'UPDATE 1_4_cal_producto 
-                         SET reserva_perseo = COALESCE(reserva_perseo, 0) + ? 
+                        'UPDATE 1_4_cal_producto
+                         SET reserva_perseo = COALESCE(reserva_perseo, 0) + ?
                          WHERE pro_codigo = ?',
                         [(int)$cantidad_nueva, $pro_codigo]
                     );
                 }
-                
+
                 // Crear el nuevo detalle
                 $DetalleProforma = new DetalleProforma;
                 $DetalleProforma->prof_id = $proforma_id;
                 $DetalleProforma->pro_codigo = $pro_codigo;
                 $DetalleProforma->det_prof_cantidad = (int)$cantidad_nueva;
                 $DetalleProforma->det_prof_valor_u = $precio;
-                
+
                 // Guardar campos específicos de Perseo
                 if ($stock_perseo !== null) {
                     $DetalleProforma->stock_perseo = (int)$stock_perseo;
                 }
-                
+
                 if ($contrato_detalle) {
                     $DetalleProforma->contrato = $contrato_detalle;
                 }
-                
+
                 $DetalleProforma->save();
             }
-            
+
             // VERIFICAR LIBROS ELIMINADOS
             foreach ($detallesAntiguos as $detalleAntiguo) {
                 $libroEnNuevaLista = collect($miarray)->firstWhere('pro_codigo', $detalleAntiguo->pro_codigo);
-                
+
                 if (!$libroEnNuevaLista) {
                     // Este libro fue ELIMINADO - Decrementar reserva_perseo
                     DB::statement(
-                        'UPDATE 1_4_cal_producto 
-                         SET reserva_perseo = GREATEST(COALESCE(reserva_perseo, 0) - ?, 0) 
+                        'UPDATE 1_4_cal_producto
+                         SET reserva_perseo = GREATEST(COALESCE(reserva_perseo, 0) - ?, 0)
                          WHERE pro_codigo = ?',
                         [(int)$detalleAntiguo->det_prof_cantidad, $detalleAntiguo->pro_codigo]
                     );
                 }
             }
-    
+
             DB::commit();
-    
+
             return response()->json([
                 'status' => 200,
                 'message' => 'Proforma Perseo actualizada exitosamente',
@@ -2174,7 +2174,7 @@ class ProformaController extends Controller
                 'prof_id' => $proforma->prof_id,
                 'tipo' => 'perseo'
             ], 200);
-            
+
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json([
@@ -2185,11 +2185,11 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Actualizar proforma de Perseo con sistema de reservas mejorado
      * Recibe información de diferencias calculadas en el frontend para mejor control
-     * 
+     *
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
@@ -2198,22 +2198,22 @@ class ProformaController extends Controller
         try {
             $miarray = json_decode($request->data_detalle);
             $proforma_id = $request->proforma_id;
-            
+
             if (!$proforma_id) {
                 return response()->json([
                     "status" => 400,
                     "message" => "El ID de la proforma es requerido"
                 ], 400);
             }
-            
+
             // Array para registrar cambios de reservas
             $reservas_modificadas = [];
-            
+
             DB::beginTransaction();
-    
+
             // Buscar la proforma existente
             $proforma = Proforma::findOrFail($proforma_id);
-    
+
             // Actualizar datos de la proforma
             $proforma->prof_observacion = $request->prof_observacion;
             $proforma->prof_observacion_libreria = $request->prof_observacion_libreria ?? '';
@@ -2224,7 +2224,7 @@ class ProformaController extends Controller
             $proforma->prof_iva_por = $request->prof_iva_por;
             $proforma->prof_total = $request->prof_total;
             $proforma->prof_estado = $request->prof_estado;
-            
+
             // Actualizar lugar de despacho y cliente si vienen
             if ($request->has('id_ins_depacho')) {
                 $proforma->id_ins_depacho = $request->id_ins_depacho;
@@ -2241,12 +2241,12 @@ class ProformaController extends Controller
             if ($request->has('emp_id')) {
                 $proforma->emp_id = $request->emp_id;
             }
-            
+
             $proforma->save();
-            
+
             // Eliminar todos los detalles antiguos
             DetalleProforma::where('prof_id', $proforma_id)->delete();
-            
+
             // Procesar cada producto y actualizar reservas
             foreach ($miarray as $item) {
                 $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo : null;
@@ -2255,11 +2255,11 @@ class ProformaController extends Controller
                 $diferencia_cantidad = isset($item->diferencia_cantidad) ? $item->diferencia_cantidad : 0;
                 $stock_perseo_actual = isset($item->stock_perseo_actual) ? $item->stock_perseo_actual : 0;
                 $contrato_detalle = isset($item->contrato) ? $item->contrato : ($request->contrato ? $request->contrato : null);
-                
+
                 if (!$pro_codigo || (int)$cantidad_nueva == 0) {
                     continue;
                 }
-                
+
                 // Actualizar reserva_perseo según la diferencia
                 if ($diferencia_cantidad != 0) {
                     // Obtener reserva anterior del producto
@@ -2268,7 +2268,7 @@ class ProformaController extends Controller
                         [$pro_codigo]
                     );
                     $reserva_anterior = $producto && $producto->reserva_perseo != null ? $producto->reserva_perseo : 0;
-                    
+
                     if ($diferencia_cantidad > 0) {
                         // Aumentó: validar stock disponible
                         if ($stock_perseo_actual < $diferencia_cantidad) {
@@ -2289,24 +2289,24 @@ class ProformaController extends Controller
                                 ]]
                             ], 400);
                         }
-                        
+
                         // Incrementar reserva
                         DB::statement(
-                            'UPDATE 1_4_cal_producto 
-                             SET reserva_perseo = COALESCE(reserva_perseo, 0) + ? 
+                            'UPDATE 1_4_cal_producto
+                             SET reserva_perseo = COALESCE(reserva_perseo, 0) + ?
                              WHERE pro_codigo = ?',
                             [$diferencia_cantidad, $pro_codigo]
                         );
                     } else {
                         // Disminuyó: liberar reserva
                         DB::statement(
-                            'UPDATE 1_4_cal_producto 
-                             SET reserva_perseo = GREATEST(COALESCE(reserva_perseo, 0) - ?, 0) 
+                            'UPDATE 1_4_cal_producto
+                             SET reserva_perseo = GREATEST(COALESCE(reserva_perseo, 0) - ?, 0)
                              WHERE pro_codigo = ?',
                             [abs($diferencia_cantidad), $pro_codigo]
                         );
                     }
-                    
+
                     // Registrar cambio
                     $reservas_modificadas[] = [
                         'pro_codigo' => $pro_codigo,
@@ -2315,7 +2315,7 @@ class ProformaController extends Controller
                         'diferencia' => $diferencia_cantidad
                     ];
                 }
-                
+
                 // Crear nuevo detalle
                 $DetalleProforma = new DetalleProforma;
                 $DetalleProforma->prof_id = $proforma_id;
@@ -2323,16 +2323,16 @@ class ProformaController extends Controller
                 $DetalleProforma->det_prof_cantidad = (int)$cantidad_nueva;
                 $DetalleProforma->det_prof_valor_u = $precio;
                 $DetalleProforma->stock_perseo = (int)$stock_perseo_actual;
-                
+
                 if ($contrato_detalle) {
                     $DetalleProforma->contrato = $contrato_detalle;
                 }
-                
+
                 $DetalleProforma->save();
             }
-    
+
             DB::commit();
-    
+
             return response()->json([
                 'status' => 200,
                 'message' => 'Proforma de Perseo actualizada correctamente. Reservas ajustadas.',
@@ -2342,7 +2342,7 @@ class ProformaController extends Controller
                 'reservas_modificadas' => $reservas_modificadas,
                 'tipo' => 'perseo'
             ], 200);
-            
+
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json([
@@ -2353,7 +2353,7 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Obtener libros proformados por contrato
      * Retorna la cantidad, descuento y totales de cada libro en las proformas del contrato
@@ -2363,17 +2363,17 @@ class ProformaController extends Controller
         try {
             $contrato = $request->contrato;
             $periodo = $request->periodo;
-            
+
             if (!$contrato) {
                 return response()->json([
                     "status" => 400,
                     "message" => "El contrato es requerido"
                 ], 400);
             }
-            
+
             // Consulta para obtener los libros proformados agrupados por producto Y descuento
             $librosProformados = DB::SELECT("
-                SELECT 
+                SELECT
                     dp.pro_codigo,
                     MAX(p.pro_nombre) as nombre_libro,
                     fp.pro_des_por as descuento_proforma,
@@ -2389,12 +2389,12 @@ class ProformaController extends Controller
                 GROUP BY dp.pro_codigo, fp.pro_des_por
                 ORDER BY MAX(p.pro_nombre), fp.pro_des_por
             ", [$contrato]);
-            
+
             return response()->json([
                 "status" => 200,
                 "data" => $librosProformados
             ], 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 "status" => 500,
@@ -2404,7 +2404,7 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Obtener proformas por contrato
      * Retorna todas las proformas asociadas a un contrato específico
@@ -2413,16 +2413,16 @@ class ProformaController extends Controller
     {
         try {
             $contrato = $request->contrato;
-            
+
             if (!$contrato) {
                 return response()->json([
                     "status" => 400,
                     "message" => "El contrato es requerido"
                 ], 400);
             }
-            
+
             $proformas = DB::SELECT("
-                SELECT 
+                SELECT
                     fpr.id,
                     fpr.prof_id,
                     fpr.contrato,
@@ -2457,7 +2457,7 @@ class ProformaController extends Controller
                 LEFT JOIN usuario usr ON fpr.usu_codigo = usr.idusuario
                 LEFT JOIN f_detalle_proforma dp ON dp.prof_id = fpr.id
                 WHERE fpr.contrato = ?
-                GROUP BY fpr.id, fpr.prof_id, fpr.contrato, fpr.prof_estado, 
+                GROUP BY fpr.id, fpr.prof_id, fpr.contrato, fpr.prof_estado,
                          fpr.prof_total, fpr.prof_descuento, fpr.prof_iva, fpr.prof_observacion,
                          fpr.created_at, fpr.updated_at, fpr.id_periodo, fpr.proforma_perseo,
                          em.id, em.nombre, em.img_base64,
@@ -2466,12 +2466,12 @@ class ProformaController extends Controller
                          usr.nombres, usr.apellidos, usr.cedula
                 ORDER BY fpr.created_at DESC
             ", [$contrato]);
-            
+
             return response()->json([
                 "status" => 200,
                 "data" => $proformas
             ], 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 "status" => 500,
@@ -2481,7 +2481,7 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Obtener datos completos de una proforma para edición
      * Retorna toda la información de la proforma incluyendo detalles y datos de cupo
@@ -2490,10 +2490,10 @@ class ProformaController extends Controller
     {
         try {
             $proforma_id = $id;
-            
+
             // Obtener datos completos de la proforma incluyendo información de cupo
             $proforma = DB::SELECT("
-                SELECT 
+                SELECT
                     fpr.id,
                     fpr.prof_id,
                     fpr.usu_codigo,
@@ -2540,21 +2540,21 @@ class ProformaController extends Controller
                 LEFT JOIN institucion i ON fpr.id_ins_depacho = i.idInstitucion
                 LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
                 LEFT JOIN f_formulario_proforma ffp ON fpr.id_ins_depacho = ffp.idInstitucion
-                LEFT JOIN pedidos p ON fpr.pedido_id = p.id_pedido 
+                LEFT JOIN pedidos p ON fpr.pedido_id = p.id_pedido
                 --  AND fpr.pedido_id = (SELECT idPeriodoEscolar FROM pedidos WHERE id_pedido = fpr.pedido_id LIMIT 1)
                 WHERE fpr.id = ?
             ", [$proforma_id]);
-            
+
             if (empty($proforma)) {
                 return response()->json([
                     "status" => 404,
                     "message" => "Proforma no encontrada"
                 ], 404);
             }
-            
+
             // Obtener detalles de la proforma con información completa
             $detalles = DB::SELECT("
-                SELECT 
+                SELECT
                     dp.det_prof_id,
                     dp.prof_id,
                     dp.pro_codigo,
@@ -2569,10 +2569,10 @@ class ProformaController extends Controller
                 WHERE dp.prof_id = ?
                 ORDER BY dp.det_prof_id
             ", [$proforma_id]);
-            
+
             // Verificar si es la primera proforma del pedido
             $esPrimera = $this->esPrimeraProforma($proforma[0]->pedido_id, $proforma_id);
-            
+
             return response()->json([
                 "status" => 200,
                 "data" => [
@@ -2581,7 +2581,7 @@ class ProformaController extends Controller
                     "es_primera_proforma" => $esPrimera
                 ]
             ], 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 "status" => 500,
@@ -2591,11 +2591,11 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Obtener proforma para edición - Versión específica para Perseo con sistema de reservas
      * Incluye información de reservas (reserva_perseo) y stock histórico (stock_perseo)
-     * 
+     *
      * @param int $id ID de la proforma
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
@@ -2604,10 +2604,10 @@ class ProformaController extends Controller
     {
         try {
             $proforma_id = $id;
-            
+
             // Obtener datos completos de la proforma incluyendo información de cupo
             $proforma = DB::SELECT("
-                SELECT 
+                SELECT
                     fpr.id,
                     fpr.prof_id,
                     fpr.usu_codigo,
@@ -2654,20 +2654,20 @@ class ProformaController extends Controller
                 LEFT JOIN institucion i ON fpr.id_ins_depacho = i.idInstitucion
                 LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
                 LEFT JOIN f_formulario_proforma ffp ON fpr.id_ins_depacho = ffp.idInstitucion
-                LEFT JOIN pedidos p ON fpr.pedido_id = p.id_pedido 
+                LEFT JOIN pedidos p ON fpr.pedido_id = p.id_pedido
                 WHERE fpr.id = ?
             ", [$proforma_id]);
-            
+
             if (empty($proforma)) {
                 return response()->json([
                     "status" => 404,
                     "message" => "Proforma no encontrada"
                 ], 404);
             }
-            
+
             // Obtener detalles de la proforma con información de reservas de Perseo
             $detalles = DB::SELECT("
-                SELECT 
+                SELECT
                     dp.det_prof_id,
                     dp.prof_id,
                     dp.pro_codigo,
@@ -2685,10 +2685,10 @@ class ProformaController extends Controller
                 WHERE dp.prof_id = ?
                 ORDER BY dp.det_prof_id
             ", [$proforma_id]);
-            
+
             // Verificar si es la primera proforma del pedido
             $esPrimera = $this->esPrimeraProforma($proforma[0]->pedido_id, $proforma_id);
-            
+
             return response()->json([
                 "status" => 200,
                 "data" => [
@@ -2697,7 +2697,7 @@ class ProformaController extends Controller
                     "es_primera_proforma" => $esPrimera
                 ]
             ], 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 "status" => 500,
@@ -2707,11 +2707,11 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Método helper para determinar si una proforma es la primera del pedido
      * Excluye proformas anuladas (prof_estado = 0)
-     * 
+     *
      * @param int $pedidoId ID del pedido
      * @param int|null $proformaId ID de la proforma a verificar (null si es nueva)
      * @return bool true si es la primera proforma, false en caso contrario
@@ -2725,26 +2725,26 @@ class ProformaController extends Controller
                 ->where('prof_estado', '!=', 0) // Excluir anuladas
                 ->orderBy('created_at', 'asc')
                 ->first();
-            
+
             // Si no hay proformas, esta será la primera
             if (!$primeraProforma) {
                 return true;
             }
-            
+
             // Si estamos creando (no hay ID), verificar si ya existe alguna
             if ($proformaId === null) {
                 return false; // Ya existe una proforma, esta no será la primera
             }
-            
+
             // Si estamos editando, verificar si esta proforma es la primera
             return $primeraProforma->id == $proformaId;
-            
+
         } catch (\Exception $e) {
             // En caso de error, retornar false para no bloquear operaciones
             return false;
         }
     }
-    
+
     /**
      * Actualizar una proforma existente desde ProformaModal
      * Maneja el control de stock de manera inteligente según las cantidades modificadas
@@ -2756,47 +2756,47 @@ class ProformaController extends Controller
             // return $request;
             $miarray = json_decode($request->data_detalle);
             $proforma_id = $request->proforma_id;
-            
+
             if (!$proforma_id) {
                 return response()->json([
                     "status" => 400,
                     "message" => "El ID de la proforma es requerido"
                 ], 400);
             }
-            
+
             // Obtener los detalles antiguos ANTES de modificar
             $detallesAntiguos = DetalleProforma::where('prof_id', $proforma_id)->get();
-            
+
             // ======================================================
             // VALIDACIÓN DE STOCK EN TIEMPO REAL (ANTES DE ACTUALIZAR)
             // ======================================================
             $productosInvalidos = [];
-            
+
             foreach ($miarray as $item) {
-                $cantidad_nueva = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad : 
+                $cantidad_nueva = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad :
                                  (isset($item->cantidad) ? $item->cantidad : 0);
-                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo : 
+                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo :
                              (isset($item->codigo_liquidacion) ? $item->codigo_liquidacion : null);
-                
+
                 if (!$pro_codigo || (int)$cantidad_nueva == 0) {
                     continue;
                 }
-                
+
                 // Consultar stock ACTUAL en tiempo real
                 $stockQuery = DB::SELECT("SELECT pro_codigo, pro_nombre, pro_reservar FROM 1_4_cal_producto WHERE pro_codigo = ?", [$pro_codigo]);
-                
+
                 if (!empty($stockQuery)) {
                     $stockActual = (int)$stockQuery[0]->pro_reservar;
                     $cantidad_nueva_int = (int)$cantidad_nueva;
-                    
+
                     // Buscar si este libro existía en la proforma anterior
                     $detalleAntiguo = $detallesAntiguos->firstWhere('pro_codigo', $pro_codigo);
-                    
+
                     if ($detalleAntiguo) {
                         // El libro YA existía - calcular cuánto stock ADICIONAL necesitamos
                         $cantidad_antigua = (int)$detalleAntiguo->det_prof_cantidad;
                         $diferencia = $cantidad_nueva_int - $cantidad_antigua;
-                        
+
                         // Si aumentó, validar que haya stock suficiente para cubrir el aumento
                         if ($diferencia > 0) {
                             if ($stockActual < $diferencia) {
@@ -2827,7 +2827,7 @@ class ProformaController extends Controller
                     }
                 }
             }
-            
+
             // Si hay productos sin stock suficiente, retornar error
             if (!empty($productosInvalidos)) {
                 return response()->json([
@@ -2837,13 +2837,13 @@ class ProformaController extends Controller
                     'productos_invalidos' => $productosInvalidos
                 ], 400);
             }
-            
+
             // Si todo está OK, proceder con la transacción
             DB::beginTransaction();
-    
+
             // Buscar la proforma existente
             $proforma = Proforma::findOrFail($proforma_id);
-    
+
             // Actualizar datos de la proforma (NO se modifica prof_id ni created_at)
             $proforma->prof_observacion = $request->prof_observacion;
             $proforma->prof_observacion_libreria = $request->prof_observacion_libreria ?? '';
@@ -2854,7 +2854,7 @@ class ProformaController extends Controller
             $proforma->prof_iva_por = $request->prof_iva_por;
             $proforma->prof_total = $request->prof_total;
             $proforma->prof_estado = $request->prof_estado;
-            
+
             // ✅ Actualizar lugar de despacho y cliente (si vienen en el request)
             if ($request->has('id_ins_depacho')) {
                 $proforma->id_ins_depacho = $request->id_ins_depacho;
@@ -2871,46 +2871,46 @@ class ProformaController extends Controller
             if ($request->has('emp_id')) {
                 $proforma->emp_id = $request->emp_id;
             }
-            
+
             // ✅ Actualizar período si viene en el request (VALIDAR QUE NO SEA NULL)
             if ($request->has('id_periodo') && $request->id_periodo) {
                 $proforma->id_periodo = $request->id_periodo;
             }
-            
+
             // Guardar cambios en la proforma
             $proforma->save();
-            
+
             // ELIMINAR todos los detalles antiguos
             DetalleProforma::where('prof_id', $proforma_id)->delete();
-            
+
             // PROCESAR NUEVOS DETALLES Y AJUSTAR STOCK
             foreach ($miarray as $key => $item) {
-                $cantidad_nueva = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad : 
+                $cantidad_nueva = isset($item->det_prof_cantidad) ? $item->det_prof_cantidad :
                                  (isset($item->cantidad) ? $item->cantidad : 0);
-                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo : 
+                $pro_codigo = isset($item->pro_codigo) ? $item->pro_codigo :
                              (isset($item->codigo_liquidacion) ? $item->codigo_liquidacion : null);
-                $precio = isset($item->det_prof_valor_u) ? $item->det_prof_valor_u : 
+                $precio = isset($item->det_prof_valor_u) ? $item->det_prof_valor_u :
                          (isset($item->precio) ? $item->precio : 0);
-                
+
                 if (!$pro_codigo || (int)$cantidad_nueva == 0) {
                     continue;
                 }
-                
+
                 // Buscar si este libro existía en la proforma anterior
                 $detalleAntiguo = $detallesAntiguos->firstWhere('pro_codigo', $pro_codigo);
-                
+
                 if ($detalleAntiguo) {
                     // EL LIBRO YA EXISTÍA - Comparar cantidades
                     $cantidad_antigua = (int)$detalleAntiguo->det_prof_cantidad;
                     $cantidad_nueva_int = (int)$cantidad_nueva;
                     $diferencia = $cantidad_nueva_int - $cantidad_antigua;
-                    
+
                     if ($diferencia != 0) {
                         // Hay diferencia, ajustar stock
                         $query1 = DB::SELECT("SELECT pro_reservar as stoc from 1_4_cal_producto where pro_codigo='$pro_codigo'");
                         if (!empty($query1)) {
                             $stockActual = (int)$query1[0]->stoc;
-                            
+
                             if ($diferencia > 0) {
                                 // Aumentó la cantidad → RESTAR del stock
                                 $nuevoStock = $stockActual - $diferencia;
@@ -2919,7 +2919,7 @@ class ProformaController extends Controller
                                 $diferencia_positiva = abs($diferencia);
                                 $nuevoStock = $stockActual + $diferencia_positiva;
                             }
-                            
+
                             $pro = _14Producto::findOrFail($pro_codigo);
                             $pro->pro_reservar = $nuevoStock;
                             $pro->save();
@@ -2931,54 +2931,54 @@ class ProformaController extends Controller
                     if (!empty($query1)) {
                         $stockActual = (int)$query1[0]->stoc;
                         $nuevoStock = $stockActual - (int)$cantidad_nueva;
-                        
+
                         $pro = _14Producto::findOrFail($pro_codigo);
                         $pro->pro_reservar = $nuevoStock;
                         $pro->save();
                     }
                 }
-                
+
                 // Crear el nuevo detalle
                 $DetalleProforma = new DetalleProforma;
                 $DetalleProforma->prof_id = $proforma_id;
                 $DetalleProforma->pro_codigo = $pro_codigo;
                 $DetalleProforma->det_prof_cantidad = (int)$cantidad_nueva;
                 $DetalleProforma->det_prof_valor_u = $precio;
-                
+
                 if ($request->contrato) {
                     $DetalleProforma->contrato = $request->contrato;
                 }
-                
+
                 $DetalleProforma->save();
             }
-            
+
             // VERIFICAR LIBROS ELIMINADOS
             foreach ($detallesAntiguos as $detalleAntiguo) {
                 $libroEnNuevaLista = collect($miarray)->firstWhere('pro_codigo', $detalleAntiguo->pro_codigo);
-                
+
                 if (!$libroEnNuevaLista) {
                     // Este libro fue ELIMINADO - Devolver su cantidad al stock
                     $query1 = DB::SELECT("SELECT pro_reservar as stoc from 1_4_cal_producto where pro_codigo='{$detalleAntiguo->pro_codigo}'");
                     if (!empty($query1)) {
                         $stockActual = (int)$query1[0]->stoc;
                         $nuevoStock = $stockActual + (int)$detalleAntiguo->det_prof_cantidad;
-                        
+
                         $pro = _14Producto::findOrFail($detalleAntiguo->pro_codigo);
                         $pro->pro_reservar = $nuevoStock;
                         $pro->save();
                     }
                 }
             }
-    
+
             DB::commit();
-    
+
             return response()->json([
                 'status' => 200,
                 'message' => 'Proforma actualizada exitosamente',
                 'proforma_id' => $proforma_id,
                 'prof_id' => $proforma->prof_id
             ], 200);
-            
+
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json([
@@ -2991,7 +2991,7 @@ class ProformaController extends Controller
     }
 
     // ==================== NUEVOS MÉTODOS PARA PROFORMAS DE FACTURACIÓN ====================
-    
+
     /**
      * Actualizar estado de proforma (Aprobar/Anular)
      * Estados: 0 = Anulada, 1 = Pendiente, 2 = Aprobada, 3 = Rechazada
@@ -3030,7 +3030,7 @@ class ProformaController extends Controller
                         'message' => 'Solo se pueden anular proformas en estado Pendiente (1) o Aprobado (3). Las proformas con ventas activas (estado 6) no se pueden anular.'
                     ], 400);
                 }
-                
+
                 // Verificar si hay ventas NO anuladas (estado diferente de 3)
                 $ventasActivas = DB::SELECT("SELECT v.ven_codigo, v.est_ven_codigo
                     FROM f_venta v
@@ -3038,7 +3038,7 @@ class ProformaController extends Controller
                     AND v.id_empresa = '$proforma->emp_id'
                     AND v.est_ven_codigo <> 3
                 ");
-                
+
                 if (count($ventasActivas) > 0) {
                     $documentos = implode(', ', array_map(function($v) { return $v->ven_codigo; }, $ventasActivas));
                     return response()->json([
@@ -3046,13 +3046,13 @@ class ProformaController extends Controller
                         'message' => "No se puede anular la proforma porque tiene ventas activas. Por favor, primero anule los siguientes documentos: $documentos"
                     ], 400);
                 }
-                
+
                 foreach ($detallesAntiguos as $detalle) {
                     $query = DB::SELECT("SELECT pro_reservar FROM 1_4_cal_producto WHERE pro_codigo = ?", [$detalle->pro_codigo]);
                     if (!empty($query)) {
                         $stockActual = (int)$query[0]->pro_reservar;
                         $nuevoStock = $stockActual + (int)$detalle->det_prof_cantidad;
-                        
+
                         DB::UPDATE("UPDATE 1_4_cal_producto SET pro_reservar = ? WHERE pro_codigo = ?", [$nuevoStock, $detalle->pro_codigo]);
                     }
                 }
@@ -3209,7 +3209,7 @@ class ProformaController extends Controller
             $productosInvalidos = [];
             foreach ($detallesVenta as $detalleVenta) {
                 $detalleProforma = $detallesProforma->firstWhere('pro_codigo', $detalleVenta['pro_codigo']);
-                
+
                 if (!$detalleProforma) {
                     continue;
                 }
@@ -3220,12 +3220,12 @@ class ProformaController extends Controller
                 // Si la cantidad de venta es mayor a la de proforma, validar stock disponible
                 if ($cantidadVenta > $cantidadProforma) {
                     $diferencia = $cantidadVenta - $cantidadProforma;
-                    
+
                     $stockQuery = DB::SELECT("SELECT pro_codigo, pro_nombre, pro_reservar FROM 1_4_cal_producto WHERE pro_codigo = ?", [$detalleVenta['pro_codigo']]);
-                    
+
                     if (!empty($stockQuery)) {
                         $stockDisponible = (int)$stockQuery[0]->pro_reservar;
-                        
+
                         if ($stockDisponible < $diferencia) {
                             $productosInvalidos[] = [
                                 'pro_codigo' => $detalleVenta['pro_codigo'],
@@ -3262,7 +3262,7 @@ class ProformaController extends Controller
             foreach ($detallesVenta as $item) {
                 $subtotalCalculado += (float)$item['det_prof_cantidad'] * (float)$item['det_prof_valor_u'];
             }
-            
+
             $porcentajeDescuento = (float)$proforma->pro_des_por;
             $descuentoCalculado = $subtotalCalculado * $porcentajeDescuento / 100;
             $baseImponible = $subtotalCalculado - $descuentoCalculado;
@@ -3307,7 +3307,7 @@ class ProformaController extends Controller
             // Crear detalles de venta con cantidades modificadas y ajustar stock
             foreach ($detallesVenta as $detalleVenta) {
                 $detalleProforma = $detallesProforma->firstWhere('pro_codigo', $detalleVenta['pro_codigo']);
-                
+
                 if (!$detalleProforma) {
                     continue;
                 }
@@ -3329,22 +3329,22 @@ class ProformaController extends Controller
                 $cantidadProforma = (int)$detalleProforma->det_prof_cantidad;
                 $cantidadVenta = (int)$detalleVenta['det_prof_cantidad'];
                 $activarTodoStock = $request->activar_todo_stock ?? false;
-                
+
                 // VALIDAR: NO se puede vender MÁS de lo proformado
                 if ($cantidadVenta > $cantidadProforma) {
                     throw new \Exception("No se puede vender más de lo proformado para el producto {$detalleVenta['pro_codigo']}. Proformado: {$cantidadProforma}, Intentando vender: {$cantidadVenta}");
                 }
-                
+
                 $producto = _14Producto::findOrFail($detalleVenta['pro_codigo']);
-                
+
                 // SIEMPRE restar la cantidad vendida del stock correspondiente
                 $this->restarStockInteligente($producto, $cantidadVenta, $request->empresa, $request->tipo_documento, $activarTodoStock, $detalleVenta);
-                
+
                 // NO tocar pro_reservar aquí
                 // - La reserva se hizo al crear la proforma
                 // - Si se vende MENOS, la reserva "fantasma" se mantiene para futuros documentos del pendiente
                 // - La reserva solo se devuelve al ANULAR la proforma o cuando se complete toda la venta
-                
+
                 $producto->save();
             }
 
@@ -3357,7 +3357,7 @@ class ProformaController extends Controller
                     'fecha_generacion' => now()
                 ]
             ];
-            
+
             $historico = new Proformahistorico();
             $historico->id_prof = $proforma->prof_id;
             $historico->old_value = json_encode(['proforma' => $proforma->toArray(), 'detalles' => $detallesProforma->toArray()], JSON_UNESCAPED_UNICODE);
@@ -3370,10 +3370,10 @@ class ProformaController extends Controller
             // Verificar si se vendió todo o quedaron pendientes
             // Necesitamos consultar TODAS las ventas de esta proforma, no solo la actual
             $todoVendido = true;
-            
+
             // Obtener el total vendido de cada producto (incluyendo TODAS las ventas anteriores + esta)
             $cantidadesVendidasTotal = DB::SELECT("
-                SELECT 
+                SELECT
                     dv.pro_codigo,
                     SUM(dv.det_ven_cantidad) as cantidad_total_vendida
                 FROM f_detalle_venta dv
@@ -3383,30 +3383,30 @@ class ProformaController extends Controller
                 AND fv.est_ven_codigo <> 3
                 GROUP BY dv.pro_codigo
             ", [$proforma->id]);
-            
+
             // Convertir a array asociativo para fácil acceso
             $cantidadesMap = [];
             foreach ($cantidadesVendidasTotal as $item) {
                 $cantidadesMap[$item->pro_codigo] = (int)$item->cantidad_total_vendida;
             }
-            
+
             // Comparar el total vendido con lo proformado
             foreach ($detallesProforma as $detalleProforma) {
                 $cantidadProforma = (int)$detalleProforma->det_prof_cantidad;
                 $cantidadTotalVendida = $cantidadesMap[$detalleProforma->pro_codigo] ?? 0;
-                
+
                 // Si algún producto tiene menos vendido que lo proformado, hay pendientes
                 if ($cantidadTotalVendida < $cantidadProforma) {
                     $todoVendido = false;
                     break;
                 }
             }
-            
+
             // Actualizar estado:
             // 2 = Finalizada (si se vendió todo)
             // 6 = Aprobado con pendiente (si quedaron items pendientes)
             $nuevoEstado = $todoVendido ? 2 : 6;
-            
+
             DB::table('f_proforma')
                 ->where('id', $proforma->id)
                 ->update([
@@ -3417,8 +3417,8 @@ class ProformaController extends Controller
 
             DB::commit();
 
-            $mensajeEstado = $todoVendido 
-                ? 'Proforma finalizada completamente' 
+            $mensajeEstado = $todoVendido
+                ? 'Proforma finalizada completamente'
                 : 'Proforma con items pendientes';
 
             return response()->json([
@@ -3447,7 +3447,7 @@ class ProformaController extends Controller
      * - PF-C-S25-FR-0001032 (Prefactura)
      * - N-C-S25-FR-BC206 (Nota BC)
      * - N-C-S241-FR-AI006 (Nota AI)
-     * 
+     *
      * Usa SELECT FOR UPDATE para evitar race conditions en concurrencia
      */
     private function generarCodigoVenta($empresa, $tipoDocumento, $contrato)
@@ -3455,23 +3455,23 @@ class ProformaController extends Controller
         try {
             // 1. Obtener información completa del tipo de documento CON BLOQUEO DE FILA
             // Esto previene que dos procesos obtengan el mismo secuencial simultáneamente
-            $tipoDoc = DB::SELECT("SELECT tdo_id, tdo_nombre, tdo_letra, 
+            $tipoDoc = DB::SELECT("SELECT tdo_id, tdo_nombre, tdo_letra,
                 tdo_secuencial_Prolipa, tdo_secuencial_calmed, tdo_secuencial_SinEmpresa, tdo_secuencial_Prolipa2026, tdo_secuencial_calmed2026
-                FROM f_tipo_documento 
+                FROM f_tipo_documento
                 WHERE tdo_id = ?
                 FOR UPDATE", [$tipoDocumento]);
 
             if (empty($tipoDoc)) {
                 throw new \Exception('Tipo de documento no encontrado');
             }
-            
+
             $letraTipoDoc = $tipoDoc[0]->tdo_letra;
             $nombreTipoDoc = $tipoDoc[0]->tdo_nombre;
-            
+
             // 2. Obtener letra de la empresa (P = Prolipa, C = Calmed)
             $letraEmpresa = '';
             $secuenciaActual = 0;
-            
+
             if ($empresa == 1) {
                 $letraEmpresa = 'P';
                 $secuenciaActual = $tipoDoc[0]->tdo_secuencial_Prolipa;
@@ -3488,52 +3488,52 @@ class ProformaController extends Controller
                 $letraEmpresa = 'SE';
                 $secuenciaActual = $tipoDoc[0]->tdo_secuencial_SinEmpresa;
             }
-            
+
             // 3. Obtener código contrato (temporada) del período escolar usando el contrato
-            $punto = DB::SELECT("SELECT pv.*, pe.codigo_contrato 
+            $punto = DB::SELECT("SELECT pv.*, pe.codigo_contrato
                 FROM pedidos pv
                 LEFT JOIN periodoescolar pe ON pv.id_periodo = pe.idperiodoescolar
                 WHERE pv.contrato_generado = ?", [$contrato]);
-            
+
             if (empty($punto)) {
                 throw new \Exception('Contrato no encontrado en pedidos');
             }
-            
+
             $codigoContrato = $punto[0]->codigo_contrato ?? '';
-            
+
             if (empty($codigoContrato)) {
                 throw new \Exception('No se pudo obtener el código de contrato del período escolar');
             }
-            
+
             // 4. Obtener iniciales del usuario desde el request
             $usuario = DB::SELECT("SELECT iniciales FROM usuario WHERE idusuario = ?", [request()->input('idusuario')]);
-            
+
             if (empty($usuario) || empty($usuario[0]->iniciales)) {
                 throw new \Exception('No se pudieron obtener las iniciales del usuario');
             }
-            
+
             $iniciales = $usuario[0]->iniciales;
-            
+
             // 5. Incrementar secuencial
             $nuevoSecuencial = $secuenciaActual + 1;
-            
+
             // 6. Formatear secuencial según el tipo de documento
             $secuenciaFormateada = '';
-            
+
             // Detectar si es NOTA DE VENTA (BC) o (AI) basado en el nombre
             if (strpos($nombreTipoDoc, 'NOTA DE VENTA (BC)') !== false) {
                 // Formato: BC + número corto (BC206, BC001, etc.)
                 $secuenciaFormateada = 'BC' . str_pad($nuevoSecuencial, 3, '0', STR_PAD_LEFT);
-            } 
+            }
             else if (strpos($nombreTipoDoc, 'NOTA DE VENTA (AI)') !== false) {
                 // Formato: AI + número corto (AI006, AI001, etc.)
                 $secuenciaFormateada = 'AI' . str_pad($nuevoSecuencial, 3, '0', STR_PAD_LEFT);
-            } 
+            }
             else {
                 // Formato estándar: 7 dígitos (0001032, 0000001, etc.)
                 $secuenciaFormateada = str_pad($nuevoSecuencial, 7, '0', STR_PAD_LEFT);
             }
-            
+
             // 7. Actualizar la secuencia en la base de datos
             // El UPDATE se ejecuta mientras mantenemos el bloqueo de la fila
             if ($empresa == 1) {
@@ -3543,17 +3543,17 @@ class ProformaController extends Controller
             } else {
                 DB::UPDATE("UPDATE f_tipo_documento SET tdo_secuencial_SinEmpresa = ? WHERE tdo_id = ?", [$nuevoSecuencial, $tipoDocumento]);
             }
-            
+
             // 8. Generar código final: TipoDoc-Empresa-Temporada-Iniciales-Secuencial
             $codigo = $letraTipoDoc=='BC'|| $letraTipoDoc=='AI'? 'N' . '-' . $letraEmpresa . '-' . $codigoContrato . '-' . $iniciales . '-' . $secuenciaFormateada:'PF' . '-' . $letraEmpresa . '-' . $codigoContrato . '-' . $iniciales . '-' . $secuenciaFormateada;
-            
+
             return $codigo;
-            
+
         } catch (\Exception $e) {
             throw new \Exception('Error al generar código de venta: ' . $e->getMessage());
         }
     }
-    
+
     /**
      * Obtener stocks de productos por sus códigos
      */
@@ -3561,14 +3561,14 @@ class ProformaController extends Controller
     {
         try {
             $codigos = $request->codigos;
-            
+
             if (empty($codigos) || !is_array($codigos)) {
                 return response()->json([
                     'status' => 400,
                     'message' => 'Debe proporcionar un array de códigos de productos'
                 ], 400);
             }
-            
+
             // Consultar stocks de productos
             $productos = DB::table('1_4_cal_producto')
                 ->select(
@@ -3581,9 +3581,9 @@ class ProformaController extends Controller
                 )
                 ->whereIn('pro_codigo', $codigos)
                 ->get();
-            
+
             return response()->json($productos);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 500,
@@ -3591,7 +3591,7 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Obtener todas las ventas de un contrato específico
      * Similar a get_proformas_por_contrato pero para documentos de venta
@@ -3600,16 +3600,16 @@ class ProformaController extends Controller
     {
         try {
             $contrato = $request->contrato;
-            
+
             if (!$contrato) {
                 return response()->json([
                     "status" => 400,
                     "message" => "El contrato es requerido"
                 ], 400);
             }
-            
+
             $ventas = DB::SELECT("
-                SELECT 
+                SELECT
                     fv.ven_codigo,
                     fv.id_empresa,
                     fv.ven_idproforma,
@@ -3645,7 +3645,7 @@ class ProformaController extends Controller
                     usr.cedula as creado_por_cedula,
                     td.tdo_id,
                     td.tdo_nombre,
-                    CASE 
+                    CASE
                         WHEN fv.est_ven_codigo = 0 THEN 'Pendiente'
                         WHEN fv.est_ven_codigo = 1 THEN 'Despachado'
                         WHEN fv.est_ven_codigo = 2 THEN 'Liquidado'
@@ -3669,8 +3669,8 @@ class ProformaController extends Controller
                 LEFT JOIN f_detalle_venta dfv ON fv.ven_codigo = dfv.ven_codigo AND fv.id_empresa = dfv.id_empresa
                 LEFT JOIN f_tipo_documento td ON fv.idtipodoc = td.tdo_id
                 WHERE fv.contrato = ?
-                GROUP BY fv.ven_codigo, fv.id_empresa, fv.est_ven_codigo, 
-                         fv.idtipodoc, fv.ven_subtotal, fv.ven_descuento, fv.ven_iva, 
+                GROUP BY fv.ven_codigo, fv.id_empresa, fv.est_ven_codigo,
+                         fv.idtipodoc, fv.ven_subtotal, fv.ven_descuento, fv.ven_iva,
                          fv.ven_transporte, fv.ven_valor, fv.ven_observacion, fv.ven_desc_por, fv.user_created,
                          fv.ven_fecha, fv.periodo_id, fv.ven_tipo_inst, fv.ven_idproforma,
                          fv.contrato, em.id, em.nombre, em.img_base64,
@@ -3681,7 +3681,7 @@ class ProformaController extends Controller
                          fv.pedido_codigo, fv.fecha_envio_perseo,fv.ven_p_libros_obsequios
                 ORDER BY fv.ven_fecha DESC
             ", [$contrato]);
-            
+
             // Calcular total del pedido (suma de ventas no anuladas)
             $totalPedido = array_reduce($ventas, function($carry, $venta) {
                 if ($venta->est_ven_codigo != 3) { // No incluir anuladas
@@ -3689,7 +3689,7 @@ class ProformaController extends Controller
                 }
                 return $carry;
             }, 0);
-            
+
             // Agregar porcentaje a cada venta
             foreach ($ventas as $venta) {
                 if ($totalPedido > 0 && $venta->est_ven_codigo != 3) {
@@ -3698,12 +3698,12 @@ class ProformaController extends Controller
                     $venta->porcentaje_pedido = 0;
                 }
             }
-            
+
             return response()->json([
                 "status" => 200,
                 "data" => $ventas
             ], 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 "status" => 500,
@@ -3713,7 +3713,7 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Obtener libros vendidos por contrato
      * Similar a get_libros_proformados_por_contrato pero para ventas
@@ -3724,18 +3724,18 @@ class ProformaController extends Controller
         try {
             $contrato = $request->contrato;
             $periodo = $request->periodo;
-            
+
             if (!$contrato) {
                 return response()->json([
                     "status" => 400,
                     "message" => "El contrato es requerido"
                 ], 400);
             }
-            
+
             // Consulta para obtener los libros vendidos agrupados por producto Y descuento
             // Excluye ventas anuladas (est_ven_codigo = 3)
             $librosVendidos = DB::SELECT("
-                SELECT 
+                SELECT
                     dv.pro_codigo,
                     MAX(p.pro_nombre) as nombre_libro,
                     fv.ven_desc_por as descuento_venta,
@@ -3751,12 +3751,12 @@ class ProformaController extends Controller
                 GROUP BY dv.pro_codigo, fv.ven_desc_por
                 ORDER BY MAX(p.pro_nombre), fv.ven_desc_por
             ", [$contrato]);
-            
+
             return response()->json([
                 "status" => 200,
                 "data" => $librosVendidos
             ], 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 "status" => 500,
@@ -3775,18 +3775,18 @@ class ProformaController extends Controller
     {
         try {
             $proformaId = $request->proforma_id;
-            
+
             if (!$proformaId) {
                 return response()->json([
                     "status" => 400,
                     "message" => "El ID de la proforma es requerido"
                 ], 400);
             }
-            
+
             // Consulta para obtener las cantidades ya vendidas de esta proforma
             // Agrupa por producto y suma todas las ventas NO anuladas
             $cantidadesVendidas = DB::SELECT("
-                SELECT 
+                SELECT
                     dv.pro_codigo,
                     SUM(dv.det_ven_cantidad) as cantidad_vendida
                 FROM f_detalle_venta dv
@@ -3796,7 +3796,7 @@ class ProformaController extends Controller
                 AND fv.est_ven_codigo <> 3
                 GROUP BY dv.pro_codigo
             ", [$proformaId]);
-            
+
             // Convertir a array asociativo para fácil acceso
             $resultado = [];
             foreach ($cantidadesVendidas as $item) {
@@ -3805,12 +3805,12 @@ class ProformaController extends Controller
                     'cantidad_vendida' => (int)$item->cantidad_vendida
                 ];
             }
-            
+
             return response()->json([
                 "status" => 200,
                 "data" => $resultado
             ], 200);
-            
+
         } catch (\Exception $e) {
             return response()->json([
                 "status" => 500,
@@ -3820,10 +3820,10 @@ class ProformaController extends Controller
             ], 500);
         }
     }
-    
+
     /**
      * Restar stock inteligentemente según empresa, tipo de documento y activar_todo_stock
-     * 
+     *
      * Lógica:
      * - Empresa 1 (PROLIPA):
      *   - Tipo 1 (Factura): resta de pro_stock
@@ -3831,10 +3831,10 @@ class ProformaController extends Controller
      * - Empresa 3 (CALMED):
      *   - Tipo 1 (Factura): resta de pro_stockCalmed
      *   - Tipo 3,4 (Notas): resta de pro_depositoCalmed
-     * 
+     *
      * Si activar_todo_stock = true y no hay suficiente en el stock correcto,
      * intenta restar de los otros stocks disponibles en orden de prioridad
-     * 
+     *
      * @param _14Producto $producto Modelo del producto
      * @param int $cantidad Cantidad a restar
      * @param int $empresa ID de la empresa (1=PROLIPA, 3=CALMED)
@@ -3847,13 +3847,13 @@ class ProformaController extends Controller
     {
         // Determinar el campo de stock principal según empresa y tipo de documento
         $campoPrincipal = '';
-        
+
         if ($empresa == 1 || $empresa == 5) { // PROLIPA
             $campoPrincipal = ($tipoDocumento == 1) ? 'pro_stock' : 'pro_deposito';
         } elseif ($empresa == 3 || $empresa == 4) { // CALMED
             $campoPrincipal = ($tipoDocumento == 1) ? 'pro_stockCalmed' : 'pro_depositoCalmed';
         }
-        
+
         // Intentar restar del stock principal
         if ($producto->$campoPrincipal >= $cantidad) {
             // Hay suficiente en el stock principal
@@ -3861,22 +3861,22 @@ class ProformaController extends Controller
             // NO restar pro_reservar aquí - ya fue restado al crear la proforma
             return;
         }
-        
+
         // Si no hay suficiente en el stock principal
         if (!$activarTodoStock) {
             // Si NO está activado "todo el stock", lanzar error
             throw new \Exception("Stock insuficiente en {$campoPrincipal} para el producto {$producto->pro_codigo}. Disponible: {$producto->$campoPrincipal}, Requerido: {$cantidad}");
         }
-        
+
         // Si está activado "todo el stock", intentar restar de otros stocks disponibles
         $cantidadRestante = $cantidad;
-        
+
         // 1. Restar lo que hay en el stock principal
         if ($producto->$campoPrincipal > 0) {
             $cantidadRestante -= $producto->$campoPrincipal;
             $producto->$campoPrincipal = 0;
         }
-        
+
         // 2. Definir orden de prioridad para los otros stocks
         $stocksDisponibles = [
             'pro_stock' => $producto->pro_stock,
@@ -3884,16 +3884,16 @@ class ProformaController extends Controller
             'pro_stockCalmed' => $producto->pro_stockCalmed,
             'pro_depositoCalmed' => $producto->pro_depositoCalmed
         ];
-        
+
         // Quitar el stock principal del array
         unset($stocksDisponibles[$campoPrincipal]);
-        
+
         // 3. Restar de los otros stocks en orden hasta completar la cantidad
         foreach ($stocksDisponibles as $campo => $valor) {
             if ($cantidadRestante <= 0) {
                 break;
             }
-            
+
             if ($valor > 0) {
                 if ($valor >= $cantidadRestante) {
                     // Hay suficiente en este stock
@@ -3906,21 +3906,21 @@ class ProformaController extends Controller
                 }
             }
         }
-        
+
         // 4. Verificar que se pudo restar toda la cantidad
         if ($cantidadRestante > 0) {
             throw new \Exception("Stock total insuficiente para el producto {$producto->pro_codigo}. Faltante: {$cantidadRestante}");
         }
-        
+
         // NO restar pro_reservar aquí - ya fue restado al crear la proforma
         // Solo se ajustará en crearVentaDesdeProforma si hay diferencia entre proforma y venta
     }
-    
+
     /**
      * Regresar stock al anular una venta
      * Solo devuelve al campo específico del que se descontó (pro_stock, pro_deposito, pro_stockCalmed, pro_depositoCalmed)
      * NO toca pro_reservar porque la reserva sigue vigente desde la proforma
-     * 
+     *
      * @param int $codi Stock actual del campo específico
      * @param object $item Detalle de la venta con cantidad
      * @param int $tipo Tipo de documento (1=Factura, 3,4=Notas)
@@ -3930,7 +3930,7 @@ class ProformaController extends Controller
         // Calcular el nuevo stock (devolver la cantidad vendida)
         $co = (int)$codi + (int)$item->det_ven_cantidad;
         $pro = _14Producto::findOrFail($item->pro_codigo);
-        
+
         // PROLIPA (empresa 1)
         if($id_empresa == 1 || $id_empresa == 5){
             if($tipo == 1){
@@ -3942,7 +3942,7 @@ class ProformaController extends Controller
             }
             $pro->save();
         }
-        
+
         // CALMED (empresa 3)
         if($id_empresa == 3 || $id_empresa == 4){
             if($tipo == 1){
@@ -3954,11 +3954,11 @@ class ProformaController extends Controller
             }
             $pro->save();
         }
-        
+
         // NO tocar pro_reservar - la reserva sigue vigente desde la proforma
         // La reserva solo se devuelve al anular la proforma completa
     }
-    
+
     /**
      * Anular una venta
      * - Cambia el estado del documento a 3 (anulado)
@@ -3966,7 +3966,7 @@ class ProformaController extends Controller
      * - Actualiza el estado de la proforma según las ventas restantes:
      *   * Estado 6 (aprobado con pendiente): si hay más proformado que vendido
      *   * Estado 3 (aprobado): si no hay ventas activas
-     * 
+     *
      * @param Request $request
      * @return JsonResponse
      */
@@ -3974,29 +3974,29 @@ class ProformaController extends Controller
     {
         try {
 
-            
+
             // Validar parámetros requeridos
             if (!$request->ven_codigo || !$request->empresa || !$request->tipodoc) {
                 return response()->json([
-                    "status" => "0", 
+                    "status" => "0",
                     "message" => "Faltan parámetros requeridos: ven_codigo, empresa, tipodoc"
                 ], 400);
             }
-            
+
             DB::beginTransaction();
-            
+
             // Validar que exista la venta
             $venta = Ventas::where('ven_codigo', $request->ven_codigo)
                 ->where('id_empresa', $request->empresa)
                 ->first();
-                
+
             if (!$venta) {
                 return response()->json([
-                    "status" => "0", 
+                    "status" => "0",
                     "message" => "El documento no existe en la base de datos"
                 ], 404);
             }
-            
+
             // Validar que el documento pueda ser anulado (solo estado 2 - Pendiente)
             if ($venta->est_ven_codigo != 2) {
                 $estadoActual = '';
@@ -4011,41 +4011,41 @@ class ProformaController extends Controller
                         $estadoActual = 'en un estado que no permite anulación';
                         break;
                 }
-                
+
                 return response()->json([
-                    "status" => "0", 
+                    "status" => "0",
                     "message" => "No se puede anular el documento porque está $estadoActual. Solo se pueden anular documentos en estado Pendiente (estado 2)"
                 ], 400);
             }
-            
+
             // Validar que no tenga devoluciones registradas
             $validateDevuelto = DB::SELECT("SELECT * FROM f_detalle_venta v
                 WHERE v.ven_codigo = '$request->ven_codigo'
                 AND v.det_ven_dev > 0
                 AND v.id_empresa = '$request->empresa'
             ");
-            
+
             if (count($validateDevuelto) > 0) {
                 return response()->json([
-                    "status" => "0", 
+                    "status" => "0",
                     "message" => "El documento $request->ven_codigo tiene devoluciones registradas, no se puede anular"
                 ], 400);
             }
-            
+
             // Obtener los detalles de la venta para regresar el stock
-            $detalleVenta = DB::SELECT("SELECT * FROM f_detalle_venta 
-                WHERE ven_codigo = '$request->ven_codigo' 
+            $detalleVenta = DB::SELECT("SELECT * FROM f_detalle_venta
+                WHERE ven_codigo = '$request->ven_codigo'
                 AND id_empresa = '$request->empresa'
             ");
-            
+
             // Validar que existan detalles
             if (!$detalleVenta || count($detalleVenta) == 0) {
                 return response()->json([
-                    "status" => "0", 
+                    "status" => "0",
                     "message" => "No se encontraron detalles para el documento $request->ven_codigo"
                 ], 404);
             }
-            
+
             // Actualizar el estado del documento a anulado (3)
             DB::table('f_venta')
                 ->where('ven_codigo', $request->ven_codigo)
@@ -4056,7 +4056,7 @@ class ProformaController extends Controller
                     'observacionAnulacion' => $request->observacionAnulacion,
                     'fecha_anulacion' => now(),
                 ]);
-            
+
             // Regresar el stock de cada producto
             foreach ($detalleVenta as $item) {
                 // Obtener el stock actual del campo correspondiente
@@ -4069,7 +4069,7 @@ class ProformaController extends Controller
                         $query1 = DB::SELECT("SELECT pro_deposito as stoc FROM 1_4_cal_producto WHERE pro_codigo='$item->pro_codigo'");
                     }
                 }
-                
+
                 if ($request->empresa == 3 || $request->empresa == 4) {
                     if ($request->tipodoc == 1) {
                         // CALMED Factura → pro_stockCalmed
@@ -4079,18 +4079,18 @@ class ProformaController extends Controller
                         $query1 = DB::SELECT("SELECT pro_depositoCalmed as stoc FROM 1_4_cal_producto WHERE pro_codigo='$item->pro_codigo'");
                     }
                 }
-                
+
                 $codi = $query1[0]->stoc;
-                
+
                 // Regresar el stock sin tocar pro_reservar
                 $this->regresarStock($codi, $item, $request->tipodoc, $request->empresa);
             }
-            
+
             // Actualizar el estado de la proforma según las ventas restantes
             $proforma = Proforma::where('prof_id', $venta->ven_idproforma)
                 ->where('emp_id', $venta->id_empresa)
                 ->first();
-            
+
             if ($proforma) {
                 // Primero verificar si hay ALGUNA venta activa (no anulada)
                 $ventasActivas = DB::SELECT("SELECT COUNT(*) as total
@@ -4099,9 +4099,9 @@ class ProformaController extends Controller
                     AND v.id_empresa = '$proforma->emp_id'
                     AND v.est_ven_codigo <> 3
                 ");
-                
+
                 $hayVentasActivas = ($ventasActivas[0]->total ?? 0) > 0;
-                
+
                 // Si no hay ventas activas, volver a estado Aprobado (3)
                 if (!$hayVentasActivas) {
                     $proforma->prof_estado = 3;
@@ -4111,12 +4111,12 @@ class ProformaController extends Controller
                     $dataProforma = DB::SELECT("SELECT * FROM f_detalle_proforma dp
                         WHERE dp.prof_id = '$proforma->id'
                     ");
-                    
+
                     $todoVendido = true;
-                    
+
                     foreach ($dataProforma as $itemProforma) {
                         $cantidadProforma = $itemProforma->det_prof_cantidad;
-                        
+
                         // Obtener la cantidad vendida (sin incluir anuladas - estado 3)
                         $getFacturada = DB::SELECT("SELECT COALESCE(SUM(d.det_ven_cantidad), 0) AS cantidadFacturada
                             FROM f_detalle_venta d
@@ -4125,16 +4125,16 @@ class ProformaController extends Controller
                             AND d.pro_codigo = '$itemProforma->pro_codigo'
                             AND v.est_ven_codigo <> 3
                         ");
-                        
+
                         $cantidadFacturada = (int)($getFacturada[0]->cantidadFacturada ?? 0);
-                        
+
                         // Si aún hay cantidades pendientes de vender
                         if ($cantidadFacturada < $cantidadProforma) {
                             $todoVendido = false;
                             break; // Ya sabemos que no está todo vendido
                         }
                     }
-                    
+
                     // Determinar el estado según si está todo vendido o no
                     if ($todoVendido) {
                         // Todo vendido → Estado 2 (Finalizada)
@@ -4143,13 +4143,13 @@ class ProformaController extends Controller
                         // Hay ventas activas pero no todo vendido → Estado 6 (Aprobada con pendiente)
                         $proforma->prof_estado = 6;
                     }
-                    
+
                     $proforma->save();
                 }
             }
-            
+
             DB::commit();
-            
+
             $mensajeEstado = '';
             if (isset($proforma)) {
                 switch ($proforma->prof_estado) {
@@ -4164,21 +4164,201 @@ class ProformaController extends Controller
                         break;
                 }
             }
-            
+
             return response()->json([
                 'status' => '1',
                 'message' => 'Anulación exitosa de la venta' . $mensajeEstado,
                 'estado_proforma' => $proforma->prof_estado ?? null
             ], 200);
-            
+
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json([
-                "status" => "0", 
+                "status" => "0",
                 "message" => "No se pudo anular la venta",
                 "error" => $e->getMessage()
             ], 500);
         }
     }
-    
+
+    //INICIO METODOS JEYSON
+    public function Procesar_MetodosGet_ProformaController(Request $request)
+    {
+        $action = $request->query('action'); // Leer el parámetro `action` desde la URL
+        switch ($action) {
+            case 'Consulta_Contratos_x_estadoPedido_PagosNULL':
+                return $this->Consulta_Contratos_x_estadoPedido_PagosNULL($request);
+            case 'get_resumen_pendientes_todos_contratos':
+                return $this->get_resumen_pendientes_todos_contratos($request);
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
+    }
+    public function Consulta_Contratos_x_estadoPedido_PagosNULL($request)
+    {
+        $periodoescolar = $request->periodoescolar;
+        $contratos = DB::SELECT("SELECT pe.id_pedido, pe.tipo_venta, pe.id_institucion, pe.contrato_generado, pe.estadoPedido_Pagos, pe.id_periodo FROM pedidos pe
+            WHERE pe.contrato_generado IS NOT NULL
+            AND pe.estadoPedido_Pagos IS NULL
+            AND  pe.id_periodo = $periodoescolar");
+        return $contratos;
+    }
+
+    /**
+     * Retorna todos los contratos pendientes del período con sus libros y ventas consolidadas.
+     * Consume internamente get_libros_pedidosAlcancesXContrato (PedidosController)
+     * y get_libros_vendidos_por_contrato (ProformaController) sin duplicar SQL.
+     */
+    public function get_resumen_pendientes_todos_contratos($request)
+    {
+        try {
+            $periodoescolar = $request->periodoescolar;
+
+            if (!$periodoescolar) {
+                return response()->json(['error' => 'El período es requerido'], 400);
+            }
+
+            // 1. Obtener contratos pendientes del período (incluye nombreInstitucion)
+            $contratos = DB::SELECT("
+                SELECT pe.id_pedido, pe.tipo_venta, pe.id_institucion, pe.contrato_generado,
+                       pe.estadoPedido_Pagos, pe.id_periodo,
+                       i.nombreInstitucion
+                FROM pedidos pe
+                LEFT JOIN institucion i ON pe.id_institucion = i.idInstitucion
+                WHERE pe.contrato_generado IS NOT NULL
+                  AND pe.estadoPedido_Pagos IS NULL
+                  AND pe.id_periodo = ?
+                ORDER BY i.nombreInstitucion ASC
+            ", [$periodoescolar]);
+
+            if (empty($contratos)) {
+                return response()->json([], 200);
+            }
+
+            // Instanciar PedidosController para reutilizar su método sin duplicar SQL
+            $pedidosCtrl = app()->make(\App\Http\Controllers\PedidosController::class);
+
+            $resultado = [];
+
+            foreach ($contratos as $contrato) {
+                $codigoContrato = $contrato->contrato_generado;
+
+                // 2. Libros del pedido — delega en el método existente de PedidosController
+                $fakeRequest = new \Illuminate\Http\Request();
+                $fakeRequest->merge(['contrato' => $codigoContrato, 'periodo' => $periodoescolar]);
+                $librosRaw = $pedidosCtrl->get_libros_pedidosAlcancesXContrato($fakeRequest);
+
+                // 3. Libros vendidos — delega en el método existente de ProformaController
+                $fakeRequest2 = new \Illuminate\Http\Request();
+                $fakeRequest2->merge(['contrato' => $codigoContrato, 'periodo' => $periodoescolar]);
+                $ventasResp = $this->get_libros_vendidos_por_contrato($fakeRequest2);
+                $librosVendidosRaw = json_decode($ventasResp->getContent())->data ?? [];
+
+                // 4. Consolidar libros duplicados por pro_codigo (suma cantidades de alcances)
+                $consolidados = [];
+                foreach ($librosRaw as $item) {
+                    $item = (array) $item;
+                    $qty  = (int)($item['cantidad'] ?? 0);
+                    $codigo = $item['pro_codigo'];
+                    if (isset($consolidados[$codigo])) {
+                        $consolidados[$codigo]['cantidad'] += $qty;
+                    } else {
+                        $consolidados[$codigo] = [
+                            'pro_codigo'   => $codigo,
+                            'nombre_libro' => $item['nombre_libro'],
+                            'precio'       => (float)($item['precio'] ?? 0),
+                            'descuento'    => (float)($item['descuento'] ?? 0),
+                            'cantidad'     => $qty,
+                        ];
+                    }
+                }
+                $librosPedido = array_values($consolidados);
+
+                // 5. Agregar libros extras (vendidos pero no en el contrato)
+                $codigosEnPedido = array_column($librosPedido, 'pro_codigo');
+                foreach ($librosVendidosRaw as $lv) {
+                    if (!in_array($lv->pro_codigo, $codigosEnPedido)) {
+                        $librosPedido[] = [
+                            'pro_codigo'   => $lv->pro_codigo,
+                            'nombre_libro' => $lv->nombre_libro,
+                            'precio'       => (float)($lv->precio_unitario ?? 0),
+                            'descuento'    => 0,
+                            'cantidad'     => 0,
+                            'esLibroExtra' => true,
+                        ];
+                        $codigosEnPedido[] = $lv->pro_codigo;
+                    }
+                }
+
+                // 6. Calcular totales del contrato + inyectar ventas en cada libro
+                $totalContratoCantidad  = 0;
+                $totalContratoSubtotal  = 0.0;
+                $totalContratoTotal     = 0.0;
+                $totalVentaCantidad     = 0;
+                $totalVentaSubtotal     = 0.0;
+                $totalVentaTotal        = 0.0;
+                $totalPendienteCantidad = 0;
+                $totalPendienteValor    = 0.0;
+
+                foreach ($librosPedido as &$libro) {
+                    $cant   = (int)($libro['cantidad'] ?? 0);
+                    $precio = (float)($libro['precio'] ?? 0);
+                    $dscto  = (float)($libro['descuento'] ?? 0);
+                    $sub    = $precio * $cant;
+                    $tot    = $sub - ($sub * $dscto / 100);
+
+                    $ventasLibro = array_filter((array)$librosVendidosRaw, fn($v) => $v->pro_codigo === $libro['pro_codigo']);
+                    $ventaCant   = array_sum(array_map(fn($v) => (int)($v->cantidad_vendida ?? 0), $ventasLibro));
+                    $ventaSub    = array_sum(array_map(fn($v) => (float)($v->subtotal_vendido ?? 0), $ventasLibro));
+                    $ventaTot    = array_sum(array_map(fn($v) => (float)($v->total_vendido ?? 0), $ventasLibro));
+
+                    $libro['ventas']            = array_values($ventasLibro);
+                    $libro['pendiente_cantidad'] = $cant - $ventaCant;
+                    $libro['pendiente_valor']    = round($tot - $ventaTot, 2);
+
+                    $totalContratoCantidad  += $cant;
+                    $totalContratoSubtotal  += $sub;
+                    $totalContratoTotal     += $tot;
+                    $totalVentaCantidad     += $ventaCant;
+                    $totalVentaSubtotal     += $ventaSub;
+                    $totalVentaTotal        += $ventaTot;
+                    $totalPendienteCantidad += ($cant - $ventaCant);
+                    $totalPendienteValor    += ($tot - $ventaTot);
+                }
+                unset($libro);
+
+                $resultado[] = [
+                    'id_pedido'         => $contrato->id_pedido,
+                    'tipo_venta'        => $contrato->tipo_venta,
+                    'id_institucion'    => $contrato->id_institucion,
+                    'nombreInstitucion' => $contrato->nombreInstitucion,
+                    'contrato_generado' => $codigoContrato,
+                    'id_periodo'        => $contrato->id_periodo,
+                    'libros'            => $librosPedido,
+                    'totales'           => [
+                        'contrato_cantidad'  => $totalContratoCantidad,
+                        'contrato_subtotal'  => round($totalContratoSubtotal, 2),
+                        'contrato_total'     => round($totalContratoTotal, 2),
+                        'venta_cantidad'     => $totalVentaCantidad,
+                        'venta_subtotal'     => round($totalVentaSubtotal, 2),
+                        'venta_total'        => round($totalVentaTotal, 2),
+                        'pendiente_cantidad' => $totalPendienteCantidad,
+                        'pendiente_valor'    => round($totalPendienteValor, 2),
+                    ],
+                ];
+            }
+
+            return response()->json($resultado, 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status'  => 500,
+                'error'   => $e->getMessage(),
+                'message' => 'Error al obtener el resumen de pendientes',
+                'line'    => $e->getLine(),
+            ], 500);
+        }
+    }
+    //FIN METODOS JEYSON
+
 }

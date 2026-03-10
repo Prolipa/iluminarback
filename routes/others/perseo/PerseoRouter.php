@@ -140,6 +140,8 @@ Route::group(['prefix' => 'perseo/ventas'], function () {
     Route::post('facturas-verificar','Perseo\VentaPerseoController@facturas_verificar');
     // Marcar como despachado venta con factura Perseo
     Route::post('marcar-despachado','Perseo\VentaPerseoController@marcarComoDespachadoPerseo');
+    // Verificar y actualizar ID de producto en Perseo
+    Route::post('verificar-producto','Perseo\VentaPerseoController@verificarProductoPerseo');
 });
 //moderna
 Route::group(['prefix' => 'perseo/moderna'], function () {

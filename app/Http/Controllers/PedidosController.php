@@ -5714,6 +5714,26 @@ class PedidosController extends Controller
             $fieldsToUpdate = [$campo, $campo2, $campo3, $campo4 ,$campo5 ,$campo6, $campo7];
             $valuesToUpdate = [$valor, $valor2, $valor3, $valor4, $valor5, $valor6, $valor7];
         }
+        //====================validar si permitir_editar_despues_contrato validar si tiene contrato en f_Venta no dejar permitir editar
+        if($campo == "permitir_editar_despues_contrato"){
+            if($valor == 1){
+                $user_created = $request->user_created;
+                $validateUserSuper = PermisoSuper::where('usuario_id', $user_created)->first();
+                if(!$validateUserSuper){
+                    $validateDocumentoVenta = DB::SELECT("SELECT p.* FROM pedidos p
+                    INNER  JOIN f_venta v ON v.contrato = p.contrato_generado
+                    AND p.id_pedido = '$request->id_pedido'
+                    AND v.est_ven_codigo <> '3'
+                    ");
+                    if(count($validateDocumentoVenta) > 0){
+                        $documentoVenta = $validateDocumentoVenta[0]->contrato_generado;
+                        return ["status" => "0", "message" => "No se puede permitir permitir editar después de contrato, porque el contrato ya tiene tiene documentos de venta $documentoVenta"];
+                    }
+                }
+
+            }
+        }
+        //=============================================================
         $dataToUpdate   = array_merge($dataToUpdate, array_combine($fieldsToUpdate, $valuesToUpdate));
         //aprobar anticipo
         if($request->anticipoAprobado) {

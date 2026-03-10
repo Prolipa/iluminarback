@@ -170,6 +170,7 @@ class SeriesController extends Controller
         // $serie->longitud_letras     = $request->longitud_letras;
         $serie->longitud_codigo             = $request->longitud_codigo;
         $serie->longitud_codigo_grafitext   = $request->longitud_codigo_grafitext;
+        $serie->id_seriePadre               = $request->id_seriePadre;
         $serie->save();
         if($serie){
             return ["status" => "1", "message" => "Se guardo correctamente"];

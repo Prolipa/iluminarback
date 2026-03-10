@@ -21,6 +21,7 @@ use App\Models\Facturacion\Inventario\ConfiguracionGeneral;
 use App\Models\HistoricoCodigos;
 use App\Models\Institucion;
 use App\Models\LibroSerie;
+use App\Models\Series;
 use App\Models\Ventas;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\Facturacion\DevolucionRepository;
@@ -5869,7 +5870,12 @@ class CodigoLibrosController extends Controller
                 return response()->json(['status' => '0', 'message' => 'No se encontró la configuración general'], 200);
             }
 
-            $id_serieConfigurada = $configuracionGeneral->id_seleccion;
+            // $id_serieConfigurada = $configuracionGeneral->id_seleccion;
+            // series que son permitidas para plus para codigoslibros
+            $getSeriesPermitidas = DB::SELECT("SELECT s.id_seriePadre FROM series s
+            WHERE s.id_seriePadre IS NOT null
+            ");
+            $seriesPermitidas = array_column($getSeriesPermitidas, 'id_seriePadre');
 
             $codigosDB = CodigosLibros::whereIn('codigo', array_column($codigos, 'codigo'))
                 ->leftJoin('libros_series', 'codigoslibros.libro_idlibro', '=', 'libros_series.idLibro')
@@ -5889,8 +5895,8 @@ class CodigoLibrosController extends Controller
                 if ($codigo) {
                     $old_values = $codigo->getOriginal();
 
-                    if ($codigo->id_serie != $id_serieConfigurada) {
-                        $item->mensaje = "El código no pertenece a la serie plus configurada";
+                    if (!in_array($codigo->id_serie, $seriesPermitidas)) {
+                        $item->mensaje = "El código no pertenece a las series permitidas";
                         $codigosNoCambiados[] = $item;
                         continue;
                     }
@@ -6110,10 +6116,15 @@ class CodigoLibrosController extends Controller
         $plus = 0;
 
         if ($serie) {
-            $getPlus = ConfiguracionGeneral::where('id_seleccion_padre', $serie)->first();
-            if ($getPlus) {
-                $plus = $getPlus->id_seleccion;
+            // se busca si es plus se toma el id de la serie normal
+            $getIfSeriePlus = Series::where('id_serie', $serie)->whereNotNull('id_seriePadre')->first();
+            if ($getIfSeriePlus) {
+                $plus = $getIfSeriePlus->id_seriePadre;
             }
+            // $getPlus = ConfiguracionGeneral::where('id_seleccion_padre', $serie)->first();
+            // if ($getPlus) {
+            //     $plus = $getPlus->id_seleccion;
+            // }
         }
 
         // Aumentar el límite de GROUP_CONCAT para evitar truncamiento

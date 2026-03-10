@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
+use App\Models\SalleAreas;
 use Illuminate\Support\Facades\DB;
 use App\Models\SalleAsignaturas;
 
@@ -158,20 +159,16 @@ class SalleAsignaturasController extends Controller
 
         return $asignatura;
     }
-    public function eliminaAsignatura($id)
+    public function eliminaAreaSalle($id)
     {
-        $contarSP = DB::table('salle_preguntas as sp')
-        ->where('sp.id_asignatura','=',$id)
-        ->count();
-        $contarSDOC = DB::table('salle_asignaturas_has_docente as sdoc')
-        ->where('sdoc.id_asignatura','=',$id)
-        ->count();
-        if($contarSP > 0 ||  $contarSDOC >0 ){
-            return compact('contarSP','contarSDOC');
-        }else{
-            $asignatura = SalleAsignaturas::find($id);
-            $asignatura->delete();
-           return $asignatura;
+       $validateAsignaturas = DB::SELECT("SELECT * FROM salle_asignaturas a
+        WHERE a.id_area = '$id'
+        ");
+        if(count($validateAsignaturas) > 0){
+            return ["status" => "0", "message" => "No se puede eliminar el área, tiene asignaturas asociadas."];
         }
+        //validar preguntas
+        SalleAreas::where('id_area', $id)->delete();
+        return ["status" => "1", "message" => "Área eliminada correctamente."];
     }
 }

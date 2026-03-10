@@ -961,6 +961,107 @@ class VentaPerseoController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Verificar y actualizar ID de producto en Perseo
+     * POST /api/perseo/ventas/verificar-producto
+     */
+    public function verificarProductoPerseo(Request $request)
+    {
+        try {
+            $codigo = $request->codigo;
+            $id_empresa = $request->id_empresa;
+
+            if (!$codigo || !$id_empresa) {
+                return response()->json([
+                    'estado' => 2,
+                    'mensaje' => 'Faltan parámetros: codigo e id_empresa'
+                ], 400);
+            }
+
+            $empresaData = DB::table('empresas')->where('id', $id_empresa)->first();
+
+            if (!$empresaData) {
+                return response()->json([
+                    'estado' => 2,
+                    'mensaje' => 'Empresa no encontrada'
+                ], 400);
+            }
+
+            $perseoProduccion = $empresaData->perseo_enviroment != null ? $empresaData->perseo_enviroment : 1;
+
+            $campoPerseo = '';
+            if ($id_empresa == 1) {
+                $campoPerseo = $perseoProduccion == 0 ? 'id_perseo_prolipa' : 'id_perseo_prolipa_produccion';
+            } else if ($id_empresa == 3) {
+                $campoPerseo = $perseoProduccion == 0 ? 'id_perseo_calmed' : 'id_perseo_calmed_produccion';
+            } else if ($id_empresa == 5) {
+                $campoPerseo = $perseoProduccion == 0 ? 'id_perseo_prolipa2026' : 'id_perseo_prolipa2026_produccion';
+            } else if ($id_empresa == 4) {
+                $campoPerseo = $perseoProduccion == 0 ? 'id_perseo_calmed2026' : 'id_perseo_calmed2026_produccion';
+            } else {
+                return response()->json([
+                    'estado' => 2,
+                    'mensaje' => 'ID de empresa no válido'
+                ], 400);
+            }
+
+            $producto = DB::table('1_4_cal_producto')
+                ->where(function ($q) use ($campoPerseo) {
+                    $q->whereNull($campoPerseo)
+                      ->orWhere($campoPerseo, 0);
+                })
+                ->where('pro_codigo', $codigo)
+                ->first();
+
+            if (!$producto) {
+                return response()->json([
+                    'estado' => 0,
+                    'mensaje' => 'No hay registros para actualizar'
+                ]);
+            }
+
+            $formData = [
+                "productocodigo" => $producto->pro_codigo,
+            ];
+
+            $response = $this->tr_PerseoPost("productos_consulta", $formData, $id_empresa);
+
+            if (isset($response["informacion"]) && $response["informacion"] === false) {
+                return response()->json([
+                    'estado' => 2,
+                    'mensaje' => "El producto {$producto->pro_codigo} no se encuentra en Perseo"
+                ]);
+            }
+
+            if (isset($response["productos"]) && isset($response["productos"][0]["productosid"])) {
+                $idPerseo = $response["productos"][0]["productosid"];
+                DB::table('1_4_cal_producto')
+                    ->where('pro_codigo', $codigo)
+                    ->update([$campoPerseo => $idPerseo]);
+
+                return response()->json([
+                    'estado' => 1,
+                    'mensaje' => 'Actualización exitosa'
+                ]);
+            } else {
+                DB::table('1_4_cal_producto')
+                    ->where('pro_codigo', $codigo)
+                    ->update([$campoPerseo => 0]);
+
+                return response()->json([
+                    'estado' => 2,
+                    'mensaje' => 'No se obtuvo ID válido desde Perseo'
+                ]);
+            }
+
+        } catch (Exception $e) {
+            return response()->json([
+                'estado' => 2,
+                'mensaje' => 'Error: ' . $e->getMessage()
+            ], 500);
+        }
+    }
     
     /**
      * Anular venta - Cambiar estado a Anulado
