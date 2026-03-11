@@ -1421,6 +1421,8 @@ Route::get('GetProducto_ParaCaracteristicas','_14ProductoController@GetProducto_
 Route::get('Get_Detallexprocodigo','OrdenTrabajoController@Get_Detallexprocodigo');
 Route::get('Todo_Libros_Individuales_pedido_alcance_formatoprecio','LibroSerieController@Todo_Libros_Individuales_pedido_alcance_formatoprecio');
 Route::get('Procesar_MetodosGet_ProformaController','ProformaController@Procesar_MetodosGet_ProformaController');
+Route::get('Procesar_MetodosGet_JuegosController','J_juegosController@Procesar_MetodosGet_JuegosController');
+Route::post('Procesar_MetodosPost_JuegosController','J_juegosController@Procesar_MetodosPost_JuegosController');
 Route::post('VerifcarMetodosPost_Institucion_Autoridades','Institucion_AutoridadesController@VerifcarMetodosPost_Institucion_Autoridades');
 Route::post('VerifcarMetodosPost_Editoriales','EditorialesController@VerifcarMetodosPost_Editoriales');
 Route::post('actualizarPassword_PerfilUser','UsuarioController@actualizarPassword_PerfilUser');

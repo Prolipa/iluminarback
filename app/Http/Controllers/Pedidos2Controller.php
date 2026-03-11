@@ -135,6 +135,9 @@ class Pedidos2Controller extends Controller
                 if (empty($agrupado[$codigo_liquidacion]['nombrelibro'])) {
                     $agrupado[$codigo_liquidacion]['nombrelibro'] = $detalle->nombrelibro;
                 }
+                if (empty($agrupado[$codigo_liquidacion]['pro_descripcion'])) {
+                    $agrupado[$codigo_liquidacion]['pro_descripcion'] = $detalle->pro_descripcion ?? null;
+                }
             } else {
                 $agrupado[$codigo_liquidacion] = [
                     'codigo_liquidacion' => $codigo_liquidacion,
@@ -142,6 +145,7 @@ class Pedidos2Controller extends Controller
                     'nombrelibro' => $detalle->nombrelibro,
                     'precio' => $detalle->precio,
                     'total' => $detalle->valor * $detalle->precio,
+                    'pro_descripcion' => $detalle->pro_descripcion ?? null,
                 ];
             }
         }
@@ -206,6 +210,9 @@ class Pedidos2Controller extends Controller
                 if (empty($agrupado[$codigo_liquidacion]['nombrelibro'])) {
                     $agrupado[$codigo_liquidacion]['nombrelibro'] = $detalle->nombrelibro;
                 }
+                if (empty($agrupado[$codigo_liquidacion]['pro_descripcion'])) {
+                    $agrupado[$codigo_liquidacion]['pro_descripcion'] = $detalle->pro_descripcion ?? null;
+                }
             } else {
                 $agrupado[$codigo_liquidacion] = [
                     'codigo_liquidacion' => $codigo_liquidacion,
@@ -213,6 +220,7 @@ class Pedidos2Controller extends Controller
                     'nombrelibro' => $detalle->nombrelibro,
                     'precio' => $detalle->precio,
                     'total' => $detalle->valor * $detalle->precio,
+                    'pro_descripcion' => $detalle->pro_descripcion ?? null,
                 ];
             }
         }

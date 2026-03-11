@@ -138,6 +138,7 @@ class DevolucionController extends Controller
             })
             ->where('v.ven_codigo', 'LIKE', '%' . $documento . '%')
             ->where('v.idtipodoc', '=', 1)
+            ->where('v.est_ven_codigo', '!=', 3) // Excluir anulados
             ->select(
                 'v.ven_codigo',
                 'v.contrato',
@@ -1228,7 +1229,7 @@ class DevolucionController extends Controller
     }
     public function CargarDocumentosDetalles(Request $request){
         $query = DB::SELECT("SELECT dv.det_ven_codigo, dv.pro_codigo, dv.det_ven_dev, dv.det_ven_cantidad, dv.det_ven_valor_u,dv.detalle_notaCreditInterna,
-            l.descripcionlibro,s.nombre_serie, ls.id_serie, p.pro_nombre as nombre , p.pro_descripcion AS descripcion_producto
+            l.descripcionlibro,s.nombre_serie, ls.id_serie, p.pro_nombre as nombre , p.pro_descripcion AS descripcion_producto, dv.descuento
             FROM f_detalle_venta AS dv
             LEFT JOIN f_venta AS fv ON dv.ven_codigo=fv.ven_codigo
             LEFT JOIN libros_series AS ls ON dv.pro_codigo=ls.codigo_liquidacion

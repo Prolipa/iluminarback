@@ -984,7 +984,7 @@ class VentasController extends Controller
                                 $query1 = DB::SELECT("SELECT pro_depositoCalmed as stoc, pro_reservar as res from 1_4_cal_producto where pro_codigo='$item->pro_codigo'");
                             }
                         }
-                        
+
                         //obtener stock y reservar o bodega general
                         $codi       = $query1[0]->stoc;
                         // $res        = $query1[0]->res;
@@ -1754,7 +1754,7 @@ class VentasController extends Controller
                     }else if ($request->id_empresa==5){
                         $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa2026 as cod from f_tipo_documento where tdo_id=11");
                     }
-                    
+
                     $id=$query1[0]->id;
                     $codi=$query1[0]->cod;
                     $co=(int)$codi+1;
@@ -2706,55 +2706,101 @@ class VentasController extends Controller
         if (!$periodo) {
             return response()->json(['status' => '0', 'message' => 'Faltan parámetros'], 200);
         }
-        $query = DB::SELECT("SELECT
-            -- Totales por cabecera
-            (SELECT SUM(v.ven_subtotal)
-            FROM f_venta v
-            WHERE v.periodo_id = '$periodo'
-            AND v.idtipodoc IN (1, 3, 4)
-            AND v.est_ven_codigo <> 3
-            ) AS venta_bruta,
+        // $query = DB::SELECT("SELECT
+        //     (SELECT SUM(v.ven_subtotal)
+        //     FROM f_venta v
+        //     WHERE v.periodo_id = '$periodo'
+        //     AND v.idtipodoc IN (1, 3, 4)
+        //     AND v.est_ven_codigo <> 3
+        //     ) AS venta_bruta,
 
-            (SELECT SUM(v.ven_valor)
-            FROM f_venta v
-            WHERE v.periodo_id = '$periodo'
-            AND v.idtipodoc IN (1, 3, 4)
-            AND v.est_ven_codigo <> 3
-            ) AS venta_neta,
+        //     (SELECT SUM(v.ven_valor)
+        //     FROM f_venta v
+        //     WHERE v.periodo_id = '$periodo'
+        //     AND v.idtipodoc IN (1, 3, 4)
+        //     AND v.est_ven_codigo <> 3
+        //     ) AS venta_neta,
 
-            -- Totales por detalle (bruto y devoluciones)
-            (SELECT SUM(fdv.det_ven_cantidad - fdv.det_ven_dev)
-            FROM f_detalle_venta fdv
-            INNER JOIN f_venta fv
-                ON fv.ven_codigo = fdv.ven_codigo
+        //     -- Totales por detalle (bruto y devoluciones)
+        //     (SELECT SUM(fdv.det_ven_cantidad - fdv.det_ven_dev)
+        //     FROM f_detalle_venta fdv
+        //     INNER JOIN f_venta fv
+        //         ON fv.ven_codigo = fdv.ven_codigo
+        //     AND fv.id_empresa = fdv.id_empresa
+        //     WHERE fv.periodo_id = '$periodo'
+        //     AND fv.idtipodoc IN (1, 3, 4)
+        //     AND fv.est_ven_codigo <> 3
+        //     ) AS cantidad_bruta_devoluciones,
+
+        //     (SELECT SUM((fdv.det_ven_cantidad - fdv.det_ven_dev) * fdv.det_ven_valor_u)
+        //     FROM f_detalle_venta fdv
+        //     INNER JOIN f_venta fv
+        //         ON fv.ven_codigo = fdv.ven_codigo
+        //     AND fv.id_empresa = fdv.id_empresa
+        //     WHERE fv.periodo_id = '$periodo'
+        //     AND fv.idtipodoc IN (1, 3, 4)
+        //     AND fv.est_ven_codigo <> 3
+        //     ) AS total_general_bruto_devoluciones,
+
+
+        //     (SELECT SUM((fdv.det_ven_cantidad - fdv.det_ven_dev) * (fdv.det_ven_valor_u * (1 - fv.ven_desc_por / 100.0)))
+        //     FROM f_detalle_venta fdv
+        //     INNER JOIN f_venta fv
+        //         ON fv.ven_codigo = fdv.ven_codigo
+        //     AND fv.id_empresa = fdv.id_empresa
+        //     WHERE fv.periodo_id = '$periodo'
+        //     AND fv.idtipodoc IN (1, 3, 4)
+        //     AND fv.est_ven_codigo <> 3
+        //     ) AS total_con_descuento_neta_con_devoluciones;
+
+        // ", [$periodo]);
+        $query = DB::select("
+        SELECT
+        (SELECT SUM(v.ven_subtotal)
+        FROM f_venta v
+        WHERE v.periodo_id = ?
+        AND v.idtipodoc IN (1,3,4)
+        AND v.est_ven_codigo <> 3
+        ) AS venta_bruta,
+
+        (SELECT SUM(v.ven_valor)
+        FROM f_venta v
+        WHERE v.periodo_id = ?
+        AND v.idtipodoc IN (1,3,4)
+        AND v.est_ven_codigo <> 3
+        ) AS venta_neta,
+
+        (SELECT SUM(fdv.det_ven_cantidad - fdv.det_ven_dev)
+        FROM f_detalle_venta fdv
+        INNER JOIN f_venta fv
+            ON fv.ven_codigo = fdv.ven_codigo
             AND fv.id_empresa = fdv.id_empresa
-            WHERE fv.periodo_id = '$periodo'
-            AND fv.idtipodoc IN (1, 3, 4)
-            AND fv.est_ven_codigo <> 3
-            ) AS cantidad_bruta_devoluciones,
+        WHERE fv.periodo_id = ?
+        AND fv.idtipodoc IN (1,3,4)
+        AND fv.est_ven_codigo <> 3
+        ) AS cantidad_bruta_devoluciones,
 
-            (SELECT SUM((fdv.det_ven_cantidad - fdv.det_ven_dev) * fdv.det_ven_valor_u)
-            FROM f_detalle_venta fdv
-            INNER JOIN f_venta fv
-                ON fv.ven_codigo = fdv.ven_codigo
+        (SELECT SUM((fdv.det_ven_cantidad - fdv.det_ven_dev) * fdv.det_ven_valor_u)
+        FROM f_detalle_venta fdv
+        INNER JOIN f_venta fv
+            ON fv.ven_codigo = fdv.ven_codigo
             AND fv.id_empresa = fdv.id_empresa
-            WHERE fv.periodo_id = '$periodo'
-            AND fv.idtipodoc IN (1, 3, 4)
-            AND fv.est_ven_codigo <> 3
-            ) AS total_general_bruto_devoluciones,
+        WHERE fv.periodo_id = ?
+        AND fv.idtipodoc IN (1,3,4)
+        AND fv.est_ven_codigo <> 3
+        ) AS total_general_bruto_devoluciones,
 
-
-            (SELECT SUM((fdv.det_ven_cantidad - fdv.det_ven_dev) * (fdv.det_ven_valor_u * (1 - fv.ven_desc_por / 100.0)))
-            FROM f_detalle_venta fdv
-            INNER JOIN f_venta fv
-                ON fv.ven_codigo = fdv.ven_codigo
+        (SELECT SUM((fdv.det_ven_cantidad - fdv.det_ven_dev) *
+            (fdv.det_ven_valor_u * (1 - fv.ven_desc_por / 100)))
+        FROM f_detalle_venta fdv
+        INNER JOIN f_venta fv
+            ON fv.ven_codigo = fdv.ven_codigo
             AND fv.id_empresa = fdv.id_empresa
-            WHERE fv.periodo_id = '$periodo'
-            AND fv.idtipodoc IN (1, 3, 4)
-            AND fv.est_ven_codigo <> 3
-            ) AS total_con_descuento_neta_con_devoluciones;
-
-        ", [$periodo]);
+        WHERE fv.periodo_id = ?
+        AND fv.idtipodoc IN (1,3,4)
+        AND fv.est_ven_codigo <> 3
+        ) AS total_con_descuento_neta_con_devoluciones
+        ", [$periodo,$periodo,$periodo,$periodo,$periodo]);
         return $query;
     }
 

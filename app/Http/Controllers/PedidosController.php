@@ -5727,7 +5727,7 @@ class PedidosController extends Controller
                     ");
                     if(count($validateDocumentoVenta) > 0){
                         $documentoVenta = $validateDocumentoVenta[0]->contrato_generado;
-                        return ["status" => "0", "message" => "No se puede permitir permitir editar después de contrato, porque el contrato ya tiene tiene documentos de venta $documentoVenta"];
+                        return ["status" => "0", "message" => "Este contrato ya tiene documentos de venta activos, no se recomienda editarlo. $documentoVenta"];
                     }
                 }
 

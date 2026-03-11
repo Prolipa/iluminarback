@@ -212,7 +212,7 @@ class  PedidosRepository extends BaseRepository
             $valores = [];
             //plan lector
             if($item->plan_lector > 0 ){
-                $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro, pro.pro_reservar,
+                $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro, pro.pro_reservar, pro.pro_descripcion,
                 (
                     SELECT f.pvp AS precio
                     FROM pedidos_formato f
@@ -228,7 +228,7 @@ class  PedidosRepository extends BaseRepository
                 ");
                 $valores = $getPlanlector;
             }else{
-                $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro, pro.pro_reservar,
+                $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro, pro.pro_reservar, pro.pro_descripcion,
                 (
                     SELECT f.pvp AS precio
                     FROM pedidos_formato f
@@ -271,6 +271,7 @@ class  PedidosRepository extends BaseRepository
                 // "subtotal"          => $item->valor * $valores[0]->precio,
                 "codigo_liquidacion"=> $valores[0]->codigo_liquidacion,
                 "alcance"           => $item->alcance,
+                "pro_descripcion"   => $valores[0]->pro_descripcion ?? null,
             ];
             $contador++;
         }
@@ -374,13 +375,15 @@ class  PedidosRepository extends BaseRepository
             ELSE CONCAT(s.nombre_serie, ' ', ar.nombrearea)
         END as serieArea,
         l.idlibro, l.nombrelibro, p.descuento, p.id_periodo, p.anticipo, p.comision, s.nombre_serie,
-        ls.version, asi.idasignatura, ls.codigo_liquidacion, l.descripcionlibro
+        ls.version, asi.idasignatura, ls.codigo_liquidacion, l.descripcionlibro,
+        pro.pro_descripcion
         FROM pedidos_val_area_new pv
         LEFT JOIN libro l ON  pv.idlibro = l.idlibro
         LEFT JOIN libros_series ls ON pv.idlibro = ls.idLibro
         LEFT JOIN asignatura asi ON l.asignatura_idasignatura = asi.idasignatura
         LEFT JOIN area ar ON asi.area_idarea = ar.idarea
         LEFT JOIN series s ON ls.id_serie = s.id_serie
+        LEFT JOIN 1_4_cal_producto pro ON ls.codigo_liquidacion = pro.pro_codigo
         INNER JOIN pedidos p ON pv.id_pedido = p.id_pedido
         WHERE pv.id_pedido = '$pedido'
         GROUP BY pv.pvn_id, s.nombre_serie, ls.year, s.id_serie, ls.version, ls.codigo_liquidacion;
@@ -416,7 +419,8 @@ class  PedidosRepository extends BaseRepository
                     "nombrelibro"       => $tr->nombrelibro,
                     "codigo_liquidacion"=> $tr->codigo_liquidacion,
                     "anio"              => $tr->anio,
-                    "alcance"           => $alcance_id
+                    "alcance"           => $alcance_id,
+                    "pro_descripcion"   => $tr->pro_descripcion ?? null,
                 ];
             }else{
                 //validate que el alcance este cerrado o aprobado
@@ -442,7 +446,8 @@ class  PedidosRepository extends BaseRepository
                         "nombrelibro"       => $tr->nombrelibro,
                         "codigo_liquidacion"=> $tr->codigo_liquidacion,
                         "anio"              => $tr->anio,
-                        "alcance"           => $alcance_id
+                        "alcance"           => $alcance_id,
+                        "pro_descripcion"   => $tr->pro_descripcion ?? null
                     ];
                 }
             }
@@ -489,6 +494,7 @@ class  PedidosRepository extends BaseRepository
                 // "subtotal"          => $item->valor * $valores[0]->precio,
                 "codigo_liquidacion"=> $item->codigo_liquidacion,
                 "alcance"           => $item->alcance,
+                "pro_descripcion"   => $item->pro_descripcion ?? null,
             ];
             $contador++;
         }

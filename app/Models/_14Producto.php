@@ -34,6 +34,7 @@ class _14Producto extends Model
         'user_created',
         'ifcombo',
         'codigos_combos',
+        'codigos_combos_regalado',
         'id_pro_codigo_padre',
         'grupo_codigo_para_v3',
         // Agrega cualquier otro campo que sea fillable

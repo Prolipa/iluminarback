@@ -194,25 +194,42 @@ class J_juegosController extends Controller
     // }
     public function juegos_prolipa_admin_tipo($tipo)
     {
-        $juego= DB::SELECT("SELECT DISTINCT j .*,j.estado as estado_juego, a.nombreasignatura, a.idasignatura,
-         u.id_group ,
-         IF(j.estado = '1','Activo','Inactivo') as statusJuego
-         FROM j_juegos j, j_temas_por_juego jt, temas t, asignatura a, usuario u
-         WHERE j.id_tipo_juego = $tipo
-         AND j.estado = 1
-         AND j.id_juego = jt.id_juego
-         AND jt.id_tema = t.id AND t.id_asignatura = a.idasignatura
-         AND j.id_docente = u.idusuario
-         ORDER BY u.id_group
-         ");
+        $juego = DB::SELECT("SELECT DISTINCT
+                j.*,
+                j.estado AS estado_juego,
+                a.nombreasignatura,
+                a.idasignatura,
+                u.id_group,
+                g.level,
+                CONCAT(u.nombres,' ',u.apellidos) AS nombre_usuario,
+                IF(j.estado = '1','Activo','Inactivo') AS statusJuego
+            FROM j_juegos j
+            INNER JOIN j_temas_por_juego jt ON j.id_juego = jt.id_juego
+            INNER JOIN temas t ON jt.id_tema = t.id
+            INNER JOIN asignatura a ON t.id_asignatura = a.idasignatura
+            INNER JOIN usuario u ON j.id_docente = u.idusuario
+            INNER JOIN sys_group_users g ON u.id_group = g.id
+            WHERE j.id_tipo_juego = ?
+            /*AND j.estado = 1*/
 
-        if(!empty($juego)){
+            ORDER BY u.id_group
+        ", [$tipo]);
+
+        if (!empty($juego)) {
             foreach ($juego as $key => $value) {
-                $temas = DB::SELECT("SELECT * FROM j_temas_por_juego tj, temas t, asignatura a WHERE tj.id_tema = t.id AND t.id_asignatura = a.idasignatura AND tj.id_juego = ?",[$value->id_juego]);
+
+                $temas = DB::SELECT("
+                    SELECT *
+                    FROM j_temas_por_juego tj
+                    INNER JOIN temas t ON tj.id_tema = t.id
+                    INNER JOIN asignatura a ON t.id_asignatura = a.idasignatura
+                    WHERE tj.id_juego = ?
+                ", [$value->id_juego]);
+
                 $data['items'][$key] = [
                     'nombreasignatura' => $value->nombreasignatura,
                     'id_juego' => $value->id_juego,
-                    "statusJuego" => $value->statusJuego,
+                    'statusJuego' => $value->statusJuego,
                     'estado_juego' => $value->estado_juego,
                     'id_tipo_juego' => $value->id_tipo_juego,
                     'id_docente' => $value->id_docente,
@@ -224,14 +241,17 @@ class J_juegosController extends Controller
                     'fecha_inicio' => $value->fecha_inicio,
                     'fecha_fin' => $value->fecha_fin,
                     'id_group' => $value->id_group,
-                    'temas'=>$temas,
+                    'level' => $value->level,
+                    'nombre_usuario' => $value->nombre_usuario,
+                    'fecha_creacion_juego' => $value->created_at,
+                    'temas' => $temas,
                 ];
             }
-        }else{
+        } else {
             $data = [];
         }
-        return $data;
 
+        return $data;
     }
 
     public function j_juegos_tipo(Request $request)
@@ -321,7 +341,7 @@ class J_juegosController extends Controller
         AND jt.id_tema      = t.id
         AND j.id_tipo_juego = tp.id_tipo_juego
         AND t.id_asignatura = '$request->id_asignatura'
-        AND j.id_docente    = u.idusuario 
+        AND j.id_docente    = u.idusuario
         AND u.id_group      != 6
         AND t.unidad        = '$request->unidad'
         ");
@@ -515,6 +535,275 @@ class J_juegosController extends Controller
         }
     }
 
+    //INICIO METODOS JEYSON
+    public function Procesar_MetodosGet_JuegosController(Request $request)
+    {
+        $action = $request->query('action'); // Leer el parámetro `action` desde la URL
+        switch ($action) {
+            case 'Consulta_Asignatura_Juegos_Transferencia':
+                return $this->Consulta_Asignatura_Juegos_Transferencia($request);
+            case 'Consulta_Unidades_Juegos_Transferencia':
+                return $this->Consulta_Unidades_Juegos_Transferencia($request);
+            case 'Consulta_Temas_Juegos_Transferencia':
+                return $this->Consulta_Temas_Juegos_Transferencia($request);
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
+    }
+    public function Procesar_MetodosPost_JuegosController(Request $request)
+    {
+        $action = $request->input('action'); // Recibir el parámetro 'action'
+
+        switch ($action) {
+            case 'Transferencia_Juegos_Asignatura':
+                return $this->Transferencia_Juegos_Asignatura($request);
+            case 'Actualizar_Imagen_Contenido_Juego':
+                return $this->Actualizar_Imagen_Contenido_Juego($request);
+            case 'Actualizar_Imagen_Opcion_Juego':
+                return $this->Actualizar_Imagen_Opcion_Juego($request);
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
+    }
+
+    public function Consulta_Asignatura_Juegos_Transferencia($request)
+    {
+        $asignatura_excluir = $request->id_asignatura;
+        $juegos = DB::SELECT("SELECT * FROM asignatura asi
+            WHERE asi.idasignatura <> $asignatura_excluir
+            AND asi.estado = '1'
+            AND asi.nombreasignatura NOT LIKE '%combo%'
+            AND asi.tipo_asignatura = 1");
+        return $juegos;
+    }
+    public function Consulta_Unidades_Juegos_Transferencia($request)
+    {
+        $asignatura_unidad = $request->id_asignatura;
+        $juegos = DB::SELECT("SELECT li.idlibro, asi.idasignatura, asi.nombreasignatura, ul.*
+            FROM libro li
+            LEFT JOIN unidades_libros ul ON li.idlibro = ul.id_libro
+            LEFT JOIN asignatura asi ON li.asignatura_idasignatura = asi.idasignatura
+            WHERE li.asignatura_idasignatura = $asignatura_unidad");
+        return $juegos;
+    }
+    public function Consulta_Temas_Juegos_Transferencia($request)
+    {
+        $id_unidad_para_tema = $request->id_unidad;
+        $juegos = DB::SELECT("SELECT * FROM temas tem
+            WHERE tem.id_unidad = $id_unidad_para_tema
+            ORDER BY
+            CAST(SUBSTRING_INDEX(tem.nombre_tema, '.', 1) AS UNSIGNED)
+        ");
+        return $juegos;
+    }
+    public function Transferencia_Juegos_Asignatura($request)
+    {
+        DB::beginTransaction();
+        try {
+            $id_juego_origen    = $request->input('id_juego');
+            $id_tipo_juego      = $request->input('id_tipo_juego');
+            $user_created       = $request->input('user_created');
+            $temas              = $request->input('temas_recibir_transferencia', []);
+
+            // =====================================================================
+            // PASO 0: Validar si el juego ya existe en los temas destino (evitar duplicados)
+            // =====================================================================
+            $juegoOrigen = DB::selectOne(
+                "SELECT * FROM j_juegos WHERE id_juego = ?",
+                [$id_juego_origen]
+            );
+
+            if (!$juegoOrigen) {
+                DB::rollBack();
+                return response()->json([
+                    'status'  => 'error',
+                    'message' => "No se encontró el juego original con id_juego = {$id_juego_origen}"
+                ], 404);
+            }
+
+            foreach ($temas as $tema) {
+                $existeJuego = DB::selectOne("
+                    SELECT j.id_juego
+                    FROM j_juegos j
+                    INNER JOIN j_temas_por_juego tj ON j.id_juego = tj.id_juego
+                    WHERE j.nombre_juego = ?
+                      AND tj.id_tema = ?
+                      AND j.id_tipo_juego = ?
+                      AND j.estado = 1
+                    LIMIT 1
+                ", [$juegoOrigen->nombre_juego, $tema['id'], $id_tipo_juego]);
+
+                if ($existeJuego) {
+                    $nombreTema = isset($tema['nombre_tema']) ? $tema['nombre_tema'] : 'seleccionado';
+                    DB::rollBack();
+                    return response()->json([
+                        'status'  => 'error',
+                        'message' => "El juego '{$juegoOrigen->nombre_juego}' (del mismo tipo) ya existe en el tema '{$nombreTema}'. No se puede duplicar."
+                        // 'message' => "El juego '{$juegoOrigen->nombre_juego}' (del mismo tipo) ya existe en uno de los temas seleccionados de destino. No se puede duplicar."
+                    ], 409);
+                }
+            }
+
+            // =====================================================================
+            // PASO 1: Copiar registro en j_juegos
+            // =====================================================================
+
+
+
+            $nuevoIdJuego = DB::table('j_juegos')->insertGetId([
+                'id_tipo_juego'       => $id_tipo_juego,
+                'id_docente'          => $user_created,
+                'puntos'              => $juegoOrigen->puntos,
+                'duracion'            => $juegoOrigen->duracion,
+                'nombre_juego'        => $juegoOrigen->nombre_juego,
+                'descripcion_juego'   => $juegoOrigen->descripcion_juego,
+                'imagen_juego'        => $juegoOrigen->imagen_juego,
+                'fecha_inicio'        => $juegoOrigen->fecha_inicio,
+                'fecha_fin'           => $juegoOrigen->fecha_fin,
+                'bloque_curricular'   => $juegoOrigen->bloque_curricular,
+                'grado'               => $juegoOrigen->grado,
+                'destrezas'           => $juegoOrigen->destrezas,
+                'habilidades'         => $juegoOrigen->habilidades,
+                'elaborado_por'       => $juegoOrigen->elaborado_por,
+                'intencion_didactica' => $juegoOrigen->intencion_didactica,
+                'consigna'            => $juegoOrigen->consigna,
+                'consideraciones'     => $juegoOrigen->consideraciones,
+                'estado'              => $juegoOrigen->estado,
+                'created_at'          => now(),
+                'updated_at'          => now(),
+            ]);
+
+            // =====================================================================
+            // PASO 2: Copiar registros en j_contenido_juegos
+            // La imagen se inserta igual a la original.
+            // El frontend usará el files-server para copiar físicamente la imagen
+            // y luego enviará el nuevo nombre para actualizar el registro.
+            // =====================================================================
+            $contenidosOrigen = DB::select(
+                "SELECT * FROM j_contenido_juegos WHERE id_juego = ?",
+                [$id_juego_origen]
+            );
+
+            // Mapa: id_contenido_juego_original => id_contenido_juego_nuevo
+            $mapaContenidos = [];
+            // Tipos 1 y 2 no manejan imágenes; tipos 3, 4 → seleccionSimple; tipo 6 → rompecabezas
+            $tiposConImagenes = [3, 4, 6];
+            $imagenesContenido = [];
+
+            foreach ($contenidosOrigen as $contenido) {
+                $nuevoIdContenido = DB::table('j_contenido_juegos')->insertGetId([
+                    'id_juego'    => $nuevoIdJuego,
+                    'imagen'      => $contenido->imagen,
+                    'pregunta'    => $contenido->pregunta,
+                    'respuesta'   => $contenido->respuesta,
+                    'descripcion' => $contenido->descripcion,
+                    'puntaje'     => $contenido->puntaje,
+                    'estado'      => $contenido->estado,
+                    'created_at'  => now(),
+                    'updated_at'  => now(),
+                ]);
+
+                $mapaContenidos[$contenido->id_contenido_juego] = $nuevoIdContenido;
+
+                // Solo registrar imagen si el tipo de juego la requiere
+                if (!empty($contenido->imagen) && in_array($id_tipo_juego, $tiposConImagenes)) {
+                    $imagenesContenido[] = [
+                        'imagen_origen'      => $contenido->imagen,
+                        'id_contenido_nuevo' => $nuevoIdContenido,
+                    ];
+                }
+            }
+
+            // =====================================================================
+            // PASO 3: Insertar en j_temas_por_juego (uno por cada tema del request)
+            // =====================================================================
+            foreach ($temas as $tema) {
+                DB::table('j_temas_por_juego')->insert([
+                    'id_juego'   => $nuevoIdJuego,
+                    'id_tema'    => $tema['id'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            // =====================================================================
+            // PASO 4: Para tipos 3 y 4 → copiar j_opciones_contenidos
+            // Igual que contenido: la imagen_opcion se deja igual a la original
+            // y el frontend la copia a través del files-server.
+            // =====================================================================
+            $imagenesOpciones = [];
+
+            if (in_array($id_tipo_juego, [3, 4])) {
+                foreach ($mapaContenidos as $idContenidoOrigen => $idContenidoNuevo) {
+                    $opciones = DB::select(
+                        "SELECT * FROM j_opciones_contenidos WHERE id_contenido_juegos = ?",
+                        [$idContenidoOrigen]
+                    );
+
+                    foreach ($opciones as $opcion) {
+                        $nuevoIdOpcion = DB::table('j_opciones_contenidos')->insertGetId([
+                            'id_contenido_juegos' => $idContenidoNuevo,
+                            'nombre_opcion'       => $opcion->nombre_opcion,
+                            'descripcion_opcion'  => $opcion->descripcion_opcion,
+                            'tipo_opcion'         => $opcion->tipo_opcion,
+                            'imagen_opcion'       => $opcion->imagen_opcion,
+                            'estado'              => $opcion->estado,
+                            'created_at'          => now(),
+                            'updated_at'          => now(),
+                        ]);
+
+                        if (!empty($opcion->imagen_opcion)) {
+                            $imagenesOpciones[] = [
+                                'imagen_opcion_origen' => $opcion->imagen_opcion,
+                                'id_opcion_nuevo'      => $nuevoIdOpcion,
+                            ];
+                        }
+                    }
+                }
+            }
+            // Para tipos 1, 2 → NO se copia j_opciones_contenidos ni imágenes
+            // Para tipo 6 → NO se copia j_opciones_contenidos (pero sí imágenes de contenido)
+
+            DB::commit();
+            return response()->json([
+                'status'             => 1,
+                'message'            => 'Juego copiado correctamente en base de datos',
+                'id_juego_nuevo'     => $nuevoIdJuego,
+                'id_tipo_juego'      => $id_tipo_juego,
+                // El front usa estos datos para copiar imágenes en el files-server:
+                // tipos 3,4 → seleccionSimple | tipo 6 → rompecabezas
+                'imagenes_contenido' => $imagenesContenido,
+                'imagenes_opciones'  => $imagenesOpciones,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status'  => 'error',
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
+    public function Actualizar_Imagen_Contenido_Juego($request)
+    {
+        $id_contenido = $request->input('id_contenido_juego');
+        $nuevo_nombre = $request->input('nuevo_nombre');
+        DB::table('j_contenido_juegos')
+            ->where('id_contenido_juego', $id_contenido)
+            ->update(['imagen' => $nuevo_nombre, 'updated_at' => now()]);
+        return response()->json(['status' => 1]);
+    }
+
+    public function Actualizar_Imagen_Opcion_Juego($request)
+    {
+        $id_opcion    = $request->input('id_opcion_contenido');
+        $nuevo_nombre = $request->input('nuevo_nombre');
+        DB::table('j_opciones_contenidos')
+            ->where('id_opcion_contenido', $id_opcion)
+            ->update(['imagen_opcion' => $nuevo_nombre, 'updated_at' => now()]);
+        return response()->json(['status' => 1]);
+    }
+    //FIN METODOS JEYSON
 
 
 }

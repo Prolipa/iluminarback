@@ -154,56 +154,64 @@ class AgendaPlanificacionController extends Controller
     }
 
     public function index(Request $request)
-    {
-        try {
-            $usuario_id = $request->query('usuario_id');
+{
+    try {
+        $usuario_id = $request->query('usuario_id');
+        $mes = $request->query('mes');
+        $anio = $request->query('anio');
 
-            $query = Agenda::select('agenda_usuario.*')
-                ->selectRaw('
-                    CASE
-                        WHEN agenda_usuario.estado_institucion_temporal = 0
-                            THEN institucion.nombreInstitucion
-                        WHEN agenda_usuario.estado_institucion_temporal = 1
-                            THEN seguimiento_institucion_temporal.nombre_institucion
-                        ELSE NULL
-                    END as nombre_institucion
-                ')
-                ->leftJoin('institucion', 'agenda_usuario.institucion_id', '=', 'institucion.idInstitucion')
-                ->leftJoin('seguimiento_institucion_temporal', 'agenda_usuario.institucion_id_temporal', '=', 'seguimiento_institucion_temporal.institucion_temporal_id');
-            if ($usuario_id) {
-                $query->where('agenda_usuario.id_usuario', $usuario_id);
-            }
+        $query = Agenda::select('agenda_usuario.*')
+            ->selectRaw('
+                CASE
+                    WHEN agenda_usuario.estado_institucion_temporal = 0
+                        THEN institucion.nombreInstitucion
+                    WHEN agenda_usuario.estado_institucion_temporal = 1
+                        THEN seguimiento_institucion_temporal.nombre_institucion
+                    ELSE NULL
+                END as nombre_institucion
+            ')
+            ->leftJoin('institucion', 'agenda_usuario.institucion_id', '=', 'institucion.idInstitucion')
+            ->leftJoin('seguimiento_institucion_temporal', 'agenda_usuario.institucion_id_temporal', '=', 'seguimiento_institucion_temporal.institucion_temporal_id');
 
-            $planificaciones = $query->where('agenda_usuario.estado', '!=', 2)
-            //order by por startData y id
+        if ($usuario_id) {
+            $query->where('agenda_usuario.id_usuario', $usuario_id);
+        }
+
+        // Filtrar por mes y año si se proporcionan
+        if ($mes && $anio) {
+            $query->whereMonth('agenda_usuario.startDate', $mes)
+                  ->whereYear('agenda_usuario.startDate', $anio);
+        }
+
+        $planificaciones = $query->where('agenda_usuario.estado', '!=', 2)
             ->orderBy('agenda_usuario.startDate', 'desc')
             ->orderBy('agenda_usuario.id', 'desc')
-                ->get();
+            ->get();
 
-            // Formatear las fechas para evitar problemas de timezone
-            $planificaciones = $planificaciones->map(function ($item) {
-                if ($item->startDate) {
-                    $item->startDate = date('Y-m-d', strtotime($item->startDate));
-                }
-                if ($item->endDate) {
-                    $item->endDate = date('Y-m-d', strtotime($item->endDate));
-                }
-                return $item;
-            });
+        // Formatear las fechas para evitar problemas de timezone
+        $planificaciones = $planificaciones->map(function ($item) {
+            if ($item->startDate) {
+                $item->startDate = date('Y-m-d', strtotime($item->startDate));
+            }
+            if ($item->endDate) {
+                $item->endDate = date('Y-m-d', strtotime($item->endDate));
+            }
+            return $item;
+        });
 
-            return response()->json([
-                'success' => true,
-                'data' => $planificaciones
-            ], 200);
+        return response()->json([
+            'success' => true,
+            'data' => $planificaciones
+        ], 200);
 
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al obtener planificaciones',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error al obtener planificaciones',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     public function update(Request $request, $id)
     {
