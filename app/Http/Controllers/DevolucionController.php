@@ -137,7 +137,7 @@ class DevolucionController extends Controller
                      ->where('ped.estado', '=', '1');
             })
             ->where('v.ven_codigo', 'LIKE', '%' . $documento . '%')
-            ->where('v.idtipodoc', '=', 1)
+            ->whereIn('v.idtipodoc', [1,2,3,4])
             ->where('v.est_ven_codigo', '!=', 3) // Excluir anulados
             ->select(
                 'v.ven_codigo',

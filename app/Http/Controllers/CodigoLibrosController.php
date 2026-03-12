@@ -502,7 +502,8 @@ class CodigoLibrosController extends Controller
                 if($request->factura == null || $request->factura == "")   { $factura = $facturaA; }
                 else{ $factura = $request->factura; }
                 $ifNotPaquete  = false;
-                $ifNotPaquete  = (($codigo_paquete == null || $codigo_paquete == ""));
+                // se quita la validacion del paquete porque se manejara en un solo el import de gestion de bodega
+                // $ifNotPaquete  = (($codigo_paquete == null || $codigo_paquete == ""));
                 //=============PROFORMA ==========
                     //cambiar codigo de proforma
                     if($ifSetProforma == 1){
@@ -557,9 +558,9 @@ class CodigoLibrosController extends Controller
                     $user              = $usuarioQuemado;
                     $booleanRegaladoB = false;
                     //paquete
-                    if($tipoProceso == '6') { $booleanRegaladoB = (($ifLiquidado !='0' && $ifLiquidado !='4') && $ifBloqueado !=2 && $ifliquidado_regalado == '0' && $ifventa_estado == 0); }
+                    if($tipoProceso == '6') { $booleanRegaladoB = (($ifLiquidado !='0' && $ifLiquidado !='4') && $ifBloqueado !=2 && $ifliquidado_regalado == '0'); }
                     //si no es el import de paquete valido que el codigo no tenga paquete
-                    else{ $booleanRegaladoB                     = (($ifLiquidado !='0' && $ifLiquidado !='4') && $ifBloqueado !=2 && $ifliquidado_regalado == '0' && $ifNotPaquete && $ifventa_estado == 0);}
+                    else{ $booleanRegaladoB                     = (($ifLiquidado !='0' && $ifLiquidado !='4') && $ifBloqueado !=2 && $ifliquidado_regalado == '0' && $ifNotPaquete);}
                     if($booleanRegaladoB) { $validacionCodigo = true; }
                     else  { $validacionCodigo = false; }
                 }
@@ -782,46 +783,49 @@ class CodigoLibrosController extends Controller
                 $facturaA                       = $validarA[0]->factura;
                 if($request->factura == null || $request->factura == "")   $factura = $facturaA;
                 else  $factura = $request->factura;
-                $ifNotPaqueteA  = false;
-                $ifNotPaqueteD  = false;
-                $ifNotPaqueteA  = (($codigo_paqueteA == null || $codigo_paqueteA == ""));
-                $ifNotPaqueteD  = (($codigo_paqueteD == null || $codigo_paqueteD == ""));
+                // $ifNotPaqueteA  = false;
+                // $ifNotPaqueteD  = false;
+                //se quita la validacion del paquete porque se hara en el mismo import de gestion bodega
+                // $ifNotPaqueteA  = (($codigo_paqueteA == null || $codigo_paqueteA == ""));
+                // $ifNotPaqueteD  = (($codigo_paqueteD == null || $codigo_paqueteD == ""));
+                $ifNotPaqueteA  = true;
+                $ifNotPaqueteD  = true;
                 //=============PROFORMA ==========
                 //cambiar codigo de proforma
-                    if($ifSetProforma == 1){
-                        //si codigo proforma es nulo le permito que actualize el codigo proforma activacion
-                        if($ifcodigo_proformaA == null || $ifcodigo_proformaA == "" ){
+                if($ifSetProforma == 1){
+                    //si codigo proforma es nulo le permito que actualize el codigo proforma activacion
+                    if($ifcodigo_proformaA == null || $ifcodigo_proformaA == "" ){
+                        $ifChangeProformaA = true;
+                        $ifErrorProformaA  = false;
+                    }else{
+                        //valido que el ifcodigo_proforma sea igual codigo_proforma y el ifproforma_empresa es igual a proforma_empresa
+                        if($ifcodigo_proformaA == $codigo_proforma && $ifproforma_empresaA == $proforma_empresa){
                             $ifChangeProformaA = true;
                             $ifErrorProformaA  = false;
-                        }else{
-                            //valido que el ifcodigo_proforma sea igual codigo_proforma y el ifproforma_empresa es igual a proforma_empresa
-                            if($ifcodigo_proformaA == $codigo_proforma && $ifproforma_empresaA == $proforma_empresa){
-                                $ifChangeProformaA = true;
-                                $ifErrorProformaA  = false;
-                            }
-                            //si no es igual guardo en un array
-                            else{
-                                $ifChangeProformaA = false;
-                                $ifErrorProformaA  = true;
-                            }
                         }
-                        //si codigo proforma es nulo le permito que actualize el codigo proforma diagnostico
-                        if($ifcodigo_proformaD == null || $ifcodigo_proformaD == "" ){
-                            $ifChangeProformaD = true;
-                            $ifErrorProformaD  = false;
-                        }else{
-                            //valido que el ifcodigo_proforma sea igual codigo_proforma y el ifproforma_empresa es igual a proforma_empresa
-                            if($ifcodigo_proformaD == $codigo_proforma && $ifproforma_empresaD == $proforma_empresa){
-                                $ifChangeProformaD = true;
-                                $ifErrorProformaD  = false;
-                            }
-                            //si no es igual guardo en un array
-                            else{
-                                $ifChangeProformaD = false;
-                                $ifErrorProformaD  = true;
-                            }
+                        //si no es igual guardo en un array
+                        else{
+                            $ifChangeProformaA = false;
+                            $ifErrorProformaA  = true;
                         }
                     }
+                    //si codigo proforma es nulo le permito que actualize el codigo proforma diagnostico
+                    if($ifcodigo_proformaD == null || $ifcodigo_proformaD == "" ){
+                        $ifChangeProformaD = true;
+                        $ifErrorProformaD  = false;
+                    }else{
+                        //valido que el ifcodigo_proforma sea igual codigo_proforma y el ifproforma_empresa es igual a proforma_empresa
+                        if($ifcodigo_proformaD == $codigo_proforma && $ifproforma_empresaD == $proforma_empresa){
+                            $ifChangeProformaD = true;
+                            $ifErrorProformaD  = false;
+                        }
+                        //si no es igual guardo en un array
+                        else{
+                            $ifChangeProformaD = false;
+                            $ifErrorProformaD  = true;
+                        }
+                    }
+                }
                 ///============PROFORMA =======
                 //===PROCESO===========
                 //=====USAN Y LIQUIDAN=========================
@@ -921,8 +925,8 @@ class CodigoLibrosController extends Controller
                     }
                     //si no es el import de paquete valido que el codigo no tenga paquete
                     else{
-                        $booleanValidacionA = (( $ifLiquidadoA !='0' && $ifLiquidadoA !='4') && $ifventa_estadoA == 0 && $ifBloqueadoA !=2 && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0') && $ifNotPaqueteA);
-                        $booleanValidacionD = (($ifLiquidadoD !='0' && $ifLiquidadoD !='4') &&  $ifventa_estadoD == 0 && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == "" || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0') && $ifNotPaqueteD);
+                        $booleanValidacionA = (( $ifLiquidadoA !='0' && $ifLiquidadoA !='4') && $ifBloqueadoA !=2 && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0') && $ifNotPaqueteA);
+                        $booleanValidacionD = (($ifLiquidadoD !='0' && $ifLiquidadoD !='4') && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == "" || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0') && $ifNotPaqueteD);
                     }
                     if($booleanValidacionA && $ifErrorProformaA == false){
                         if($booleanValidacionD && $ifErrorProformaD == false){

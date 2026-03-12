@@ -3242,7 +3242,7 @@ class AdminController extends Controller
         SET
             p.id_perseo_calmed2026_produccion = NULL,
             p.id_perseo_prolipa2026_produccion = NULL
-        WHERE p.gru_pro_codigo IN ('1','2')
+        WHERE p.gru_pro_codigo IN ('1','2','7')
         AND p.id_perseo_calmed2026_produccion = 0
         ;");
         return "Se limpiaron a los ceros a null para proceder a llenar los ids de Perseo";

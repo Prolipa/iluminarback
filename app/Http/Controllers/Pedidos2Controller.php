@@ -100,7 +100,7 @@ class Pedidos2Controller extends Controller
                 AND p.tipo = '0'
                 AND p.contrato_generado IS NOT NULL
             ", [$periodo_id]);
-        } else {
+        } elseif ($ifContratos == 0) {
             // Sin contratos
             $getPedidos = DB::SELECT("
                 SELECT p.*
@@ -109,6 +109,15 @@ class Pedidos2Controller extends Controller
                 AND p.estado = '1'
                 AND p.tipo = '0'
                 AND p.contrato_generado IS NULL
+            ", [$periodo_id]);
+        } else {
+            // Todos (con y sin contratos)
+            $getPedidos = DB::SELECT("
+                SELECT p.*
+                FROM pedidos p
+                WHERE p.id_periodo = ?
+                AND p.estado = '1'
+                AND p.tipo = '0'
             ", [$periodo_id]);
         }
 
@@ -175,7 +184,7 @@ class Pedidos2Controller extends Controller
                 AND p.tipo = '0'
                 AND p.contrato_generado IS NOT NULL
             ", [$periodo_id]);
-        } else {
+        } elseif ($ifContratos == 0) {
             // Sin contratos
             $getPedidos = DB::SELECT("
                 SELECT p.*
@@ -184,6 +193,15 @@ class Pedidos2Controller extends Controller
                 AND p.estado = '1'
                 AND p.tipo = '0'
                 AND p.contrato_generado IS NULL
+            ", [$periodo_id]);
+        } else {
+            // Todos (con y sin contratos)
+            $getPedidos = DB::SELECT("
+                SELECT p.*
+                FROM pedidos p
+                WHERE p.id_periodo = ?
+                AND p.estado = '1'
+                AND p.tipo = '0'
             ", [$periodo_id]);
         }
 

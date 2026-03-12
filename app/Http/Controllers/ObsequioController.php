@@ -53,6 +53,22 @@ class ObsequioController extends Controller
         LEFT JOIN periodoescolar pe ON o.periodo_id = pe.idperiodoescolar
         WHERE  o.periodo_id = '$periodo_id'
         ORDER BY o.id DESC");
+        //obtener total gastado diferente a pedido del for
+        foreach($query as $key => $item){
+            $query2 = DB::SELECT("SELECT
+                SUM(o.valor_total) AS total_gastado
+                FROM obsequios o
+                WHERE o.institucion_id  = '$item->institucion_id'
+                AND o.periodo_id        = '$item->periodo_id'
+                AND (o.estado = '4' OR o.estado = '5' OR o.estado = '6')
+                and o.id != '$item->id'
+            ");
+            $total_gastado = 0;
+            if(count($query2) > 0){
+                $total_gastado = $query2[0]->total_gastado;
+            }
+            $query[$key]->total_gastado = $total_gastado == null ? 0 : $total_gastado;
+        }
         return $query;
     }
     public function institucionPedido($institucion,$periodo){
