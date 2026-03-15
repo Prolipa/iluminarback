@@ -698,6 +698,7 @@ class SeminarioController extends Controller
            $capacitacion->asistencia_activa             = $request->asistencia_activa;
            $capacitacion->capacitador                   = $request->capacitador;
            $capacitacion->editor_id                     = $request->editor_id;
+           $capacitacion->tipo                      = $request->tipo;
            $capacitacion->notificado                    = $request->notificado;
            $capacitacion->save();
            $this->crearCapacitadores($request,$capacitacion);

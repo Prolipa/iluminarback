@@ -2662,7 +2662,7 @@ class PedidosController extends Controller
         foreach($guias as $key => $item){
             //traer Pendientes
             $getPendientes = DB::SELECT("SELECT  v.ven_codigo,v.id_empresa, v.ven_fecha, v.est_ven_codigo, v.fecha_proceso_despacho,
-            v.estadoPerseo, v.pedido_codigo
+            v.estadoPerseo, v.pedido_codigo, v.observacion_anula_envio_perseo
              FROM f_venta  v
             WHERE v.id_pedido_guia = $item->id_pedido
             ");

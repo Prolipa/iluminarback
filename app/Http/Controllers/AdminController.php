@@ -3470,7 +3470,13 @@ class AdminController extends Controller
             } elseif ($empresa == 'calmed') {
                 $campoPerseo = 'id_perseo_calmed_produccion';
                 $tipoEmpresa = 3;
-            } else {
+            } elseif ($empresa == 'prolipa26') {
+                $campoPerseo = 'id_perseo_prolipa_produccion';
+                $tipoEmpresa = 5;
+            } elseif ($empresa == 'calmed26') {
+                $campoPerseo = 'id_perseo_calmed_produccion';
+                $tipoEmpresa = 4;
+            }  else {
                 return response()->json([
                     'estado' => 2,
                     'mensaje' => 'Empresa no válida'

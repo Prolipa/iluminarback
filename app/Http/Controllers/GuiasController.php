@@ -219,7 +219,8 @@ class GuiasController extends Controller
         CONCAT(fact.nombres,' ', fact.apellidos) AS facturador_nombre,
         CONCAT(user_anul.nombres,' ', user_anul.apellidos) AS anulador_nombre,
         CONCAT(user_despacho.nombres,' ', user_despacho.apellidos) AS despachador_nombre,
-
+        CONCAT(user_anula_per.nombres,' ', user_anula_per.apellidos) AS usuario_anula_perseo,
+        
         COALESCE(d.total_items, 0) AS total_items,
         COALESCE(d.total_libros, 0) AS total_libros
 
@@ -249,6 +250,8 @@ class GuiasController extends Controller
         LEFT JOIN usuario user_despacho
             ON user_despacho.idusuario = v.user_despacha
 
+        LEFT JOIN usuario user_anula_per
+            ON user_anula_per.idusuario = v.user_anula_envio_perseo
         -- 🔥 AQUÍ ESTÁ LA MAGIA
         LEFT JOIN (
             SELECT
@@ -647,8 +650,9 @@ class GuiasController extends Controller
        if($request->GuiasGenerarDocumentoVenta) { return $this->GuiasGenerarDocumentoVenta($request); }
        if($request->guardarGuiasPendientes)     { return $this->guardarGuiasPendientes($request); }
        if($request->anularPedidoAprobado)       { return $this->anularPedidoAprobado($request); }
-       if($request->enviarAPerseo)             { return $this->enviarAPerseo($request); }
+       if($request->enviarAPerseo)              { return $this->enviarAPerseo($request); }
        if($request->anularDocumentoVenta)       { return $this->anularDocumentoVenta($request); }
+       if($request->regresar_no_enviado_perseo) { return $this->regresar_no_enviado_perseo($request); }
     }
 
     //api:post/guias?GuiasGenerarDocumentoVenta=1
@@ -1297,6 +1301,81 @@ class GuiasController extends Controller
             return response()->json([
                 'status' => 0,
                 'message' => 'Ocurrió un error al intentar anular el documento de venta.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    //api:post/guias?regresar_no_enviado_perseo=1
+    public function regresar_no_enviado_perseo(Request $request){
+        try {
+            DB::beginTransaction();
+            
+            // Validar que exista el documento
+            $venta = DB::table('f_venta')
+                ->where('ven_codigo', $request->ven_codigo)
+                ->where('id_empresa', $request->id_empresa)
+                ->first();
+            
+            if (!$venta) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'No se encontró el documento de venta'
+                ], 404);
+            }
+            
+            // Validar en PERSEO que el pedido ya no exista
+            try {
+                $perseoResponse = $this->guiaRepository->getDocumentoPerseoXPedidoId($request->ven_codigo, $request->id_empresa);
+
+                // Solo se permite continuar si PERSEO retorna fault con "No existen detalles asociados"
+                $tieneFault = isset($perseoResponse['fault']['faultstring']) &&
+                              $perseoResponse['fault']['faultstring'] === 'No existen detalles asociados';
+
+                if (!$tieneFault) {
+                    DB::rollBack();
+                    return response()->json([
+                        'status'  => 0,
+                        'message' => 'No se puede regresar el documento porque el pedido aún existe en PERSEO. Debe eliminarlo primero desde PERSEO.'
+                    ], 400);
+                }
+
+                // El pedido ya no existe en PERSEO, se puede proceder
+                $observacionCompleta = $request->observacion .
+                    ' | Pedido ID PERSEO: ' . ($venta->id_pedido_perseo ?? 'N/A') .
+                    ' | Código Pedido: '    . ($venta->pedido_codigo    ?? 'N/A');
+
+                DB::table('f_venta')
+                    ->where('ven_codigo',  $request->ven_codigo)
+                    ->where('id_empresa',  $request->id_empresa)
+                    ->update([
+                        'estadoPerseo'                   => 0,
+                        'user_anula_envio_perseo'        => $request->id_usuario,
+                        'fecha_anula_envio_perseo'       => now(),
+                        'observacion_anula_envio_perseo' => $observacionCompleta
+                    ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'status'  => 1,
+                    'message' => 'El documento ha sido regresado a no enviado a PERSEO correctamente'
+                ], 200);
+
+            } catch (\Exception $e) {
+                DB::rollBack();
+                return response()->json([
+                    'status'  => 0,
+                    'message' => 'Error al consultar PERSEO: ' . $e->getMessage()
+                ], 500);
+            }
+            
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status' => 0,
+                'message' => 'Error al regresar el documento',
                 'error' => $e->getMessage()
             ], 500);
         }

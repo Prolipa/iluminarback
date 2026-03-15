@@ -481,7 +481,7 @@ class ProformaController extends Controller
             $letra = "C";
             $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
         }else if ($empresa==4){
-            $letra = "C26";
+            $letra = "GC26";
             $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed2026 as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
         }else if ($empresa==5){
             $letra = "P26";
@@ -3479,7 +3479,7 @@ class ProformaController extends Controller
                 $letraEmpresa = 'C';
                 $secuenciaActual = $tipoDoc[0]->tdo_secuencial_calmed;
             } else if ($empresa == 4) {
-                $letraEmpresa = 'C26';
+                $letraEmpresa = 'GC26';
                 $secuenciaActual = $tipoDoc[0]->tdo_secuencial_calmed2026;
             } else if ($empresa == 5) {
                 $letraEmpresa = 'P26';
@@ -3762,6 +3762,57 @@ class ProformaController extends Controller
                 "status" => 500,
                 "error" => $e->getMessage(),
                 "message" => "Error al obtener libros vendidos",
+                "line" => $e->getLine()
+            ], 500);
+        }
+    }
+
+    /**
+     * Obtener libros vendidos por totalizado (código TVL)
+     * Similar a get_libros_vendidos_por_contrato pero filtra por ven_totalizado
+     * Agrupa por producto y descuento
+     */
+    public function get_libros_vendidos_por_totalizado(Request $request)
+    {
+        try {
+            $totalizado = $request->totalizado;
+            $periodo = $request->periodo;
+
+            if (!$totalizado) {
+                return response()->json([
+                    "status" => 400,
+                    "message" => "El código de totalizado es requerido"
+                ], 400);
+            }
+
+            $librosVendidos = DB::SELECT("
+                SELECT
+                    dv.pro_codigo,
+                    MAX(p.pro_nombre) as nombre_libro,
+                    fv.ven_desc_por as descuento_venta,
+                    SUM(dv.det_ven_cantidad) as cantidad_vendida,
+                    MAX(dv.det_ven_valor_u) as precio_unitario,
+                    SUM(dv.det_ven_cantidad * dv.det_ven_valor_u) as subtotal_vendido,
+                    SUM(dv.det_ven_cantidad * dv.det_ven_valor_u * (1 - COALESCE(fv.ven_desc_por, 0) / 100)) as total_vendido
+                FROM f_detalle_venta dv
+                INNER JOIN f_venta fv ON dv.ven_codigo = fv.ven_codigo AND dv.id_empresa = fv.id_empresa
+                INNER JOIN 1_4_cal_producto p ON dv.pro_codigo = p.pro_codigo
+                WHERE fv.ven_totalizado = ?
+                AND fv.est_ven_codigo <> 3
+                GROUP BY dv.pro_codigo, fv.ven_desc_por
+                ORDER BY MAX(p.pro_nombre), fv.ven_desc_por
+            ", [$totalizado]);
+
+            return response()->json([
+                "status" => 200,
+                "data" => $librosVendidos
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                "status" => 500,
+                "error" => $e->getMessage(),
+                "message" => "Error al obtener libros vendidos por totalizado",
                 "line" => $e->getLine()
             ], 500);
         }

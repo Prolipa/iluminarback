@@ -14,9 +14,11 @@ use App\Models\Ventas;
 use App\Models\Usuario;
 use App\Repositories\BaseRepository;
 use App\Repositories\Codigos\CodigosRepository;
+use App\Traits\Pedidos\TraitPedidosGeneral;
 use DB;
 class  GuiaRepository extends BaseRepository
 {
+    use TraitPedidosGeneral;
     protected $codigoRepository;
     public function __construct(Pedidos $pedidoRepository, CodigosRepository $codigoRepository)
     {
@@ -518,4 +520,39 @@ class  GuiaRepository extends BaseRepository
         }
     }
 
+    public function getDocumentoPerseoXPedidoId($ven_codigo,$empresa){
+         try {
+            if (!$ven_codigo || !$empresa) {
+                throw new \Exception("Faltan parámetros requeridos: ven_codigo y empresa");
+            }
+
+            // Obtener información de la venta
+            $venta = DB::table('f_venta')
+                ->where('ven_codigo', $ven_codigo)
+                ->where('id_empresa', $empresa)
+                ->first();
+
+            if (!$venta) {
+                throw new \Exception("Venta no encontrada con el código proporcionado.");
+            }
+
+            // Validar que tenga id_pedido_perseo
+            if (!$venta->id_pedido_perseo) {
+                throw new \Exception("Esta venta no ha sido enviada a Perseo aún");
+            }
+
+            // Preparar parámetros para la API de Perseo
+            $formData = [
+                "pedidosid" => $venta->id_pedido_perseo,
+            ];
+
+            // Llamar a la API de Perseo para consultar el pedido
+            $url = "pedidos_consulta";
+            $process = $this->tr_PerseoPost($url, $formData, $empresa);
+            return $process;
+
+        } catch (\Exception $e) {
+            throw new \Exception("Error al consultar el pedido en Perseo: " . $e->getMessage());
+        }
+    }
 }

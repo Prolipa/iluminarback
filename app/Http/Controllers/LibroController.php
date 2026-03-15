@@ -710,7 +710,8 @@ class LibroController extends Controller
                 'folleto.nombrelibro as folleto_nombre','folleto.weblibro as folleto_weblibro','folleto_ls.id_serie as folleto_id_serie',
                 'libro_plus.nombrelibro as libro_plus_nombre','libro_plus_ls.id_serie as libro_plus_id_serie',
                 'gpv3.gru_pro_nombre as nombre_grupo_v3','p.grupo_codigo_para_v3',
-                'p.id_pro_codigo_padre','pdr.pro_nombre AS nombre_producto_padre'
+                'p.id_pro_codigo_padre','pdr.pro_nombre AS nombre_producto_padre',
+                'pdr.id_perseo_prolipa2026_produccion','pdr.id_perseo_calmed2026_produccion'
         )
         ->leftJoin('asignatura as a', 'a.idasignatura', '=', 'l.asignatura_idasignatura')
         ->leftJoin('libros_series as ls', 'ls.idLibro', '=', 'l.idlibro')
