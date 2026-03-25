@@ -593,7 +593,7 @@ class PrefacturaController extends Controller
                   // SECCION PARA ACTUALIZAR STOCK
                 $productoController = new _14ProductoController();
                 // Llamar al método Mover_Stock_SoloTxt_Todo_A_DepositoCALMED
-                $productoController->Mover_Stock_SoloTxt_Todo_A_DepositoCALMED();
+                $productoController->Mover_Stock_SoloTxt_Todo_A_pro_stockCalmed();
             }
             //SUMAR SECUENCIA
             // ACTUALIZAR SECUENCIAL

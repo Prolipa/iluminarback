@@ -613,6 +613,8 @@ Route::get('eliminar_seminario/{id}', 'SeminarioController@eliminar_seminario');
 Route::get('get_periodos_seminarios', 'SeminarioController@get_periodos_seminarios');
 //obtener capacitador x seminarios
 Route::get('getCapacitadoresXCapacitacion/{id_seminario}', 'SeminarioController@getCapacitadoresXCapacitacion');
+//obtener firma del capacitador de una capacitación
+Route::get('get_capacitador_firma/{id_seminario}', 'SeminarioController@get_capacitador_firma');
 Route::apiResource('inscripcion', 'InscripcionController');
 Route::apiResource('nivel', 'NivelController');
 Route::get('getNiveles', 'NivelController@getNiveles');
@@ -1383,7 +1385,7 @@ Route::get('Getstockproductosrestablecer', '_14ProductoController@Getstockproduc
 Route::get('GetSumarTodo_Productos', '_14ProductoController@GetSumarTodo_Productos');
 Route::get('GetSumarTodo_ProductosFinal', '_14ProductoController@GetSumarTodo_ProductosFinal');
 Route::get('Getstockproductosrestablecer_SINACTUALIZAR', '_14ProductoController@Getstockproductosrestablecer_SINACTUALIZAR');
-Route::get('Mover_Stock_SoloTxt_Todo_A_DepositoCALMED', '_14ProductoController@Mover_Stock_SoloTxt_Todo_A_DepositoCALMED');
+Route::get('Mover_Stock_SoloTxt_Todo_A_DepositoCALMED', '_14ProductoController@Mover_Stock_SoloTxt_Todo_A_pro_stockCalmed');
 Route::get('GetSacarAreasxSerieProducto', 'SeriesController@GetSacarAreasxSerieProducto');
 Route::get('GetSacarAreasxSerieComboProducto', 'SeriesController@GetSacarAreasxSerieComboProducto');
 Route::get('GetObtenerProductosxSerieoArea', 'SeriesController@GetObtenerProductosxSerieoArea');
@@ -2451,6 +2453,9 @@ Route::prefix('encuesta_prolipa')->group(function () {
 
     // 🧾 responder encuesta
     Route::post('/responder', 'EncuestaProlipaController@responder');
+
+    // 📥 registrar descarga de certificado
+    Route::post('/registrar-descarga', 'EncuestaProlipaController@registrarDescarga');
 
     // 📋 encuestas
     Route::get('/', 'EncuestaProlipaController@index');

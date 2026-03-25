@@ -1001,7 +1001,7 @@ class VentasController extends Controller
                     // SECCION PARA ACTUALIZAR STOCK
                     $productoController = new _14ProductoController();
                     // Llamar al método Mover_Stock_SoloTxt_Todo_A_DepositoCALMED
-                    $productoController->Mover_Stock_SoloTxt_Todo_A_DepositoCALMED();
+                    $productoController->Mover_Stock_SoloTxt_Todo_A_pro_stockCalmed();
                 DB::commit();
                 return response()->json(['message' => 'Anulación exitosa de la venta.'], 200);
             }catch(\Exception $e){
@@ -1032,7 +1032,7 @@ class VentasController extends Controller
             // SECCION PARA ACTUALIZAR STOCK
             $productoController = new _14ProductoController();
             // Llamar al método Mover_Stock_SoloTxt_Todo_A_DepositoCALMED
-            $productoController->Mover_Stock_SoloTxt_Todo_A_DepositoCALMED();
+            $productoController->Mover_Stock_SoloTxt_Todo_A_pro_stockCalmed();
             return $venta;
         }
     }
@@ -3551,7 +3551,7 @@ class VentasController extends Controller
                     // SECCION PARA ACTUALIZAR STOCK
                     $productoController = new _14ProductoController();
                     // Llamar al método Mover_Stock_SoloTxt_Todo_A_DepositoCALMED
-                    $productoController->Mover_Stock_SoloTxt_Todo_A_DepositoCALMED();
+                    $productoController->Mover_Stock_SoloTxt_Todo_A_pro_stockCalmed();
 
                 }
 
