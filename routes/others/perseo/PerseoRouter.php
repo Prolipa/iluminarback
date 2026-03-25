@@ -57,6 +57,10 @@ Route::group(['prefix' => 'perseo/productos'], function () {
     Route::post('existencia_producto','Perseo\PerseoProductoController@existencia_producto');
     //procesar metodos post productos
     Route::post('Procesar_MetodosPost_Productos','Perseo\PerseoProductoController@Procesar_MetodosPost_Productos');
+    //sincronizar existencias desde Perseo
+    Route::post('sincronizar_existencias_perseo','Perseo\PerseoProductoController@sincronizarExistenciasPerseo');
+     //sincronizar existencias desde Perseo
+    Route::post('sincronizar_existencias_perseo','Perseo\PerseoProductoController@sincronizarExistenciasPerseo');
 });
 //contabilidad
 Route::group(['prefix' => 'perseo/contabilidad'], function () {
@@ -143,6 +147,29 @@ Route::group(['prefix' => 'perseo/ventas'], function () {
     // Verificar y actualizar ID de producto en Perseo
     Route::post('verificar-producto','Perseo\VentaPerseoController@verificarProductoPerseo');
 });
+
+// ==================================
+// VENTAS LISTA PERSEO (Contratos Agrupados - Totalizados)
+// ==================================
+Route::group(['prefix' => 'perseo/ventas-lista'], function () {
+    // Obtener pedidos sin agrupar (disponibles para agrupar)
+    Route::get('pedidos-sin-agrupar','Perseo\VentaListaPerseoController@getPedidosSinAgrupar');
+    // Obtener TODOS los pedidos de Lista (agrupados y sin agrupar)
+    Route::get('pedidos-lista-completos','Perseo\VentaListaPerseoController@getPedidosListaCompletos');
+    // Obtener todos los contratos agrupados (para V-Select)
+    Route::get('contratos-agrupados','Perseo\VentaListaPerseoController@getContratosAgrupados');
+    // Crear nueva agrupación de contratos
+    Route::post('crear-agrupacion','Perseo\VentaListaPerseoController@crearAgrupacion');
+    // Editar agrupación existente
+    Route::put('editar-agrupacion/{id}','Perseo\VentaListaPerseoController@editarAgrupacion');
+    // Anular agrupación
+    Route::post('anular-agrupacion/{id}','Perseo\VentaListaPerseoController@anularAgrupacion');
+    // Verificar si una agrupación tiene ventas registradas
+    Route::get('verificar-ventas/{codigo}','Perseo\VentaListaPerseoController@verificarVentasAgrupacion');
+    // Consultar stock local por producto (sistema)
+    Route::get('stock-producto','Perseo\VentaListaPerseoController@consultarStockProductoSistema');
+});
+
 //moderna
 Route::group(['prefix' => 'perseo/moderna'], function () {
     Route::resource('moderna','Perseo\PerseoModernaController');

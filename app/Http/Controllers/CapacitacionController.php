@@ -39,11 +39,16 @@ class CapacitacionController extends Controller
         c.cant_asistentes as personas,
         p.idperiodoescolar, p.periodoescolar AS periodo, i.nombreInstitucion,
         c.capacitador as capacitadores,
-        c.link_reunion
+        c.link_reunion,
+        c.cant_asistentes,
+        c.oferta_academica,
+        oa.nombreofertaAcademica,
+        c.area_capacitacion
         FROM seminarios c
         LEFT JOIN periodoescolar p ON c.periodo_id = p.idperiodoescolar
         LEFT JOIN institucion i ON  c.id_institucion = i.idInstitucion
         LEFT JOIN capacitacion_temas t ON c.tema_id = t.id
+        LEFT JOIN ofertaacademica oa ON c.oferta_academica = oa.idofertaAcademica
         WHERE c.id_usuario = '$request->id_usuario'
         AND c.tipo_webinar = '2'
         AND c.estado = '1'
@@ -205,6 +210,8 @@ class CapacitacionController extends Controller
             $agenda->cant_asistentes = $request->asistentes;
             $agenda->link_reunion   = $request->link_reunion == null || $request->link_reunion == "null" ? null : $request->link_reunion;
             $agenda->editor_id = $request->editor_id ?? null ;
+            $agenda->oferta_academica = $request->oferta_academica ?? null ;
+            $agenda->area_capacitacion = $request->area_capacitacion ?? null ;
             $agenda->save();
             return $agenda;
         } catch (\Throwable $th) {
@@ -230,6 +237,20 @@ class CapacitacionController extends Controller
     }
     public function delete_agenda_asesor($id_agenda)
     {
+        // Verificar si tiene respuestas de encuestas
+        $tieneRespuestas = DB::table('encuesta_prolipa_respuestas as r')
+            ->join('encuesta_prolipa_asignaciones as a', 'r.asignacion_id', '=', 'a.id')
+            ->where('a.entidad_tipo', 'capacitacion')
+            ->where('a.entidad_id', $id_agenda)
+            ->exists();
+
+        if ($tieneRespuestas) {
+            return response()->json([
+                'status'  => 0,
+                'message' => 'No se puede eliminar: esta capacitación tiene encuestas respondidas.'
+            ], 422);
+        }
+
         DB::DELETE("DELETE FROM `seminarios` WHERE `id_seminario` = $id_agenda");
     }
     public function edit_agenda_admin(Request $request)

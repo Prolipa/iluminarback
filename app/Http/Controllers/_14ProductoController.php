@@ -513,6 +513,79 @@ class _14ProductoController extends Controller {
         ]);
     }
 
+    public function Mover_Stock_SoloTxt_Todo_A_pro_stockCalmed() {
+        // 1. Obtener productos antes del cambio
+        $productosAntes = DB::table('1_4_cal_producto')
+            ->where('gru_pro_codigo', 1)
+            ->get();
+        // 2. Hacer el UPDATE masivo
+        $actualizados = DB::update("UPDATE `1_4_cal_producto` SET
+            pro_stockCalmed = pro_depositoCalmed + pro_stock + pro_stockCalmed + pro_deposito,
+            pro_stock = 0,
+            pro_depositoCalmed = 0,
+            pro_deposito = 0
+            WHERE gru_pro_codigo = 1");
+        // 3. Obtener productos después del cambio
+        $productosDespues = DB::table('1_4_cal_producto')
+            ->where('gru_pro_codigo', 1)
+            ->get()
+            ->keyBy('pro_codigo'); // Para buscar por código luego
+        // 4. Comparar y registrar historial solo si hay cambios
+        $HistoricoStock = [];
+        foreach ($productosAntes as $producto) {
+            $codigo = $producto->pro_codigo;
+            $old_values = [
+                'pro_codigo' => $codigo,
+                'pro_reservar' => $producto->pro_reservar,
+                'pro_stock' => $producto->pro_stock,
+                'pro_stockCalmed' => $producto->pro_stockCalmed,
+                'pro_deposito' => $producto->pro_deposito,
+                'pro_depositoCalmed' => $producto->pro_depositoCalmed,
+            ];
+            $nuevo = $productosDespues[$codigo];
+            $new_values = [
+                'pro_codigo' => $codigo,
+                'pro_reservar' => $nuevo->pro_reservar,
+                'pro_stock' => $nuevo->pro_stock,
+                'pro_stockCalmed' => $nuevo->pro_stockCalmed,
+                'pro_deposito' => $nuevo->pro_deposito,
+                'pro_depositoCalmed' => $nuevo->pro_depositoCalmed,
+            ];
+            $cambios = false;
+            foreach (['pro_reservar', 'pro_stock', 'pro_stockCalmed', 'pro_deposito', 'pro_depositoCalmed'] as $campo) {
+                if ($old_values[$campo] != $new_values[$campo]) {
+                    $cambios = true;
+                    break;
+                }
+            }
+            if ($cambios) {
+                $HistoricoStock[$codigo] = [
+                    'pro_codigo' => $codigo,
+                    'psh_old_values' => json_encode($old_values),
+                    'psh_new_values' => json_encode($new_values),
+                ];
+            }
+        }
+        if (!empty($HistoricoStock)) {
+            $query = DB::SELECT("SELECT * FROM usuario u
+            WHERE u.name_usuario = 'sadmin'
+            ");
+            $registroHistorial = [
+                'psh_old_values' => json_encode(array_column($HistoricoStock, 'psh_old_values', 'pro_codigo')),
+                'psh_new_values' => json_encode(array_column($HistoricoStock, 'psh_new_values', 'pro_codigo')),
+                'psh_tipo' => 8,
+                'user_created' => $query[0]->idusuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+            _14ProductoStockHistorico::insert($registroHistorial);
+        }
+        return response()->json([
+            'mensaje' => "$actualizados productos actualizados correctamente en Depósito CALMED",
+            'cantidad' => $actualizados
+        ]);
+    }
+
     public function GetProductoxcodynombre(Request $request) {
         $query = DB:: SELECT("SELECT pro_codigo, pro_nombre,pro_stock,pro_deposito,pro_stockCalmed,pro_depositoCalmed,id_perseo_prolipa,id_perseo_calmed,id_perseo_prolipa_produccion,id_perseo_calmed_produccion,temporal FROM 1_4_cal_producto
         WHERE pro_codigo LIKE '%$request->busquedacodnombre%' || pro_nombre LIKE '%$request->busquedacodnombre%'
@@ -1693,6 +1766,11 @@ class _14ProductoController extends Controller {
                             ]);
                         }
                     }
+                    // SECCION PARA ACTUALIZAR STOCK
+                    $productoController = new _14ProductoController();
+                    $productoController->Mover_Stock_SoloTxt_Todo_A_pro_stockCalmed();
+
+
                     DB::commit();
                     return response()->json([
                         'status' => 1,

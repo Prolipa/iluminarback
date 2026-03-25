@@ -19,6 +19,7 @@ class Fichero_Mercado extends Model
         'fm_convenio',
         'fm_cantidad_anios_trabaja_con_prolipa',
         'fm_tipo_venta',
+        'fm_establecimientos_para_despacho',
         'fm_decide_compra',
         'fm_factores_inciden_en_compra',
         'fm_niveles_educativos',

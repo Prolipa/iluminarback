@@ -355,9 +355,9 @@ class PedidosController extends Controller
             if( !$asesor[0]->iniciales ){
                 return response()->json(['pedido' => '', 'error' => 'Faltan las iniciales del asesor']);
             }
-            if( !$asesor[0]->cli_ins_codigo ){
-                return response()->json(['pedido' => '', 'error' => 'Faltan el cli_ins_codigo para pedir guias en el asesor']);
-            }
+            // if( !$asesor[0]->cli_ins_codigo ){
+            //     return response()->json(['pedido' => '', 'error' => 'Faltan el cli_ins_codigo para pedir guias en el asesor']);
+            // }
             // if( !$institucion[0]->codigo_institucion_milton ){
             //     return response()->json(['pedido' => '', 'error' => 'Falta el código de la institución, revise si el codigo de la ciudad es correcto.']);
             // }
@@ -2029,7 +2029,7 @@ class PedidosController extends Controller
         return $pedidos;
     }
      public function get_pedidos_periodoAgrupado_new($periodo){
-        $pedidos = $this->getPedidoContrato(4,$periodo);
+        $pedidos = $this->getPedidoContratoSinAnulados($periodo);
         return $pedidos;
     }
     public function get_libros_pedidosAlcancesXContrato(Request $request){
@@ -2043,7 +2043,9 @@ class PedidosController extends Controller
                 ls.codigo_liquidacion AS pro_codigo,
                 l.nombrelibro AS nombre_libro,
                 pfp.pfn_pvp AS precio,
-                SUM(pv.valor) AS cantidad
+                SUM(pv.valor) AS cantidad,
+                pro.pro_reservar, pro.pro_stock, pro.pro_deposito,
+                pro.pro_stockCalmed, pro.pro_depositoCalmed
             FROM pedidos_val_area pv
             LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
             LEFT JOIN libro l ON l.idlibro = pv.id_libro
@@ -2053,6 +2055,7 @@ class PedidosController extends Controller
             LEFT JOIN pedidos_formato_new pfp
                 ON pfp.idlibro = pv.id_libro
                 AND pfp.idperiodoescolar = p.id_periodo
+            LEFT JOIN 1_4_cal_producto pro ON pro.pro_codigo = ls.codigo_liquidacion
             WHERE p.contrato_generado IS NOT NULL
             AND p.estado = '1'
             AND p.tipo = '0'
@@ -2067,7 +2070,10 @@ class PedidosController extends Controller
                 p.descuento,
                 ls.codigo_liquidacion,
                 l.nombrelibro,
-                pfp.pfn_pvp
+                pfp.pfn_pvp,
+                pro.pro_reservar, pro.pro_stock, pro.pro_deposito,
+                pro.pro_stockCalmed, pro.pro_depositoCalmed
+
 
             UNION ALL
 
@@ -2080,7 +2086,9 @@ class PedidosController extends Controller
                 ls.codigo_liquidacion AS pro_codigo,
                 l.nombrelibro AS nombre_libro,
                 pfp.pfn_pvp AS precio,
-                SUM(pv.valor) AS cantidad
+                SUM(pv.valor) AS cantidad,
+                pro.pro_reservar, pro.pro_stock, pro.pro_deposito,
+                pro.pro_stockCalmed, pro.pro_depositoCalmed
             FROM pedidos_val_area pv
             LEFT JOIN pedidos_alcance a ON a.id = pv.alcance
             LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
@@ -2091,6 +2099,7 @@ class PedidosController extends Controller
             LEFT JOIN pedidos_formato_new pfp
                 ON pfp.idlibro = pv.id_libro
                 AND pfp.idperiodoescolar = p.id_periodo
+            LEFT JOIN 1_4_cal_producto pro ON pro.pro_codigo = ls.codigo_liquidacion
             WHERE p.contrato_generado IS NOT NULL
             AND p.estado = '1'
             AND p.tipo = '0'
@@ -2106,7 +2115,10 @@ class PedidosController extends Controller
                 p.descuento,
                 ls.codigo_liquidacion,
                 l.nombrelibro,
-                pfp.pfn_pvp
+                pfp.pfn_pvp,
+                pro.pro_reservar, pro.pro_stock, pro.pro_deposito,
+                pro.pro_stockCalmed, pro.pro_depositoCalmed
+
             ");
             return $libros;
         }else{
@@ -2119,7 +2131,9 @@ class PedidosController extends Controller
                 ls.codigo_liquidacion AS pro_codigo,
                 l.nombrelibro AS nombre_libro,
                 pfp.pfn_pvp AS precio,
-                SUM(pv.pvn_cantidad) AS cantidad
+                SUM(pv.pvn_cantidad) AS cantidad,
+                prod.pro_reservar, prod.pro_stock, prod.pro_deposito,
+                prod.pro_stockCalmed, prod.pro_depositoCalmed
             FROM pedidos_val_area_new pv
             LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
             LEFT JOIN libro l ON l.idlibro = pv.idlibro
@@ -2156,7 +2170,9 @@ class PedidosController extends Controller
                 ls.codigo_liquidacion AS pro_codigo,
                 l.nombrelibro AS nombre_libro,
                 pfp.pfn_pvp AS precio,
-                SUM(pv.pvn_cantidad) AS cantidad
+                SUM(pv.pvn_cantidad) AS cantidad,
+                prod.pro_reservar, prod.pro_stock, prod.pro_deposito,
+                prod.pro_stockCalmed, prod.pro_depositoCalmed
             FROM pedidos_val_area_new pv
             LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
             LEFT JOIN pedidos_alcance a ON a.id = pv.pvn_tipo
@@ -2277,7 +2293,9 @@ class PedidosController extends Controller
                 'convenioRechazado'              => $item->convenioRechazado,
                 'estadoPedido_Pagos'              => $item->estadoPedido_Pagos,
                 'revision_pedido'                 => $item->revision_pedido,
-                'revision_observacion'            => $item->revision_observacion
+                'revision_observacion'            => $item->revision_observacion,
+
+                'created_at'                     => $item->created_at,
             ];
         }
         return $response;
@@ -2381,6 +2399,12 @@ class PedidosController extends Controller
                     'convenioFinalizados'            => $item->convenioFinalizados,
                     'convenioRechazado'              => $item->convenioRechazado,
                     'estadoPedido_Pagos'            => $item->estadoPedido_Pagos,
+
+                    'nombreprovincia'                => $item->nombreprovincia,
+                    'parr_nombre'                    => $item->parr_nombre,
+                    'fecha_fundacion'                => $item->fecha_fundacion,
+
+                    'created_at'                     => $item->created_at,
                 ];
             }
             return $datosMostrar;
@@ -2662,7 +2686,7 @@ class PedidosController extends Controller
         foreach($guias as $key => $item){
             //traer Pendientes
             $getPendientes = DB::SELECT("SELECT  v.ven_codigo,v.id_empresa, v.ven_fecha, v.est_ven_codigo, v.fecha_proceso_despacho,
-            v.estadoPerseo, v.pedido_codigo, v.observacion_anula_envio_perseo
+            v.estadoPerseo, v.pedido_codigo
              FROM f_venta  v
             WHERE v.id_pedido_guia = $item->id_pedido
             ");
@@ -2799,14 +2823,20 @@ class PedidosController extends Controller
 
     public function get_instituciones_asesor($cedula)
     {
-        $instituciones = DB::SELECT("SELECT i.*,
-        CONCAT(i.nombreInstitucion,' - ',c.nombre) AS nombre_institucion,
-         i.idInstitucion AS id_institucion
-         FROM institucion i
-         LEFT JOIN ciudad c ON c.idciudad = i.ciudad_id
-         WHERE i.vendedorInstitucion = '$cedula'
-         ANd i.estado_idEstado = 1
+        $instituciones = DB::SELECT("
+            SELECT i.*,
+            CONCAT(
+                COALESCE(i.nombreInstitucion, ''),
+                ' - ',
+                COALESCE(c.nombre, '')
+            ) AS nombre_institucion,
+            i.idInstitucion AS id_institucion
+            FROM institucion i
+            LEFT JOIN ciudad c ON c.idciudad = i.ciudad_id
+            WHERE i.vendedorInstitucion = '$cedula'
+            AND i.estado_idEstado = 1
         ");
+
         return $instituciones;
     }
     public function get_instituciones_asesorXId($institucion)
@@ -5601,6 +5631,9 @@ class PedidosController extends Controller
             if(count($beneficiarios) > 0){
                 // pedido
                 $id_pedido = $beneficiarios[0]->id_pedido;
+                if($id_pedido == null || $id_pedido == "" || $id_pedido == "null" || $id_pedido == 0){
+                    return ["status" => "0", "message" => "Aun no tiene pedido el fichero"];
+                }
                 $pedido    = Pedidos::findOrFail($id_pedido);
                 /// validar si id_responsable es null o vacio asignar el primer beneficiario
                 if($pedido->id_responsable == null || $pedido->id_responsable == "" || $pedido->id_responsable == "null"){

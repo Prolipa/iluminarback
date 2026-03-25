@@ -16,14 +16,14 @@ use Exception;
 class VentaPerseoController extends Controller
 {
     use TraitPedidosGeneral;
-
+    
     public $perseoConsultaReposiory;
-
+    
     public function __construct(PerseoConsultasRepository $perseoConsultasRepository)
     {
         $this->perseoConsultaReposiory = $perseoConsultasRepository;
     }
-
+    
     /**
      * Generar código de venta (Prefactura) para Perseo
      * Formato: PFAC-P-2026-0001-CR (ejemplo)
@@ -41,14 +41,14 @@ class VentaPerseoController extends Controller
             if (!$tipoDoc) {
                 throw new Exception('Tipo de documento no encontrado');
             }
-
+            
             $letraTipoDoc = $tipoDoc->tdo_letra;
-
+            
             // 2. Obtener letra de la empresa
             $letraEmpresa = '';
             $secuenciaActual = 0;
             $campoSecuencial = '';
-
+            
             $empresaData = DB::table('empresas')->where('id', $empresa)->first();
 
             if (!$empresaData) {
@@ -76,49 +76,308 @@ class VentaPerseoController extends Controller
                 $secuenciaActual = $tipoDoc->tdo_secuencial_SinEmpresa;
                 $campoSecuencial = 'tdo_secuencial_SinEmpresa';
             }
-
-            // 3. Obtener código contrato del período escolar
-            $pedido = DB::SELECT("SELECT pv.*, pe.codigo_contrato
-                FROM pedidos pv
-                LEFT JOIN periodoescolar pe ON pv.id_periodo = pe.idperiodoescolar
-                WHERE pv.contrato_generado = ?", [$contrato]);
-
-            if (empty($pedido)) {
-                throw new Exception('Contrato no encontrado en pedidos');
+            
+            // 3. Obtener código de contrato del período escolar
+            // Nota: cuando se genera desde totalizado puede venir ca_codigo_agrupado en lugar de contrato.
+            $pedido = DB::table('pedidos as pv')
+                ->leftJoin('periodoescolar as pe', 'pv.id_periodo', '=', 'pe.idperiodoescolar')
+                ->select('pv.id_pedido', 'pv.contrato_generado', 'pv.ca_codigo_agrupado', 'pe.codigo_contrato')
+                ->where(function ($query) use ($contrato) {
+                    $query->where('pv.contrato_generado', $contrato)
+                        ->orWhere('pv.ca_codigo_agrupado', $contrato);
+                })
+                ->where('pv.estado', 1)
+                ->orderByRaw("CASE WHEN pv.contrato_generado = ? THEN 0 ELSE 1 END", [$contrato])
+                ->first();
+            
+            if (!$pedido) {
+                throw new Exception('Contrato/Totalizado no encontrado en pedidos');
             }
-
-            $codigoContrato = $pedido[0]->codigo_contrato ?? '';
-
+            
+            $codigoContrato = $pedido->codigo_contrato ? $pedido->codigo_contrato : '';
+            
             if (empty($codigoContrato)) {
                 throw new Exception('No se pudo obtener el código de contrato del período escolar');
             }
-
+            
             // 4. Obtener iniciales del usuario
             $usuario = DB::SELECT("SELECT iniciales FROM usuario WHERE idusuario = ?", [$idusuario]);
-
+            
             if (empty($usuario) || empty($usuario[0]->iniciales)) {
                 throw new Exception('No se pudieron obtener las iniciales del usuario');
             }
-
+            
             $iniciales = $usuario[0]->iniciales;
-
+            
             // 5. Incrementar secuencial
             $nuevoSecuencial = $secuenciaActual + 1;
-
+            
             // 6. Actualizar el secuencial usando el campo correcto para esta empresa
             DB::table('f_tipo_documento')
                 ->where('tdo_id', $tipoDocumento)
                 ->update([$campoSecuencial => $nuevoSecuencial]);
-
+            
             // 7. Generar código final
             $secuencialFormateado = str_pad($nuevoSecuencial, 4, '0', STR_PAD_LEFT);
             $codigoFinal = "{$letraTipoDoc}-{$letraEmpresa}-{$codigoContrato}-{$iniciales}-{$secuencialFormateado}";
-
+            
             return $codigoFinal;
-
+            
         } catch (Exception $e) {
             throw $e;
         }
+    }
+
+    private function obtenerControlFacturacionPorInstitucion($institucionId, $periodoId, $venCodigoExcluir = null)
+    {
+        $formulario = DB::table('f_formulario_proforma')
+            ->where('idInstitucion', $institucionId)
+            ->where('idperiodoescolar', $periodoId)
+            ->first();
+
+        if (!$formulario) {
+            return null;
+        }
+
+        $cupoTotal = (float)$formulario->ffp_cupo;
+        $porcentajeFacturacion = $formulario->ffp_porcentaje_facturacion !== null ? (float)$formulario->ffp_porcentaje_facturacion : 100;
+
+        $saldoPrefacturas = $formulario->ffp_saldo_prefacturas !== null
+            ? (float)$formulario->ffp_saldo_prefacturas
+            : ($cupoTotal * $porcentajeFacturacion) / 100;
+
+        $saldoNotas = $formulario->ffp_saldo_notas !== null
+            ? (float)$formulario->ffp_saldo_notas
+            : ($cupoTotal - $saldoPrefacturas);
+
+        $baseVentas = DB::table('f_venta')
+            ->where('est_ven_codigo', '!=', 3)
+            ->where('periodo_id', $periodoId)
+            ->where('institucion_id', $institucionId)
+            ->where('ven_tipo_inst', 'L');
+
+        if (!empty($venCodigoExcluir)) {
+            $baseVentas->where('ven_codigo', '!=', $venCodigoExcluir);
+        }
+
+        $consumoPrefacturas = (float)(clone $baseVentas)
+            ->where('idtipodoc', 1)
+            ->sum('ven_valor');
+
+        $consumoNotas = (float)(clone $baseVentas)
+            ->whereIn('idtipodoc', [3, 4])
+            ->sum('ven_valor');
+
+        $ventasActivas = (int)(clone $baseVentas)->count();
+
+        return [
+            'saldo_prefacturas' => $saldoPrefacturas,
+            'saldo_notas' => $saldoNotas,
+            'consumido_prefacturas' => $consumoPrefacturas,
+            'consumido_notas' => $consumoNotas,
+            'disponible_prefacturas' => max(0, $saldoPrefacturas - $consumoPrefacturas),
+            'disponible_notas' => max(0, $saldoNotas - $consumoNotas),
+            'ventas_activas' => $ventasActivas,
+            'es_primera_venta' => $ventasActivas === 0,
+        ];
+    }
+
+    // Compatibilidad: mantener nombre anterior para llamadas legacy.
+    private function obtenerControlFacturacionPorTotalizado($institucionId, $periodoId, $venTotalizado, $venCodigoExcluir = null)
+    {
+        return $this->obtenerControlFacturacionPorInstitucion($institucionId, $periodoId, $venCodigoExcluir);
+    }
+
+    private function validarControlFacturacionPorDocumento(Request $request, $totalVenta)
+    {
+        $this->validarControlFacturacionPorDocumentoDatos(
+            $request->tipo_venta,
+            $request->tipo_documento,
+            $request->lugar_despacho_id,
+            $request->periodo_id,
+            $totalVenta,
+            null
+        );
+    }
+
+    private function validarCupoInicialPrimeraVentaDatos($tipoVenta, $institucionId, $periodoId, $totalVenta, $venCodigoExcluir = null)
+    {
+        if ($tipoVenta != 'L') {
+            return;
+        }
+
+        $formulario = DB::table('f_formulario_proforma')
+            ->where('idInstitucion', $institucionId)
+            ->where('idperiodoescolar', $periodoId)
+            ->first();
+
+        if (!$formulario) {
+            throw new Exception('No existe configuración de cupo para esta institución y período.', 422);
+        }
+
+        $queryVentasActivas = DB::table('f_venta')
+            ->where('est_ven_codigo', '!=', 3)
+            ->where('periodo_id', $periodoId)
+            ->where('institucion_id', $institucionId)
+            ->where('ven_tipo_inst', 'L');
+
+        if (!empty($venCodigoExcluir)) {
+            $queryVentasActivas->where('ven_codigo', '!=', $venCodigoExcluir);
+        }
+
+        $ventasActivas = (int)$queryVentasActivas->count();
+
+        // Solo aplica para primera venta del punto de venta (institucion de despacho + periodo)
+        if ($ventasActivas > 0) {
+            return;
+        }
+
+        $cupoTotal = (float)$formulario->ffp_cupo;
+        if ($cupoTotal <= 0) {
+            throw new Exception('El cupo inicial debe estar configurado y ser mayor a 0 para la primera venta del punto de venta.', 422);
+        }
+
+        if ((float)$totalVenta > $cupoTotal) {
+            throw new Exception(
+                'El total de la venta (' . number_format((float)$totalVenta, 2, '.', '') . ') supera el cupo inicial disponible (' . number_format($cupoTotal, 2, '.', '') . ') en la primera venta del punto de venta.',
+                422
+            );
+        }
+    }
+
+    private function validarControlFacturacionPorDocumentoDatos($tipoVenta, $tipoDocumento, $institucionId, $periodoId, $totalVenta, $venCodigoExcluir = null)
+    {
+        if ($tipoVenta != 'L') {
+            return;
+        }
+
+        // 1) Control de cupo inicial en primera venta
+        $this->validarCupoInicialPrimeraVentaDatos(
+            $tipoVenta,
+            $institucionId,
+            $periodoId,
+            $totalVenta,
+            $venCodigoExcluir
+        );
+
+        // 2) Control por porcentaje de facturacion/notas
+        $tipoDocumento = (int)$tipoDocumento;
+        $controlaPrefacturas = $tipoDocumento === 1;
+        $controlaNotas = in_array($tipoDocumento, [3, 4]);
+
+        if (!$controlaPrefacturas && !$controlaNotas) {
+            return;
+        }
+
+        $control = $this->obtenerControlFacturacionPorInstitucion(
+            $institucionId,
+            $periodoId,
+            $venCodigoExcluir
+        );
+
+        if (!$control) {
+            throw new Exception('No existe configuración de cupo para esta institución y período.', 422);
+        }
+
+        if ($controlaPrefacturas) {
+            $disponible = (float)$control['disponible_prefacturas'];
+            if ((float)$totalVenta > $disponible) {
+                throw new Exception(
+                    'El total de la venta (' . number_format((float)$totalVenta, 2, '.', '') . ') supera el saldo disponible para prefacturas (' . number_format($disponible, 2, '.', '') . ').',
+                    422
+                );
+            }
+        }
+
+        if ($controlaNotas) {
+            $disponible = (float)$control['disponible_notas'];
+            if ((float)$totalVenta > $disponible) {
+                throw new Exception(
+                    'El total de la venta (' . number_format((float)$totalVenta, 2, '.', '') . ') supera el saldo disponible para notas (' . number_format($disponible, 2, '.', '') . ').',
+                    422
+                );
+            }
+        }
+    }
+
+    private function obtenerCamposStockDescuento($idEmpresa, $tipoDocumento)
+    {
+        return ['pro_stockCalmed'];
+    }
+
+    private function calcularReservaDesdeStocks($producto)
+    {
+        return intval($producto->pro_stockCalmed);
+    }
+
+    private function aplicarDescuentoStockYHistorico($proCodigo, $cantidadSolicitada, $tipoDocumento, $idEmpresa)
+    {
+        $producto = DB::table('1_4_cal_producto')
+            ->where('pro_codigo', $proCodigo)
+            ->lockForUpdate()
+            ->first();
+
+        if (!$producto) {
+            throw new Exception('No se encontró el producto ' . $proCodigo . ' para descontar stock');
+        }
+
+        $oldValues = [
+            'pro_codigo' => $producto->pro_codigo,
+            'pro_reservar' => intval($producto->pro_reservar),
+            'pro_stock' => intval($producto->pro_stock),
+            'pro_stockCalmed' => intval($producto->pro_stockCalmed),
+            'pro_deposito' => intval($producto->pro_deposito),
+            'pro_depositoCalmed' => intval($producto->pro_depositoCalmed),
+        ];
+
+        $camposStock = $this->obtenerCamposStockDescuento($idEmpresa, $tipoDocumento);
+        $cantidadRestante = intval($cantidadSolicitada);
+        $totalRestado = 0;
+
+        foreach ($camposStock as $campo) {
+            if ($cantidadRestante <= 0) {
+                break;
+            }
+
+            $disponibleCampo = intval($producto->$campo);
+            if ($disponibleCampo <= 0) {
+                continue;
+            }
+
+            $restar = min($cantidadRestante, $disponibleCampo);
+            $producto->$campo = $disponibleCampo - $restar;
+            $cantidadRestante = $cantidadRestante - $restar;
+            $totalRestado = $totalRestado + $restar;
+        }
+
+        if ($totalRestado != intval($cantidadSolicitada)) {
+            throw new Exception('Stock insuficiente para el producto ' . $proCodigo . '. Solicitado: ' . intval($cantidadSolicitada) . ', disponible: ' . $totalRestado);
+        }
+
+        // Regla de negocio: pro_reservar siempre debe ser la suma de todos los stocks.
+        $producto->pro_reservar = $this->calcularReservaDesdeStocks($producto);
+
+        DB::table('1_4_cal_producto')
+            ->where('pro_codigo', $proCodigo)
+            ->update([
+                'pro_stockCalmed' => intval($producto->pro_stockCalmed),
+                'pro_reservar' => intval($producto->pro_reservar),
+            ]);
+
+        $newValues = [
+            'pro_codigo' => $producto->pro_codigo,
+            'pro_reservar' => intval($producto->pro_reservar),
+            'pro_stock' => intval($producto->pro_stock),
+            'pro_stockCalmed' => intval($producto->pro_stockCalmed),
+            'pro_deposito' => intval($producto->pro_deposito),
+            'pro_depositoCalmed' => intval($producto->pro_depositoCalmed),
+        ];
+
+        return [
+            'old_values' => $oldValues,
+            'new_values' => $newValues,
+            'total_restado' => $totalRestado,
+        ];
     }
 
     /**
@@ -129,12 +388,14 @@ class VentaPerseoController extends Controller
     {
         try {
             DB::beginTransaction();
+            $historicoStock = [];
 
             // ==================================
             // 1. VALIDACIONES INICIALES
             // ==================================
             $request->validate([
                 'empresa' => 'required|integer',
+                'tipo_documento' => 'required|integer',
                 'descuento' => 'required|numeric|min:0',
                 'observacion' => 'required|string|max:500',
                 'concepto_perseo' => 'required|string|max:500',
@@ -142,7 +403,8 @@ class VentaPerseoController extends Controller
                 'cliente_perseo_id' => 'required|integer',
                 'clientesidPerseo' => 'required|integer',
                 'ruc_cliente' => 'required|string',
-                'contrato' => 'required|string',
+                'contrato' => 'nullable|string',
+                'ven_totalizado' => 'nullable|string',
                 'tipo_venta' => 'required|string|in:L,V',
                 'periodo_id' => 'required|integer',
                 'idusuario' => 'required|integer',
@@ -156,13 +418,16 @@ class VentaPerseoController extends Controller
             // ==================================
             // 2. GENERAR CÓDIGO DE VENTA
             // ==================================
-            // Tipo de documento 1 = Prefactura
-            $tipoDocumento = 1;
-
+            // Obtener tipo de documento del request
+            $tipoDocumento = $request->tipo_documento;
+            
+            // Si viene ven_totalizado pero no contrato, usar el totalizado como contrato para generar código
+            $contratoParaCodigo = $request->contrato ? $request->contrato : $request->ven_totalizado;
+            
             $codigoVenta = $this->generarCodigoVenta(
                 $request->empresa,
                 $tipoDocumento,
-                $request->contrato,
+                $contratoParaCodigo,
                 $request->idusuario
             );
 
@@ -176,15 +441,39 @@ class VentaPerseoController extends Controller
             // 3. CALCULAR TOTALES
             // ==================================
             $subtotal = 0;
-            $detalles = $request->detalles;
+            $descuentoMonto = 0;
+            $detalles = [];
 
-            foreach ($detalles as $detalle) {
-                $subtotal += (float)$detalle['cantidad'] * (float)$detalle['precio'];
+            // Limpiamos los detalles con cantidad 0 o menor
+            foreach ($request->detalles as $detalle) {
+                if ((int)$detalle['cantidad'] > 0) {
+                    $detalles[] = $detalle;
+                }
             }
 
-            $porcentajeDescuento = (float)$request->descuento;
-            $descuentoMonto = $subtotal * $porcentajeDescuento / 100;
+            if (count($detalles) === 0) {
+                throw new Exception('La venta debe tener al menos un detalle válido con cantidad mayor a 0');
+            }
+
+            foreach ($detalles as $detalle) {
+                // Cálculo por detalle
+                $cantidad = (float)$detalle['cantidad'];
+                $precio = (float)$detalle['precio'];
+                $porcentajeDetalle = (float)$detalle['descuento'];
+                
+                $montoSubtotalDetalle = $cantidad * $precio;
+                $montoDescuentoDetalle = ($montoSubtotalDetalle * $porcentajeDetalle) / 100;
+
+                $subtotal += $montoSubtotalDetalle;
+                $descuentoMonto += $montoDescuentoDetalle;
+            }
+
             $total = $subtotal - $descuentoMonto;
+            
+            // Calculamos un porcentaje de descuento promedio general basado en el monto para f_venta
+            $porcentajeDescuento = $subtotal > 0 ? ($descuentoMonto * 100) / $subtotal : 0;
+
+            $this->validarControlFacturacionPorDocumento($request, $total);
 
             // \Log::info('💰 Totales calculados:', [
             //     'subtotal' => $subtotal,
@@ -244,6 +533,7 @@ class VentaPerseoController extends Controller
                 'clientesidPerseo' => $request->clientesidPerseo,
                 'id_factura' => null,
                 'ruc_cliente' => $request->ruc_cliente,
+                'ven_totalizado' => $request->ven_totalizado,
                 'anuladoEnPerseo' => 0,
                 'doc_intercambio' => null,
                 'user_intercambio' => 0,
@@ -270,12 +560,26 @@ class VentaPerseoController extends Controller
             // 6. CREAR DETALLES EN f_detalle_venta
             // ==================================
             foreach ($detalles as $detalle) {
+                $stockResultado = $this->aplicarDescuentoStockYHistorico(
+                    $detalle['pro_codigo'],
+                    $detalle['cantidad'],
+                    $tipoDocumento,
+                    $request->empresa
+                );
+
+                $historicoStock[] = [
+                    'pro_codigo' => $detalle['pro_codigo'],
+                    'psh_old_values' => $stockResultado['old_values'],
+                    'psh_new_values' => $stockResultado['new_values'],
+                ];
+
                 DB::table('f_detalle_venta')->insert([
                     'ven_codigo' => $codigoVenta,
                     'id_empresa' => $request->empresa,
                     'pro_codigo' => $detalle['pro_codigo'],
-                    'det_ven_cantidad' => $detalle['cantidad'],
+                    'det_ven_cantidad' => $stockResultado['total_restado'],
                     'contrato' => $request->contrato,
+                    'ven_totalizado' => $request->ven_totalizado,
                     'det_ven_valor_u' => $detalle['precio'],
                     'det_ven_cantidad_despacho' => 0, // Pendiente
                     'idProforma' => null, // No hay proforma
@@ -284,6 +588,26 @@ class VentaPerseoController extends Controller
                     'doc_intercambio' => null,
                     'detalle_notaCreditInterna' => null,
                     'descuento' => $detalle['descuento']
+                ]);
+            }
+
+            if (count($historicoStock) > 0) {
+                $oldGrouped = [];
+                $newGrouped = [];
+
+                foreach ($historicoStock as $itemHistorico) {
+                    $oldGrouped[$itemHistorico['pro_codigo']] = $itemHistorico['psh_old_values'];
+                    $newGrouped[$itemHistorico['pro_codigo']] = $itemHistorico['psh_new_values'];
+                }
+
+                DB::table('1_4_cal_producto_stock_historico')->insert([
+                    'psh_old_values' => json_encode($oldGrouped),
+                    'psh_new_values' => json_encode($newGrouped),
+                    'psh_tipo' => 4,
+                    'psh_id_ven_codigo' => $codigoVenta,
+                    'user_created' => $request->idusuario,
+                    'created_at' => now(),
+                    'updated_at' => now(),
                 ]);
             }
 
@@ -309,7 +633,7 @@ class VentaPerseoController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             DB::rollBack();
             // \Log::error('❌ Error de validación en crearVentaPerseo: ' . json_encode($e->errors()));
-
+            
             return response()->json([
                 'status' => 422,
                 'message' => 'Error de validación',
@@ -320,11 +644,12 @@ class VentaPerseoController extends Controller
             DB::rollBack();
             // \Log::error('❌ Error al crear venta Perseo: ' . $e->getMessage());
             // \Log::error('Stack trace: ' . $e->getTraceAsString());
-
+            $statusCode = $e->getCode() == 422 ? 422 : 500;
+            
             return response()->json([
-                'status' => 500,
+                'status' => $statusCode,
                 'message' => 'Error al crear la venta: ' . $e->getMessage()
-            ], 500);
+            ], $statusCode);
         }
     }
 
@@ -369,6 +694,15 @@ class VentaPerseoController extends Controller
             $porcentajeDescuento = (float)$request->descuento;
             $descuentoMonto = $subtotal * $porcentajeDescuento / 100;
             $total = $subtotal - $descuentoMonto;
+
+            $this->validarControlFacturacionPorDocumentoDatos(
+                $venta->ven_tipo_inst,
+                $venta->idtipodoc,
+                $venta->institucion_id,
+                $venta->periodo_id,
+                $total,
+                $venta->ven_codigo
+            );
 
             // Actualizar venta
             DB::table('f_venta')
@@ -425,7 +759,7 @@ class VentaPerseoController extends Controller
         } catch (Exception $e) {
             DB::rollBack();
             // \Log::error('Error al actualizar venta Perseo: ' . $e->getMessage());
-
+            
             return response()->json([
                 'status' => 500,
                 'message' => 'Error al actualizar la venta: ' . $e->getMessage()
@@ -454,13 +788,41 @@ class VentaPerseoController extends Controller
                 ], 404);
             }
 
+            // Definir el alcance de acumulación para edición:
+            // - Si existe ven_totalizado, acumular por totalizado.
+            // - Caso contrario, acumular por contrato.
+            $campoAgrupacion = 'contrato';
+            $valorAgrupacion = $venta->contrato;
+            $usaAgrupacion = false;
+
+            if ($venta->ven_totalizado !== null && $venta->ven_totalizado !== '') {
+                $campoAgrupacion = 'ven_totalizado';
+                $valorAgrupacion = $venta->ven_totalizado;
+                $usaAgrupacion = true;
+            } else if ($venta->contrato !== null && $venta->contrato !== '') {
+                $usaAgrupacion = true;
+            }
+
             // 1.1 Determinar si es primera venta del contrato
             // Obtenemos la primera venta del contrato ordenada por fecha
-            $primeraVenta = DB::table('f_venta')
-                ->where('contrato', $venta->contrato)
-                ->where('est_ven_codigo', 2) // Solo ventas pendientes
-                ->orderBy('ven_fecha', 'ASC')
-                ->first();
+            if ($usaAgrupacion) {
+                $queryPrimeraVenta = DB::table('f_venta')
+                    ->where('est_ven_codigo', 2);
+
+                if ($campoAgrupacion == 'ven_totalizado') {
+                    $queryPrimeraVenta->where('ven_totalizado', $valorAgrupacion);
+                } else {
+                    $queryPrimeraVenta->where('contrato', $valorAgrupacion);
+                }
+
+                $primeraVenta = $queryPrimeraVenta
+                    ->orderBy('ven_fecha', 'ASC')
+                    ->first();
+            } else {
+                $primeraVenta = (object)[
+                    'ven_codigo' => $ven_codigo
+                ];
+            }
 
             // Es primera venta si el código coincide con la primera encontrada
             $esPrimeraVenta = ($primeraVenta && $primeraVenta->ven_codigo === $ven_codigo);
@@ -496,7 +858,45 @@ class VentaPerseoController extends Controller
             $nombreCliente = ($cliente->nombres ?? '') . ' ' . ($cliente->apellidos ?? '');
 
             // 4. Obtener detalles de la venta (productos vendidos)
-            // Incluye cantidades vendidas en otras ventas para control de stock
+            // Incluye cantidades vendidas en otras ventas para control de stock.
+            $subqueryOtrasVentas = DB::table('f_detalle_venta as dv2')
+                ->join('f_venta as v2', function ($join) {
+                    $join->on('dv2.ven_codigo', '=', 'v2.ven_codigo')
+                        ->on('dv2.id_empresa', '=', 'v2.id_empresa');
+                })
+                ->select(
+                    'dv2.pro_codigo',
+                    DB::raw('COALESCE(SUM(dv2.det_ven_cantidad), 0) as cantidad_otras_ventas')
+                )
+                ->where('v2.est_ven_codigo', 2)
+                ->where('dv2.ven_codigo', '!=', $ven_codigo)
+                ->groupBy('dv2.pro_codigo');
+
+            $subqueryTotalVendidas = DB::table('f_detalle_venta as dv3')
+                ->join('f_venta as v3', function ($join) {
+                    $join->on('dv3.ven_codigo', '=', 'v3.ven_codigo')
+                        ->on('dv3.id_empresa', '=', 'v3.id_empresa');
+                })
+                ->select(
+                    'dv3.pro_codigo',
+                    DB::raw('COALESCE(SUM(dv3.det_ven_cantidad), 0) as cantidad_total_vendida')
+                )
+                ->where('v3.est_ven_codigo', 2)
+                ->groupBy('dv3.pro_codigo');
+
+            if ($usaAgrupacion) {
+                if ($campoAgrupacion == 'ven_totalizado') {
+                    $subqueryOtrasVentas->where('v2.ven_totalizado', $valorAgrupacion);
+                    $subqueryTotalVendidas->where('v3.ven_totalizado', $valorAgrupacion);
+                } else {
+                    $subqueryOtrasVentas->where('v2.contrato', $valorAgrupacion);
+                    $subqueryTotalVendidas->where('v3.contrato', $valorAgrupacion);
+                }
+            } else {
+                $subqueryOtrasVentas->whereRaw('1 = 0');
+                $subqueryTotalVendidas->where('dv3.ven_codigo', $ven_codigo);
+            }
+
             $detalles = DB::table('f_detalle_venta as dv')
                 ->join('1_4_cal_producto as l', 'dv.pro_codigo', '=', 'l.pro_codigo')
                 // Join con pedido para obtener cantidad original pedida
@@ -507,6 +907,12 @@ class VentaPerseoController extends Controller
                          ->where('pvn.id_pedido', '=', $venta->id_pedido ?? 0)
                          ->where('pvn.pvn_tipo', '=', 0); // Solo pedidos normales, no obsequios
                 })
+                ->leftJoinSub($subqueryOtrasVentas, 'ov', function ($join) {
+                    $join->on('ov.pro_codigo', '=', 'dv.pro_codigo');
+                })
+                ->leftJoinSub($subqueryTotalVendidas, 'tv', function ($join) {
+                    $join->on('tv.pro_codigo', '=', 'dv.pro_codigo');
+                })
                 ->select(
                     'dv.pro_codigo',
                     'l.pro_nombre as nombre_libro',
@@ -514,25 +920,8 @@ class VentaPerseoController extends Controller
                     'dv.det_ven_cantidad as cantidad',
                     // Cantidad del pedido original
                     DB::raw('COALESCE(pvn.pvn_cantidad, 0) as cantidad_pedido'),
-                    // Cantidad en OTRAS ventas pendientes (excluyendo esta) DEL MISMO CONTRATO
-                    DB::raw("(
-                        SELECT COALESCE(SUM(dv2.det_ven_cantidad), 0)
-                        FROM f_detalle_venta dv2
-                        INNER JOIN f_venta v2 ON dv2.ven_codigo = v2.ven_codigo
-                        WHERE dv2.pro_codigo = dv.pro_codigo
-                        AND v2.contrato = '{$venta->contrato}'
-                        AND v2.est_ven_codigo = 2
-                        AND dv2.ven_codigo != '{$ven_codigo}'
-                    ) as cantidad_otras_ventas"),
-                    // Cantidad TOTAL en todas las ventas pendientes (incluyendo esta) DEL MISMO CONTRATO
-                    DB::raw("(
-                        SELECT COALESCE(SUM(dv3.det_ven_cantidad), 0)
-                        FROM f_detalle_venta dv3
-                        INNER JOIN f_venta v3 ON dv3.ven_codigo = v3.ven_codigo
-                        WHERE dv3.pro_codigo = dv.pro_codigo
-                        AND v3.contrato = '{$venta->contrato}'
-                        AND v3.est_ven_codigo = 2
-                    ) as cantidad_total_vendida")
+                    DB::raw('COALESCE(ov.cantidad_otras_ventas, 0) as cantidad_otras_ventas'),
+                    DB::raw('COALESCE(tv.cantidad_total_vendida, 0) as cantidad_total_vendida')
                 )
                 ->where('dv.ven_codigo', $ven_codigo)
                 ->get();
@@ -551,6 +940,7 @@ class VentaPerseoController extends Controller
                         'ven_valor' => floatval($venta->ven_valor),
                         'est_ven_codigo' => $venta->est_ven_codigo,
                         'contrato' => $venta->contrato,
+                        'ven_totalizado' => $venta->ven_totalizado,
                         'ven_fecha' => $venta->ven_fecha,
                         'usu_codigo' => $venta->usu_codigo ?? $venta->user_created,
                         'pedido_id' => $venta->id_pedido,
@@ -584,7 +974,7 @@ class VentaPerseoController extends Controller
 
         } catch (Exception $e) {
             // \Log::error('Error al cargar venta para editar: ' . $e->getMessage());
-
+            
             return response()->json([
                 'status' => 500,
                 'message' => 'Error al cargar los datos de la venta: ' . $e->getMessage()
@@ -620,7 +1010,7 @@ class VentaPerseoController extends Controller
 
             // 2. Procesar detalles - ELIMINAR Y RECREAR TODOS
             $detallesNuevos = json_decode($request->data_detalle, true);
-
+            
             if (empty($detallesNuevos)) {
                 throw new Exception('No se enviaron detalles de la venta');
             }
@@ -632,26 +1022,43 @@ class VentaPerseoController extends Controller
                 $precioUnitario = floatval($detalle['ven_det_valor_u']);
                 $subtotal += $cantidad * $precioUnitario;
             }
-
+            
             // 2.2. Calcular descuento y total
             $porcentajeDescuento = floatval($request->ven_descuento ?? 0);
             $descuentoMonto = $subtotal * $porcentajeDescuento / 100;
             $total = $subtotal - $descuentoMonto;
 
+            // 2.3. Validar control por porcentaje facturacion/notas (solo aplica venta lista totalizada)
+            $tipoVenta = $venta->ven_tipo_inst;
+            $tipoDocumento = $request->idtipodoc ? (int)$request->idtipodoc : (int)$venta->idtipodoc;
+            $venTotalizado = $venta->ven_totalizado;
+            $institucionId = $request->id_ins_depacho ? (int)$request->id_ins_depacho : (int)$venta->institucion_id;
+            $periodoId = (int)$venta->periodo_id;
+
+            $this->validarControlFacturacionPorDocumentoDatos(
+                $tipoVenta,
+                $tipoDocumento,
+                $institucionId,
+                $periodoId,
+                $total,
+                $venta->ven_codigo
+            );
+
             // 3. ELIMINAR todos los detalles antiguos
             DB::table('f_detalle_venta')
                 ->where('ven_codigo', $request->ven_codigo)
                 ->delete();
-
+            
             // 4. CREAR todos los detalles nuevos
             foreach ($detallesNuevos as $detalle) {
                 $diferencia = intval($detalle['diferencia_cantidad'] ?? 0);
-
+                $proCodigo = $detalle['pro_codigo'];
+                
                 // Insertar detalle
                 DB::table('f_detalle_venta')->insert([
                     'ven_codigo' => $request->ven_codigo,
                     'id_empresa' => $venta->id_empresa,
-                    'pro_codigo' => $detalle['pro_codigo'],
+                    'pro_codigo' => $proCodigo,
                     'det_ven_cantidad' => intval($detalle['ven_det_cantidad']),
                     'contrato' => $venta->contrato,
                     'det_ven_valor_u' => floatval($detalle['ven_det_valor_u']),
@@ -664,14 +1071,34 @@ class VentaPerseoController extends Controller
                     'descuento' => 0
                 ]);
 
-                // TODO: Actualizar reservas en Perseo según la diferencia
-                if ($diferencia > 0) {
-                    // AUMENTÓ: restar del stock disponible (nueva reserva)
-                    // \Log::info("📦 Perseo: Reservando {$diferencia} unidades adicionales de {$detalle['pro_codigo']}");
-                } elseif ($diferencia < 0) {
-                    // DISMINUYÓ: devolver al stock disponible (liberar reserva)
-                    $cantidadLiberar = abs($diferencia);
-                    // \Log::info("📦 Perseo: Liberando {$cantidadLiberar} unidades de {$detalle['pro_codigo']}");
+                if ($diferencia != 0) {
+                    $producto = DB::table('1_4_cal_producto')
+                        ->where('pro_codigo', $proCodigo)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (!$producto) {
+                        throw new Exception('No se encontró el producto ' . $proCodigo . ' para actualizar stock');
+                    }
+
+                    $stockCalmedActual = intval($producto->pro_stockCalmed);
+                    $nuevoStockCalmed = $stockCalmedActual;
+
+                    if ($diferencia > 0) {
+                        if ($stockCalmedActual < $diferencia) {
+                            throw new Exception('Stock insuficiente para el producto ' . $proCodigo . '. Disponible: ' . $stockCalmedActual . ', solicitado: ' . $diferencia);
+                        }
+                        $nuevoStockCalmed = $stockCalmedActual - $diferencia;
+                    } else {
+                        $nuevoStockCalmed = $stockCalmedActual + abs($diferencia);
+                    }
+
+                    DB::table('1_4_cal_producto')
+                        ->where('pro_codigo', $proCodigo)
+                        ->update([
+                            'pro_stockCalmed' => $nuevoStockCalmed,
+                            'pro_reservar' => $nuevoStockCalmed,
+                        ]);
                 }
             }
 
@@ -719,13 +1146,18 @@ class VentaPerseoController extends Controller
             DB::rollBack();
             // \Log::error('❌ Error al actualizar venta Perseo con reservas: ' . $e->getMessage());
 
+            $statusCode = 500;
+            if (is_int($e->getCode()) && $e->getCode() >= 400 && $e->getCode() <= 499) {
+                $statusCode = $e->getCode();
+            }
+            
             return response()->json([
-                'status' => 500,
+                'status' => $statusCode,
                 'message' => 'Error al actualizar la venta: ' . $e->getMessage()
-            ], 500);
+            ], $statusCode);
         }
     }
-
+    
     /**
      * Enviar venta a Perseo como pedido
      * POST /api/perseo/ventas/enviar-perseo
@@ -734,10 +1166,10 @@ class VentaPerseoController extends Controller
     {
         try {
             DB::beginTransaction();
-
+            
             $ven_codigo = $request->ven_codigo;
             $empresa = $request->id_empresa;
-
+            
             // Validar parámetros requeridos
             if (!$ven_codigo || !$empresa) {
                 return response()->json([
@@ -745,12 +1177,12 @@ class VentaPerseoController extends Controller
                     'message' => 'Faltan parámetros requeridos: ven_codigo e id_empresa'
                 ], 400);
             }
-
+            
             // Obtener la venta del modelo Ventas (tabla f_venta)
             $venta = Ventas::where('ven_codigo', $ven_codigo)
                           ->where('id_empresa', $empresa)
                           ->first();
-
+            
             // Validar que exista la venta
             if (!$venta) {
                 DB::rollBack();
@@ -759,7 +1191,7 @@ class VentaPerseoController extends Controller
                     'message' => 'La venta no existe'
                 ], 404);
             }
-
+            
             // Validar si la venta ya fue enviada a Perseo
             if ($venta->estadoPerseo == 1) {
                 DB::rollBack();
@@ -768,7 +1200,7 @@ class VentaPerseoController extends Controller
                     'message' => 'La venta ya fue enviada a Perseo'
                 ], 400);
             }
-
+            
             // Obtener valores de la venta
             $ven_valor = $venta->ven_valor;
             $ven_descuento = $venta->ven_descuento;
@@ -776,17 +1208,17 @@ class VentaPerseoController extends Controller
             $discount = $venta->ven_desc_por;
             $concepto = $venta->ven_concepto_perseo ?? 'Venta Perseo';
             $observacion = $venta->ven_observacion ?? 'Pedido';
-
+            
             // Obtener configuración de ambiente desde la tabla empresas
             $empresaData = DB::table('empresas')->where('id', $empresa)->first();
-
+            
             if (!$empresaData) {
                 throw new Exception('Empresa no encontrada');
             }
-
+            
             // perseo_enviroment: 0 = local/desarrollo, 1 = producción
             $perseoProduccion = $empresaData->perseo_enviroment ?? 1;
-
+            
             // Determinar qué columna de producto Perseo usar según empresa y ambiente
             if ($empresa == 1) {
                 $productoBuscar = $perseoProduccion == 0 ? 'id_perseo_prolipa' : 'id_perseo_prolipa_produccion';
@@ -799,23 +1231,23 @@ class VentaPerseoController extends Controller
             } else {
                 throw new Exception('ID de empresa no válido');
             }
-
+            
             if(!$productoBuscar) {
                 throw new Exception('No se pudo determinar la columna de producto Perseo a usar');
             }
-
+            
             // Obtener detalles de la venta con el ID de Perseo del producto
             $detalle = DB::table('f_detalle_venta as vd')
                 ->select(
-                    'vd.*',
-                    DB::raw('(vd.det_ven_cantidad * vd.det_ven_valor_u) AS valorTotal'),
+                    'vd.*', 
+                    DB::raw('(vd.det_ven_cantidad * vd.det_ven_valor_u) AS valorTotal'), 
                     DB::raw("`$productoBuscar` AS idPerseoProducto")
                 )
                 ->leftJoin('1_4_cal_producto as p', 'vd.pro_codigo', '=', 'p.pro_codigo')
                 ->where('vd.ven_codigo', $ven_codigo)
                 ->where('vd.id_empresa', $empresa)
                 ->get();
-
+            
             if ($detalle->isEmpty()) {
                 DB::rollBack();
                 return response()->json([
@@ -823,18 +1255,18 @@ class VentaPerseoController extends Controller
                     'message' => 'La venta no tiene detalles'
                 ], 400);
             }
-
+            
             // Calcular total y preparar detalles
             $totalFactura = 0;
             $detalles = [];
             $productosFaltantes = [];
-
+            
             foreach ($detalle as $d) {
                 $totalFactura += $d->valorTotal;
-
+                
                 $pro_codigo = $d->pro_codigo;
                 $id_perseo = $d->idPerseoProducto;
-
+                
                 if ($id_perseo == 0 || $id_perseo == null || $id_perseo == "") {
                     $productosFaltantes[] = $pro_codigo;
                 } else {
@@ -855,7 +1287,7 @@ class VentaPerseoController extends Controller
                     ];
                 }
             }
-
+            
             // Verificar si hay productos sin ID de Perseo
             if (!empty($productosFaltantes)) {
                 $codigosFaltantes = implode(', ', $productosFaltantes);
@@ -866,9 +1298,9 @@ class VentaPerseoController extends Controller
                     'codigosFaltantes' => $codigosFaltantes
                 ], 400);
             }
-
+            
             $totalFactura = number_format($totalFactura, 2, '.', '');
-
+            
             // Preparar estructura JSON para Perseo
             $formData = [
                 "registro" => [
@@ -903,11 +1335,11 @@ class VentaPerseoController extends Controller
                     ]
                 ]
             ];
-
+            
             // Enviar a Perseo usando el trait
             $url = "pedidos_crear";
             $process = $this->tr_PerseoPost($url, $formData, $empresa);
-
+            
             // Si la respuesta es exitosa, actualizar estadoPerseo y estado de venta
             if (isset($process["pedidos"])) {
                 $pedidoCodigo_nuevo = $process["pedidos"][0]["pedidos_codigo"];
@@ -922,9 +1354,9 @@ class VentaPerseoController extends Controller
                           'id_pedido_perseo' => $idpedidoCodigo_nuevo,
                           'fecha_envio_perseo' => date('Y-m-d H:i:s')
                       ]);
-
+                
                 DB::commit();
-
+                
                 return response()->json([
                     'status' => 200,
                     'message' => 'Venta enviada a Perseo y marcada como Despachada exitosamente',
@@ -940,20 +1372,20 @@ class VentaPerseoController extends Controller
                 Ventas::where('ven_codigo', $ven_codigo)
                       ->where('id_empresa', $empresa)
                       ->update(['estadoPerseo' => 0]);
-
+                
                 DB::rollBack();
-
+                
                 return response()->json([
                     'status' => 0,
                     'message' => 'Error al enviar a Perseo',
                     'response' => $process
                 ], 400);
             }
-
+            
         } catch (Exception $e) {
             DB::rollBack();
             // \Log::error('❌ Error al enviar venta a Perseo: ' . $e->getMessage());
-
+            
             return response()->json([
                 'status' => 0,
                 'message' => 'Ocurrió un error al intentar enviar el pedido a Perseo.',
@@ -1062,7 +1494,7 @@ class VentaPerseoController extends Controller
             ], 500);
         }
     }
-
+    
     /**
      * Anular venta - Cambiar estado a Anulado
      * POST /api/perseo/ventas/anular
@@ -1071,12 +1503,12 @@ class VentaPerseoController extends Controller
     {
         try {
             DB::beginTransaction();
-
+            
             $ven_codigo = $request->ven_codigo;
             $empresa = $request->id_empresa;
             $observacionAnulacion = $request->observacionAnulacion;
             $id_usuario = $request->id_usuario;
-
+            
             // Validar parámetros requeridos
             if (!$ven_codigo || !$empresa) {
                 return response()->json([
@@ -1084,19 +1516,19 @@ class VentaPerseoController extends Controller
                     'message' => 'Faltan parámetros requeridos: ven_codigo e id_empresa'
                 ], 400);
             }
-
+            
             if (!$observacionAnulacion || trim($observacionAnulacion) === '') {
                 return response()->json([
                     'status' => 0,
                     'message' => 'Debe proporcionar una observación de anulación'
                 ], 400);
             }
-
+            
             // Obtener la venta
             $venta = Ventas::where('ven_codigo', $ven_codigo)
                           ->where('id_empresa', $empresa)
                           ->first();
-
+            
             // Validar que exista la venta
             if (!$venta) {
                 DB::rollBack();
@@ -1105,7 +1537,7 @@ class VentaPerseoController extends Controller
                     'message' => 'La venta no existe'
                 ], 404);
             }
-
+            
             // Validar que no esté ya anulada
             if ($venta->est_ven_codigo == 3) {
                 DB::rollBack();
@@ -1114,7 +1546,7 @@ class VentaPerseoController extends Controller
                     'message' => 'La venta ya está anulada'
                 ], 400);
             }
-
+            
             // Actualizar estado a Anulado
             $dataUpdate = [
                 'est_ven_codigo' => 3, // Estado anulado
@@ -1122,20 +1554,20 @@ class VentaPerseoController extends Controller
                 'user_anulado' => $id_usuario,
                 'fecha_anulacion' => now()
             ];
-
+            
             Ventas::where('ven_codigo', $ven_codigo)
                   ->where('id_empresa', $empresa)
                   ->update($dataUpdate);
-
+            
             DB::commit();
-
+            
             $mensaje = 'Venta anulada exitosamente';
-
+            
             // Si estaba enviada a Perseo, agregar nota en el mensaje
             if ($venta->estadoPerseo == 1) {
                 $mensaje .= '. El pedido de Perseo ' . ($venta->pedido_codigo ?? '') . ' queda marcado como no válido.';
             }
-
+            
             return response()->json([
                 'status' => 200,
                 'message' => $mensaje,
@@ -1145,11 +1577,11 @@ class VentaPerseoController extends Controller
                     'estadoPerseo' => $venta->estadoPerseo
                 ]
             ], 200);
-
+            
         } catch (Exception $e) {
             DB::rollBack();
             // \Log::error('❌ Error al anular venta: ' . $e->getMessage());
-
+            
             return response()->json([
                 'status' => 0,
                 'message' => 'Ocurrió un error al intentar anular la venta.',
@@ -1157,11 +1589,11 @@ class VentaPerseoController extends Controller
             ], 500);
         }
     }
-
+    
     // ============================================
     // MÉTODOS PARA VENTAS DE OBSEQUIOS
     // ============================================
-
+    
     /**
      * Obtener pedidos de obsequios por contrato
      */
@@ -1169,19 +1601,19 @@ class VentaPerseoController extends Controller
     {
         try {
             $contrato = $request->input('contrato');
-
+            
             if (empty($contrato)) {
                 return response()->json([
                     'status' => 400,
                     'message' => 'El contrato es requerido'
                 ], 400);
             }
-
+            
             $pedidosObsequios = DB::SELECT("
                 SELECT pa.*, i.nombreInstitucion, c.nombre AS ciudad, p.contrato_generado,
                 CONCAT(u.nombres,' ',u.apellidos) AS asesor,
                 CONCAT(uf.apellidos, ' ',uf.nombres) AS facturador,
-                CONCAT(uc.apellidos, ' ',uc.nombres) AS creador,
+                CONCAT(uc.apellidos, ' ',uc.nombres) AS creador, 
                 uc.id_group AS grupo_creador,
                 CASE uc.id_group
                     WHEN 0 THEN 'ROOT'
@@ -1191,7 +1623,7 @@ class VentaPerseoController extends Controller
                     WHEN 23 THEN 'ADMIN FACTURADOR'
                     ELSE 'OTRO PERFIL'
                 END AS tipo_creador,
-                CONCAT(ua.apellidos, ' ',ua.nombres) AS aprobador,
+                CONCAT(ua.apellidos, ' ',ua.nombres) AS aprobador, 
                 ua.id_group AS grupo_aprobador
                 FROM p_libros_obsequios pa
                 LEFT JOIN pedidos p ON pa.id_pedido = p.id_pedido
@@ -1205,15 +1637,15 @@ class VentaPerseoController extends Controller
                 AND pa.estado_libros_obsequios IN (4,5,9)
                 ORDER BY pa.id DESC
             ", [$contrato]);
-
+            
             return response()->json([
                 'status' => 200,
                 'data' => $pedidosObsequios
             ], 200);
-
+            
         } catch (Exception $e) {
             // \Log::error('Error al obtener pedidos obsequios: ' . $e->getMessage());
-
+            
             return response()->json([
                 'status' => 0,
                 'message' => 'Error al obtener pedidos obsequios',
@@ -1222,6 +1654,76 @@ class VentaPerseoController extends Controller
         }
     }
 
+    /**
+     * Obtener detalle de libros hijos docentes por uno o varios contratos.
+     * Recibe contratos como csv o arreglo.
+     */
+    public function obtenerDetalleHijosDocentesPorContratos(Request $request)
+    {
+        try {
+            $contratosInput = $request->input('contratos');
+            $periodo = $request->input('periodo');
+
+            $contratos = [];
+
+            if (is_array($contratosInput)) {
+                $contratos = $contratosInput;
+            } else if (!empty($contratosInput)) {
+                $contratos = explode(',', $contratosInput);
+            }
+
+            $contratos = array_values(array_filter(array_map(function ($item) {
+                return trim((string)$item);
+            }, $contratos), function ($item) {
+                return $item !== '';
+            }));
+
+            if (count($contratos) === 0) {
+                return response()->json([
+                    'status' => 400,
+                    'message' => 'Debe enviar al menos un contrato'
+                ], 400);
+            }
+
+            $query = DB::table('p_libros_obsequios as po')
+                ->join('pedidos as p', 'po.id_pedido', '=', 'p.id_pedido')
+                ->join('p_detalle_libros_obsequios as pdl', 'pdl.p_libros_obsequios_id', '=', 'po.id')
+                ->leftJoin('libros_series as ls', 'ls.codigo_liquidacion', '=', 'pdl.pro_codigo')
+                ->select(
+                    'p.contrato_generado',
+                    'pdl.pro_codigo'
+                )
+                ->selectRaw('COALESCE(ls.nombre, pdl.pro_codigo) as nombre_libro')
+                ->selectRaw('SUM(COALESCE(pdl.p_libros_cantidad_pendiente, 0) + COALESCE(pdl.p_libros_cantidad_aprobada, 0)) as cantidad_hijos_docentes')
+                ->selectRaw('AVG(COALESCE(pdl.p_libros_valor_u, 0)) as precio_referencial')
+                ->where('p.estado', 1)
+                ->whereNotNull('p.contrato_generado')
+                ->where('p.contrato_generado', '!=', '')
+                ->whereIn('p.contrato_generado', $contratos)
+                ->whereIn('po.estado_libros_obsequios', [4, 5, 9])
+                ->groupBy('p.contrato_generado', 'pdl.pro_codigo', 'ls.nombre')
+                ->orderBy('p.contrato_generado', 'asc')
+                ->orderBy('pdl.pro_codigo', 'asc');
+
+            if (!empty($periodo)) {
+                $query->where('p.id_periodo', $periodo);
+            }
+
+            $rows = $query->get();
+
+            return response()->json([
+                'status' => 200,
+                'data' => $rows
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Error al obtener detalle de hijos docentes por contratos',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    
     /**
      * Obtener detalle de libros de un pedido de obsequios
      * Devuelve los libros con sus cantidades aprobadas y pendientes
@@ -1235,9 +1737,9 @@ class VentaPerseoController extends Controller
                     'message' => 'El ID del pedido de obsequios es requerido'
                 ], 400);
             }
-
+            
             $detalleLibros = DB::SELECT("
-                SELECT
+                SELECT 
                     pdl.id_detalle AS id,
                     pdl.p_libros_obsequios_id,
                     pdl.pro_codigo,
@@ -1253,16 +1755,16 @@ class VentaPerseoController extends Controller
                 AND po.estado_libros_obsequios <> 0
                 ORDER BY pdl.id_detalle ASC
             ", [$id]);
-
+            
             return response()->json([
                 'status' => 200,
                 'data' => $detalleLibros,
                 'message' => 'Detalle de libros obtenido correctamente'
             ], 200);
-
+            
         } catch (Exception $e) {
             // \Log::error('Error al obtener detalle de libros obsequios: ' . $e->getMessage());
-
+            
             return response()->json([
                 'status' => 0,
                 'message' => 'Error al obtener detalle de libros',
@@ -1270,7 +1772,7 @@ class VentaPerseoController extends Controller
             ], 500);
         }
     }
-
+    
     /**
      * Generar venta de obsequios (similar a generarVenta pero para obsequios)
      * Actualiza p_detalle_libros_obsequios: aprobada += vendido, pendiente -= vendido
@@ -1278,33 +1780,33 @@ class VentaPerseoController extends Controller
     public function generarVentaObsequios(Request $request)
     {
         DB::beginTransaction();
-
+        
         try {
             // Obtener datos del request
             $p_libros_obsequios_id = $request->input('p_libros_obsequios_id');
             $productosVenta = $request->input('productosVenta', []);
             $infoVenta = $request->input('infoVenta');
-
+            
             // Validaciones básicas
             if (empty($p_libros_obsequios_id)) {
                 throw new Exception('El ID del pedido obsequio es requerido');
             }
-
+            
             if (empty($productosVenta) || !is_array($productosVenta)) {
                 throw new Exception('Los productos de venta son requeridos');
             }
-
+            
             if (empty($infoVenta)) {
                 throw new Exception('La información de venta es requerida');
             }
-
+            
             // Validar campos obligatorios de infoVenta
             $camposFaltantes = [];
-
+            
             if (empty($infoVenta['id_empresa'])) {
                 $camposFaltantes[] = 'id_empresa';
             }
-
+            
             if (empty($infoVenta['clienteId'])) {
                 $camposFaltantes[] = 'clienteId';
             }
@@ -1312,60 +1814,70 @@ class VentaPerseoController extends Controller
             if (!isset($infoVenta['clientesidPerseo']) || $infoVenta['clientesidPerseo'] === null || $infoVenta['clientesidPerseo'] === '') {
                 $camposFaltantes[] = 'clientesidPerseo';
             }
-
+            
             if (empty($infoVenta['ven_idUsuario'])) {
                 $camposFaltantes[] = 'ven_idUsuario';
             }
-
+            
             if (empty($infoVenta['institucion_id'])) {
                 $camposFaltantes[] = 'institucion_id';
             }
-
+            
             if (!isset($infoVenta['tip_ven_codigo'])) {
                 $camposFaltantes[] = 'tip_ven_codigo';
             }
-
+            
             if (!isset($infoVenta['ven_subtotal'])) {
                 $camposFaltantes[] = 'ven_subtotal';
             }
-
+            
             if (!isset($infoVenta['ven_desc_por'])) {
                 $camposFaltantes[] = 'ven_desc_por';
             }
-
+            
             if (!isset($infoVenta['ven_desc_valor'])) {
                 $camposFaltantes[] = 'ven_desc_valor';
             }
-
+            
             if (!isset($infoVenta['ven_valor'])) {
                 $camposFaltantes[] = 'ven_valor';
             }
-
+            
             if (empty($infoVenta['ven_observacion'])) {
                 $camposFaltantes[] = 'ven_observacion';
             }
-
+            
             if (empty($infoVenta['ven_concepto_perseo'])) {
                 $camposFaltantes[] = 'ven_concepto_perseo';
             }
-
+            
             if (!empty($camposFaltantes)) {
                 throw new Exception('Faltan los siguientes campos obligatorios en infoVenta: ' . implode(', ', $camposFaltantes));
             }
-
+            
             // Validar que exista el pedido obsequio
             $pedidoObsequio = DB::SELECT("
-                SELECT po.*, p.contrato_generado, p.id_periodo
+                SELECT po.*, p.contrato_generado, p.id_periodo 
                 FROM p_libros_obsequios po
                 LEFT JOIN pedidos p ON po.id_pedido = p.id_pedido
                 WHERE po.id = ?
             ", [$p_libros_obsequios_id]);
-
+            
             if (empty($pedidoObsequio)) {
                 throw new Exception('Pedido obsequio no encontrado');
             }
-
+            
             $pedidoObsequio = $pedidoObsequio[0];
+
+            $contratoVenta = $pedidoObsequio->contrato_generado;
+            if (isset($infoVenta['contrato']) && $infoVenta['contrato'] !== null && $infoVenta['contrato'] !== '') {
+                $contratoVenta = $infoVenta['contrato'];
+            }
+
+            $venTotalizado = null;
+            if (isset($infoVenta['ven_totalizado']) && $infoVenta['ven_totalizado'] !== null && $infoVenta['ven_totalizado'] !== '') {
+                $venTotalizado = $infoVenta['ven_totalizado'];
+            }
 
              // Tipo de documento 1 = Prefactura
             $tipoDocumento = $infoVenta['ven_desc_por']==100 ? 2 : 4;  // Tipo de documento: 1 = prefactura, 2 = actas
@@ -1373,14 +1885,15 @@ class VentaPerseoController extends Controller
             $codigoVenta = $this->generarCodigoVenta(
                 $infoVenta['id_empresa'],
                 $tipoDocumento, // Tipo documento prefactura
-                $pedidoObsequio->contrato_generado,
+                $contratoVenta,
                 $infoVenta['ven_idUsuario']
             );
-
+            
             // Crear registro en ventas
             DB::table('f_venta')->insert([
                 'ven_codigo' => $codigoVenta,
-                'contrato' => $pedidoObsequio->contrato_generado,
+                'contrato' => $contratoVenta,
+                'ven_totalizado' => $venTotalizado,
                 'tip_ven_codigo' => $infoVenta['tip_ven_codigo'],
                 'est_ven_codigo' => 2,
                 'ven_idproforma' => null,
@@ -1438,7 +1951,7 @@ class VentaPerseoController extends Controller
                 'fecha_proceso_despacho' => null,
                 'destino' => 0
             ]);
-
+            
             // Guardar detalles de venta
             foreach ($productosVenta as $producto) {
                 DB::table('f_detalle_venta')->insert([
@@ -1446,7 +1959,7 @@ class VentaPerseoController extends Controller
                     'id_empresa' => $infoVenta['id_empresa'],
                     'pro_codigo' => $producto['pro_codigo'],
                     'det_ven_cantidad' => $producto['cantidad'],
-                    'contrato' => $pedidoObsequio->contrato_generado,
+                    'contrato' => $contratoVenta,
                     'det_ven_valor_u' => $producto['precio'],
                     'det_ven_cantidad_despacho' => 0,
                     'idProforma' => null,
@@ -1456,14 +1969,14 @@ class VentaPerseoController extends Controller
                     'detalle_notaCreditInterna' => null,
                     'descuento' => 0
                 ]);
-
+                
                 // Actualizar p_detalle_libros_obsequios
                 DB::statement("
-                    UPDATE p_detalle_libros_obsequios
+                    UPDATE p_detalle_libros_obsequios 
                     SET p_libros_cantidad_aprobada = COALESCE(p_libros_cantidad_aprobada, 0) + ?,
                         p_libros_cantidad_pendiente = p_libros_cantidad_pendiente - ?,
                         updated_at = NOW()
-                    WHERE p_libros_obsequios_id = ?
+                    WHERE p_libros_obsequios_id = ? 
                     AND pro_codigo = ?
                 ", [
                     $producto['cantidad'],
@@ -1472,7 +1985,7 @@ class VentaPerseoController extends Controller
                     $producto['pro_codigo']
                 ]);
             }
-
+            
             // Verificar si todos los productos tienen cantidad_pendiente = 0
             $productosPendientes = DB::SELECT("
                 SELECT COUNT(*) as total_pendientes
@@ -1480,19 +1993,19 @@ class VentaPerseoController extends Controller
                 WHERE p_libros_obsequios_id = ?
                 AND p_libros_cantidad_pendiente > 0
             ", [$p_libros_obsequios_id]);
-
+            
             // Si no hay productos pendientes, actualizar estado del pedido a 9 (Completado)
             if ($productosPendientes && $productosPendientes[0]->total_pendientes == 0) {
                 DB::statement("
-                    UPDATE p_libros_obsequios
+                    UPDATE p_libros_obsequios 
                     SET estado_libros_obsequios = 9,
                         updated_at = NOW()
                     WHERE id = ?
                 ", [$p_libros_obsequios_id]);
             }
-
+            
             DB::commit();
-
+            
             return response()->json([
                 'status' => 200,
                 'message' => 'Venta de obsequios generada exitosamente',
@@ -1501,11 +2014,11 @@ class VentaPerseoController extends Controller
                     'p_libros_obsequios_id' => $p_libros_obsequios_id
                 ]
             ], 200);
-
+            
         } catch (Exception $e) {
             DB::rollBack();
             // \Log::error('Error al generar venta obsequios: ' . $e->getMessage());
-
+            
             return response()->json([
                 'status' => 0,
                 'message' => 'Error al generar venta de obsequios',
@@ -1625,27 +2138,27 @@ class VentaPerseoController extends Controller
         try {
             $ven_codigo = $request->ven_codigo;
             $empresa = $request->empresa;
-
+            
             if (!$ven_codigo || !$empresa) {
                 return response()->json([
                     'status' => 0,
                     'message' => 'Faltan parámetros requeridos: ven_codigo y empresa'
                 ], 400);
             }
-
+            
             // Obtener información de la venta
             $venta = DB::table('f_venta')
                 ->where('ven_codigo', $ven_codigo)
                 ->where('id_empresa', $empresa)
                 ->first();
-
+            
             if (!$venta) {
                 return response()->json([
                     'status' => 0,
                     'message' => 'Venta no encontrada'
                 ], 404);
             }
-
+            
             // Validar que tenga id_pedido_perseo
             if (!$venta->id_pedido_perseo) {
                 return response()->json([
@@ -1653,16 +2166,16 @@ class VentaPerseoController extends Controller
                     'message' => 'Esta venta no ha sido enviada a Perseo aún'
                 ], 400);
             }
-
+            
             // Preparar parámetros para la API de Perseo
             $formData = [
-                "pedidosid" => 50,
+                "pedidosid" => $venta->id_pedido_perseo,
             ];
-
+            
             // Llamar a la API de Perseo para consultar el pedido
             $url = "pedidos_consulta";
             $process = $this->tr_PerseoPost($url, $formData, $empresa);
-            return $process;
+            
             return response()->json([
                 'status' => 200,
                 'message' => 'Consulta realizada exitosamente',
@@ -1676,7 +2189,7 @@ class VentaPerseoController extends Controller
                     'factura_perseo' => $venta->factura_perseo
                 ]
             ], 200);
-
+            
         } catch (Exception $e) {
             return response()->json([
                 'status' => 0,
@@ -1695,50 +2208,50 @@ class VentaPerseoController extends Controller
         try {
             $ven_codigo = $request->ven_codigo;
             $empresa = $request->empresa;
-
+            
             if (!$ven_codigo || !$empresa) {
                 return response()->json([
                     'status' => 0,
                     'message' => 'Faltan parámetros requeridos: ven_codigo y empresa'
                 ], 400);
             }
-
+            
             // Obtener información de la venta
             $venta = DB::table('f_venta')
                 ->where('ven_codigo', $ven_codigo)
                 ->where('id_empresa', $empresa)
                 ->first();
-
+            
             if (!$venta) {
                 return response()->json([
                     'status' => 0,
                     'message' => 'Venta no encontrada'
                 ], 404);
             }
-
+            
             if (!$venta->id_pedido_perseo) {
                 return response()->json([
                     'status' => 0,
                     'message' => 'Esta venta no ha sido enviada a Perseo'
                 ], 400);
             }
-
+            
             // Primero consultar el pedido para obtener sus datos
             $formDataPedido = [
                 "pedidosid" => $venta->id_pedido_perseo,
             ];
-
+            
             $processPedido = $this->tr_PerseoPost("pedidos_consulta", $formDataPedido, $empresa);
-
+            
             if (!isset($processPedido['pedidos']) || count($processPedido['pedidos']) == 0) {
                 return response()->json([
                     'status' => 0,
                     'message' => 'No se encontró el pedido en Perseo'
                 ], 404);
             }
-
+            
             $pedido = $processPedido['pedidos'][0];
-
+            
             // Verificar que el pedido esté facturado (estado = 3)
             if ($pedido['estado'] != 3) {
                 return response()->json([
@@ -1747,27 +2260,27 @@ class VentaPerseoController extends Controller
                     'pedido_estado' => $pedido['estado']
                 ], 400);
             }
-
+            
             // El pedido está facturado, buscar la factura correspondiente
             $clientesid = $pedido['clientesid'];
             $emisionPedido = $pedido['emision'];
             $clientePedido = $pedido['cliente'] ?? '';
             $detallesPedido = $pedido['detalles'] ?? [];
-
+            
             // Consultar facturas en Perseo
             $urlFacturas = "facturas_consulta";
             $formDataFacturas = [
                 "facturaid" => "",
-                "dias" => "7",
+                "dias" => "100",
                 "generarpdf" => false
             ];
-
+            
             $processFacturas = $this->tr_PerseoPost($urlFacturas, $formDataFacturas, $empresa);
-
+            
             $facturaInfo = null;
             $facturaActualizada = false;
             $facturaEncontrada = false;
-
+            
             // Buscar la factura que coincida con el pedido
             if (isset($processFacturas['facturas']) && count($processFacturas['facturas']) > 0) {
                 foreach ($processFacturas['facturas'] as $factura) {
@@ -1775,20 +2288,20 @@ class VentaPerseoController extends Controller
                     if ($factura['emision'] == $emisionPedido && $factura['clientesid'] == $clientesid) {
                         // Obtener razón social de la factura (campo "razonsocial" en Perseo)
                         $razonSocialFactura = $factura['razonsocial'] ?? ($factura['cliente'] ?? '');
-
+                        
                         // Comparar cliente del pedido con razón social de la factura (tolerante a espacios)
                         $nombreCoincide = $this->compararNombres($clientePedido, $razonSocialFactura);
-
+                        
                         if (!$nombreCoincide) {
                             // No coincide el cliente, seguir buscando
                             continue;
                         }
-
+                        
                         $detallesFactura = $factura['facturasd']['detalles'] ?? [];
-
+                        
                         // Comparar los detalles del pedido con los de la factura
                         $coincide = $this->compararDetalles($detallesPedido, $detallesFactura);
-
+                        
                         if ($coincide) {
                             // Encontramos la factura correcta
                             $facturaEncontrada = true;
@@ -1797,7 +2310,7 @@ class VentaPerseoController extends Controller
                             $puntoEmision = $factura['puntoemision'];
                             $secuencial = $factura['secuencial'];
                             $facturaCodigo = "{$establecimiento}-{$puntoEmision}-{$secuencial}";
-
+                            
                             // Actualizar la venta con la información de la factura
                             DB::table('f_venta')
                                 ->where('ven_codigo', $ven_codigo)
@@ -1807,20 +2320,20 @@ class VentaPerseoController extends Controller
                                     'factura_perseo' => $facturaCodigo,
                                     'updated_at' => now()
                                 ]);
-
+                            
                             $facturaInfo = [
                                 'id_factura_perseo' => $facturaPerseoID,
                                 'factura_perseo' => $facturaCodigo,
                                 'factura_completa' => $factura
                             ];
-
+                            
                             $facturaActualizada = true;
                             break;
                         }
                     }
                 }
             }
-
+            
             // Si no se encontró la factura, retornar info pero sin error
             if (!$facturaEncontrada) {
                 return response()->json([
@@ -1831,7 +2344,7 @@ class VentaPerseoController extends Controller
                     'pedido_info' => $pedido
                 ], 200);
             }
-
+            
             return response()->json([
                 'status' => 200,
                 'message' => 'Factura vinculada exitosamente',
@@ -1840,7 +2353,7 @@ class VentaPerseoController extends Controller
                 'factura_actualizada' => $facturaActualizada,
                 'facturas_completo' => $processFacturas
             ], 200);
-
+            
         } catch (Exception $e) {
             return response()->json([
                 'status' => 0,
@@ -1849,7 +2362,7 @@ class VentaPerseoController extends Controller
             ], 500);
         }
     }
-
+    
     /**
      * Comparar nombres de cliente (tolerante a espacios y mayúsculas/minúsculas)
      */
@@ -1858,10 +2371,10 @@ class VentaPerseoController extends Controller
         // Normalizar nombres: quitar espacios extras, convertir a minúsculas, quitar acentos
         $nombre1Normalizado = $this->normalizarNombre($nombre1);
         $nombre2Normalizado = $this->normalizarNombre($nombre2);
-
+        
         return $nombre1Normalizado === $nombre2Normalizado;
     }
-
+    
     /**
      * Normalizar nombre para comparación
      */
@@ -1870,22 +2383,22 @@ class VentaPerseoController extends Controller
         if (empty($nombre)) {
             return '';
         }
-
+        
         // Convertir a minúsculas
         $nombre = mb_strtolower($nombre, 'UTF-8');
-
+        
         // Quitar espacios extras (al inicio, fin, y duplicados)
         $nombre = trim($nombre);
         $nombre = preg_replace('/\s+/', ' ', $nombre);
-
+        
         // Quitar acentos y caracteres especiales
         $acentos = ['á', 'é', 'í', 'ó', 'ú', 'ñ', 'ü'];
         $sinAcentos = ['a', 'e', 'i', 'o', 'u', 'n', 'u'];
         $nombre = str_replace($acentos, $sinAcentos, $nombre);
-
+        
         return $nombre;
     }
-
+    
     /**
      * Comparar detalles del pedido con detalles de la factura
      */
@@ -1895,7 +2408,7 @@ class VentaPerseoController extends Controller
         if (count($detallesPedido) != count($detallesFactura)) {
             return false;
         }
-
+        
         // Crear un array asociativo de los detalles del pedido por código de producto
         $pedidoMap = [];
         foreach ($detallesPedido as $detallePedido) {
@@ -1903,18 +2416,18 @@ class VentaPerseoController extends Controller
             $cantidad = $detallePedido['cantidad'];
             $pedidoMap[$codigo] = $cantidad;
         }
-
+        
         // Verificar que cada detalle de la factura coincida con el pedido
         foreach ($detallesFactura as $detalleFactura) {
             $codigo = $detalleFactura['productocodigo'];
             $cantidad = $detalleFactura['cantidad'];
-
+            
             // Si el código no existe en el pedido o la cantidad no coincide, no es la factura correcta
             if (!isset($pedidoMap[$codigo]) || $pedidoMap[$codigo] != $cantidad) {
                 return false;
             }
         }
-
+        
         return true;
     }
 
@@ -1924,7 +2437,7 @@ class VentaPerseoController extends Controller
             $estado = $request->input('estado');
             $fechaDesde = $request->input('fecha_desde');
             $fechaHasta = $request->input('fecha_hasta');
-
+            
             $whereEstado = '';
             if ($estado == 'pendiente' || $estado == '2') {
                 $whereEstado = 'AND fv.est_ven_codigo = 2';
@@ -1947,9 +2460,9 @@ class VentaPerseoController extends Controller
                 $whereFechas = 'AND DATE(fv.ven_fecha) <= ?';
                 $bindings[] = $fechaHasta;
             }
-
+            
             $ventas = DB::SELECT("
-                SELECT
+                SELECT 
                     fv.ven_codigo,
                     fv.id_empresa,
                     fv.ven_idproforma,
@@ -2010,7 +2523,7 @@ class VentaPerseoController extends Controller
                         WHEN 11 THEN 'Pendiente Excluido'
                         WHEN 12 THEN 'Preparado'
                         ELSE 'Desconocido'
-                    END AS estado_nombre,
+                    END AS estado_nombre,                    
                     fv.factura_perseo,
                     fv.id_factura_perseo,
                     fv.id_pedido_guia,
@@ -2030,10 +2543,10 @@ class VentaPerseoController extends Controller
                 $whereFechas
                 ORDER BY fv.ven_fecha DESC
             ", $bindings);
-
+            
             $totalPendientes = 0;
             $totalDespachadas = 0;
-
+            
             foreach ($ventas as $venta) {
                 if ($venta->est_ven_codigo == 2) {
                     $totalPendientes++;
@@ -2041,7 +2554,7 @@ class VentaPerseoController extends Controller
                     $totalDespachadas++;
                 }
             }
-
+            
             return response()->json([
                 'status' => 200,
                 'data' => $ventas,
@@ -2051,10 +2564,10 @@ class VentaPerseoController extends Controller
                     'despachadas' => $totalDespachadas
                 ]
             ], 200);
-
+            
         } catch (Exception $e) {
             // \Log::error('Error al obtener ventas por despachar: ' . $e->getMessage());
-
+            
             return response()->json([
                 'status' => 0,
                 'message' => 'Error al obtener ventas por despachar',
@@ -2073,27 +2586,27 @@ class VentaPerseoController extends Controller
             $ven_codigo = $request->ven_codigo;
             $empresa = $request->empresa;
             $usuario_id = $request->usuario_id ?? null;
-
+            
             if (!$ven_codigo || !$empresa) {
                 return response()->json([
                     'status' => 0,
                     'message' => 'Faltan parámetros requeridos: ven_codigo y empresa'
                 ], 400);
             }
-
+            
             // Obtener información de la venta
             $venta = DB::table('f_venta')
                 ->where('ven_codigo', $ven_codigo)
                 ->where('id_empresa', $empresa)
                 ->first();
-
+            
             if (!$venta) {
                 return response()->json([
                     'status' => 0,
                     'message' => 'Venta no encontrada'
                 ], 404);
             }
-
+            
             // Validar que tenga factura vinculada de Perseo
             if (!$venta->factura_perseo || !$venta->id_factura_perseo) {
                 return response()->json([
@@ -2101,7 +2614,7 @@ class VentaPerseoController extends Controller
                     'message' => 'Esta venta no tiene una factura vinculada de Perseo. Primero debe verificar y vincular la factura.'
                 ], 400);
             }
-
+            
             // Validar que esté en estado pendiente (2)
             if ($venta->est_ven_codigo != 2) {
                 $estadoActual = $venta->est_ven_codigo == 1 ? 'Despachado' : 'Otro estado';
@@ -2110,7 +2623,7 @@ class VentaPerseoController extends Controller
                     'message' => "Esta venta ya se encuentra en estado: {$estadoActual}"
                 ], 400);
             }
-
+            
             // Cambiar estado a despachado (1)
             DB::table('f_venta')
                 ->where('ven_codigo', $ven_codigo)
@@ -2121,7 +2634,7 @@ class VentaPerseoController extends Controller
                     'fecha_proceso_despacho' => now(),
                     'updated_at' => now()
                 ]);
-
+            
             return response()->json([
                 'status' => 200,
                 'message' => 'Venta marcada como despachada exitosamente',
@@ -2132,7 +2645,7 @@ class VentaPerseoController extends Controller
                     'est_ven_codigo' => 1
                 ]
             ], 200);
-
+            
         } catch (Exception $e) {
             return response()->json([
                 'status' => 0,

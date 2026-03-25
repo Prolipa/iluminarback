@@ -77,6 +77,8 @@ class Fichero_MercadoController extends Controller
                 return $this->Listar_Beneficiarios_por_insitucion_y_periodo($request);
             case 'Verificar_EstadoFichero':
                 return $this->Verificar_EstadoFichero($request);
+            case 'Consulta_Instituciones_Para_Despacho':
+                return $this->Consulta_Instituciones_Para_Despacho($request);
             default:
                 return response()->json(['error' => 'Acción no válida'], 400);
         }
@@ -106,6 +108,8 @@ class Fichero_MercadoController extends Controller
                 return $this->Copiar_Informacion_Fichero_Nuevo($request);
             case 'Eliminar_FicheroMercado':
                 return $this->Eliminar_FicheroMercado($request);
+            case 'ConsultaInstitucionesxFichero_Para_Despacho':
+                return $this->ConsultaInstitucionesxFichero_Para_Despacho($request);
             default:
                 return response()->json(['error' => 'Acción no válida'], 400);
         }
@@ -257,66 +261,129 @@ class Fichero_MercadoController extends Controller
     {
         $ficheros = $request->ficheros;
         $resultado = [];
+
+        if (empty($ficheros) || !is_array($ficheros)) {
+            return $resultado;
+        }
+
+        // 1. Extraer IDs únicos para optimizar consultas a DB (Evitar problema N+1)
+        $idsInstituciones = [];
+        $idsPeriodos = [];
         foreach ($ficheros as $fichero) {
-            // 🔹 Validación mínima
-            if (!$fichero['idInstitucion'] || !$fichero['idperiodoescolar']) {
+            if (!empty($fichero['idInstitucion'])) $idsInstituciones[] = $fichero['idInstitucion'];
+            if (!empty($fichero['idperiodoescolar'])) $idsPeriodos[] = $fichero['idperiodoescolar'];
+        }
+
+        $idsInstituciones = array_values(array_unique($idsInstituciones));
+        $idsPeriodos = array_values(array_unique($idsPeriodos));
+
+        if (empty($idsInstituciones) || empty($idsPeriodos)) {
+            foreach ($ficheros as $fichero) {
                 $resultado[] = [
-                    'idInstitucion'     => $fichero['idInstitucion'],
-                    'idperiodoescolar'  => $fichero['idperiodoescolar'],
+                    'idInstitucion'     => $fichero['idInstitucion'] ?? null,
+                    'idperiodoescolar'  => $fichero['idperiodoescolar'] ?? null,
+                    'entregas_muestras' => []
+                ];
+            }
+            return $resultado;
+        }
+
+        // 2. Traer todos los periodos y determinar la fecha límite global
+        $periodosDb = DB::table('periodoescolar')
+            ->whereIn('idperiodoescolar', $idsPeriodos)
+            ->get()
+            ->keyBy('idperiodoescolar');
+
+        $minFechaInicio = null;
+        $maxFechaFin = null;
+
+        foreach ($periodosDb as $p) {
+            if (!$minFechaInicio || $p->fecha_inicial < $minFechaInicio) {
+                $minFechaInicio = $p->fecha_inicial;
+            }
+            if (!$maxFechaFin || $p->fecha_final > $maxFechaFin) {
+                $maxFechaFin = $p->fecha_final;
+            }
+        }
+
+        // 3. Consulta maestra a agenda_usuario: sólo 1 consulta a BD en vez de N
+        $agendasBase = DB::table('agenda_usuario as au')
+            ->leftJoin('usuario as us_create', 'au.usuario_creador', '=', 'us_create.idusuario')
+            ->leftJoin('usuario as us_finalizo', 'au.usuario_editor', '=', 'us_finalizo.idusuario')
+            ->select(
+                'au.*',
+                DB::raw("CONCAT(us_create.nombres,' ',us_create.apellidos,' (',us_create.cedula,')') AS us_create_planificacion"),
+                DB::raw("CONCAT(us_finalizo.nombres,' ',us_finalizo.apellidos,' (',us_finalizo.cedula,')') AS us_finalizo_planificacion")
+            )
+            ->whereIn('au.institucion_id', $idsInstituciones)
+            ->when($minFechaInicio && $maxFechaFin, function ($query) use ($minFechaInicio, $maxFechaFin) {
+                return $query->whereBetween('au.startDate', [$minFechaInicio, $maxFechaFin]);
+            })
+            ->get();
+
+        // Agrupar agendas por institución para filtrarlas rápido en PHP
+        $agendasPorInstitucion = $agendasBase->groupBy('institucion_id');
+
+        // 4. Armar el resultado recorriendo cada fichero y asociando de la memoria
+        foreach ($ficheros as $fichero) {
+            $idInst = $fichero['idInstitucion'] ?? null;
+            $idPeriodo = $fichero['idperiodoescolar'] ?? null;
+
+            if (!$idInst || !$idPeriodo || !isset($periodosDb[$idPeriodo])) {
+                $resultado[] = [
+                    'idInstitucion'     => $idInst,
+                    'idperiodoescolar'  => $idPeriodo,
                     'entregas_muestras' => []
                 ];
                 continue;
             }
-            // 1️⃣ Obtener fechas del periodo
-            $periodo = DB::table('periodoescolar')
-                ->where('idperiodoescolar', $fichero['idperiodoescolar'])
-                ->first();
-            $fecha_inicio = $periodo->fecha_inicial;
-            $fecha_fin    = $periodo->fecha_final;
-            // 2️⃣ Consulta principal
-            $query = DB::select("
-                SELECT
-                    au.*,
-                    CONCAT(us_create.nombres,' ',us_create.apellidos,' (',us_create.cedula,')') AS us_create_planificacion,
-                    CONCAT(us_finalizo.nombres,' ',us_finalizo.apellidos,' (',us_finalizo.cedula,')') AS us_finalizo_planificacion
-                FROM agenda_usuario au
-                LEFT JOIN usuario us_create ON au.usuario_creador = us_create.idusuario
-                LEFT JOIN usuario us_finalizo ON au.usuario_editor = us_finalizo.idusuario
-                WHERE au.institucion_id = ?
-                AND au.startDate BETWEEN ? AND ?
-            ", [
-                $fichero['idInstitucion'],
-                $fecha_inicio,
-                $fecha_fin
-            ]);
-            // 3️⃣ Procesar las opciones seleccionadas
-            foreach ($query as $item) {
-                // Intentar decodificar JSON
-                $op = json_decode($item->opciones, true);
-                // Asegurar que $op sea array para evitar error "Invalid argument supplied for foreach"
-                $op = is_array($op) ? $op : [];
-                $seleccionadas = [];
-                foreach ($op as $key => $value) {
-                    if ($value === true) {
-                        // Insertar espacios antes de mayúsculas
-                        $texto = preg_replace('/(?<!^)[A-Z]/', ' $0', $key);
-                        // Reemplazar guiones bajos
-                        $texto = str_replace('_', ' ', $texto);
-                        // Capitalizar
-                        $texto = ucwords($texto);
-                        $seleccionadas[] = $texto;
+
+            $periodoActual = $periodosDb[$idPeriodo];
+            $fechaInicio = $periodoActual->fecha_inicial;
+            $fechaFin = $periodoActual->fecha_final;
+
+            $agendasAsociadas = [];
+
+            if (isset($agendasPorInstitucion[$idInst])) {
+                // $agendasPorInstitucion[$idInst] es una Collection o Array según Laravel
+                foreach ($agendasPorInstitucion[$idInst] as $agenda) {
+                    // Validar que la fecha esté en el rango del periodo actual.
+                    // Similar al "BETWEEN ? AND ?" de MySQL para ese ID de fichero
+                    if ($agenda->startDate >= $fechaInicio && $agenda->startDate <= $fechaFin) {
+
+                        // Parsear opciones como hacía el código original
+                        $op = json_decode($agenda->opciones, true);
+                        $op = is_array($op) ? $op : [];
+                        $seleccionadas = [];
+
+                        foreach ($op as $key => $value) {
+                            if ($value === true) {
+                                // Insertar espacios antes de mayúsculas
+                                $texto = preg_replace('/(?<!^)[A-Z]/', ' $0', $key);
+                                // Reemplazar guiones bajos
+                                $texto = str_replace('_', ' ', $texto);
+                                // Capitalizar
+                                $texto = ucwords($texto);
+                                $seleccionadas[] = $texto;
+                            }
+                        }
+
+                        // Evitar modificar la referencia original si se necesitara reutilizarla
+                        $agendaClonada = clone $agenda;
+                        $agendaClonada->opciones_seleccionadas = implode(', ', $seleccionadas);
+
+                        $agendasAsociadas[] = $agendaClonada;
                     }
                 }
-                // Devolver como string separado por comas
-                $item->opciones_seleccionadas = implode(', ', $seleccionadas);
             }
-            // 4️⃣ Agregar resultado final del fichero
+
             $resultado[] = [
-                'idInstitucion'     => $fichero['idInstitucion'],
-                'idperiodoescolar'  => $fichero['idperiodoescolar'],
-                'entregas_muestras' => $query
+                'idInstitucion'     => $idInst,
+                'idperiodoescolar'  => $idPeriodo,
+                'entregas_muestras' => $agendasAsociadas
             ];
         }
+
         return $resultado;
     }
 
@@ -682,6 +749,7 @@ class Fichero_MercadoController extends Controller
                 'fm.fm_SumaTotal_EstudiantesxAula',
                 'fm.fm_cantidad_real_estudiantes',
                 'fm.fm_observacion',
+                'fm.fm_establecimientos_para_despacho',
                 'fm.fm_estado',
                 'pe.descripcion as descripcion_periodoescolar',
                 DB::raw("CONCAT(us_asesor_fichero.nombres, ' ', us_asesor_fichero.apellidos) as usuario_asesor_fichero"),
@@ -799,6 +867,18 @@ class Fichero_MercadoController extends Controller
             WHERE fm.fm_id = $fm_id");
         return $query;
     }
+    public function Consulta_Instituciones_Para_Despacho($request)
+    {
+        $nombreestablecimiento = $request->nombreInstitucion;
+        $query = DB::SELECT("SELECT ins.idInstitucion, ins.nombreInstitucion, ins.punto_venta, pr.nombreprovincia, ci.nombre,
+            parr.parr_nombre
+            FROM institucion ins
+            LEFT JOIN provincia pr ON ins.idprovincia = pr.idprovincia
+            LEFT JOIN ciudad ci ON ins.ciudad_id = ci.idciudad
+            LEFT JOIN parroquia parr ON ins.parr_id = parr.parr_id
+            WHERE ins.nombreInstitucion LIKE '%$nombreestablecimiento%'");
+        return $query;
+    }
     // METODOS GET FIN
     // METODOS POST INICIO
     public function GuardarDatos_guardarFicheroCabecera(Request $request)
@@ -878,6 +958,7 @@ class Fichero_MercadoController extends Controller
             $fichero->fm_SumaTotal_EstudiantesxAula = json_encode($request->input('fm_SumaTotal_EstudiantesxAula'));
             $fichero->fm_cantidad_real_estudiantes = json_encode($request->input('fm_cantidad_real_estudiantes'));
             $fichero->fm_observacion = $request->input('fm_observacion');
+            $fichero->fm_establecimientos_para_despacho = json_encode($request->input('fm_establecimientos_para_despacho', []));
 
             $fichero->save();
 
@@ -1460,6 +1541,7 @@ class Fichero_MercadoController extends Controller
                 $nuevoFichero->fm_convenio = 0;
                 $nuevoFichero->fm_cantidad_anios_trabaja_con_prolipa = null;
                 $nuevoFichero->fm_tipo_venta = null;
+                $nuevoFichero->fm_establecimientos_para_despacho = null;
             }
             // ---------------- FACTORES ----------------
             if (!($secciones['factores'] ?? false)) {
@@ -1656,6 +1738,31 @@ class Fichero_MercadoController extends Controller
                 'error'   => $e->getMessage()
             ]);
         }
+    }
+    public function ConsultaInstitucionesxFichero_Para_Despacho(Request $request)
+    {
+        $ids = $request->input('ids_instituciones', []);
+
+        if (empty($ids) || !is_array($ids)) {
+            return response()->json([]);
+        }
+
+        $query = DB::table('institucion as ins')
+            ->leftJoin('provincia as pr', 'ins.idprovincia', '=', 'pr.idprovincia')
+            ->leftJoin('ciudad as ci', 'ins.ciudad_id', '=', 'ci.idciudad')
+            ->leftJoin('parroquia as parr', 'ins.parr_id', '=', 'parr.parr_id')
+            ->select(
+            'ins.idInstitucion',
+            'ins.nombreInstitucion',
+            'ins.punto_venta',
+            'pr.nombreprovincia',
+            'ci.nombre',
+            'parr.parr_nombre'
+        )
+            ->whereIn('ins.idInstitucion', $ids)
+            ->get();
+
+        return response()->json($query);
     }
     // METODOS POST FIN
     // METODOS PRIVADOS INICIO

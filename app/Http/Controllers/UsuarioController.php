@@ -1956,6 +1956,10 @@ class UsuarioController extends Controller
                 return $this->Get_Busqueda_UsuarioDocentesx_Institucion($request);
             case 'Get_Busqueda_UsuarioxIDUsuarioFICHERO':
                 return $this->Get_Busqueda_UsuarioxIDUsuarioFICHERO($request);
+            case 'getConsulta_OlvideMiPassword_Back':
+                return $this->getConsulta_OlvideMiPassword_Back($request);
+            case 'getConsulta_CompletaOlvideMiPassword_Back':
+                return $this->getConsulta_CompletaOlvideMiPassword_Back($request);
             default:
                 return response()->json(['error' => 'Acción no válida'], 400);
         }
@@ -2208,6 +2212,50 @@ class UsuarioController extends Controller
             'message' => 'La contraseña ha sido actualizada correctamente.',
             'usuario' => $usuario,
         ]);
+    }
+
+    public function getConsulta_OlvideMiPassword_Back(Request $request)
+    {
+        $cedula = $request->cedula;
+        if (empty($cedula)) {
+            return response()->json(['status' => 0, 'message' => 'Cédula es requerida'], 200);
+        }
+
+        $usuario = DB::table('usuario')->where('cedula', $cedula)->first();
+
+        if ($usuario) {
+            return response()->json(['status' => 1, 'message' => 'Cédula encontrada en el sistema.']);
+        }
+        else {
+            // We intentionally return 200 so axios doesn't throw, but with status 0
+            return response()->json(['status' => 0, 'message' => 'Esta cédula no se encuentra registrada en nuestro sistema.'], 200);
+        }
+    }
+
+    public function getConsulta_CompletaOlvideMiPassword_Back(Request $request)
+    {
+        $cedula = $request->cedula;
+        $email = $request->email;
+
+        if (empty($cedula) || empty($email)) {
+            return response()->json(['status' => 0, 'message' => 'Cédula y correo son requeridos'], 200);
+        }
+
+        $usuario = DB::table('usuario')
+            ->where('cedula', $cedula) // Cedula check
+            ->where('email', $email) // Email check
+            ->first();
+
+        if ($usuario) {
+            return response()->json([
+                'status' => 1,
+                'message' => 'Datos verificados correctamente.',
+                'idusuario' => $usuario->idusuario
+            ]);
+        }
+        else {
+            return response()->json(['status' => 0, 'message' => 'El correo electrónico no coincide con la cédula registrada.'], 200);
+        }
     }
     //Fin Metodos Jeyson
 

@@ -45,4 +45,17 @@ class ConfiguracionGeneral extends Model
         'id_seleccion' => 'integer',
         'id_seleccion_padre' => 'integer',
     ];
+
+    // IDs de configuraciones conocidas
+    const NUEVO_FORMATO_VENTAS = 12;
+
+    /**
+     * Retorna el campo `minimo` de una configuración por su ID.
+     * Uso: ConfiguracionGeneral::getMinimo(ConfiguracionGeneral::NUEVO_FORMATO_VENTAS)
+     */
+    public static function getMinimo(int $id): float
+    {
+        $config = static::find($id);
+        return $config ? (float) $config->minimo : 0;
+    }
 }

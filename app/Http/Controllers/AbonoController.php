@@ -3692,6 +3692,8 @@ class AbonoController extends Controller
         $request->validate([
             'idInstitucion' => 'required|integer',
             'idperiodoescolar' => 'required|integer',
+            'ven_totalizado' => 'nullable|string',
+            'ven_codigo_excluir' => 'nullable|string',
         ]);
 
         $idInstitucion = $request->idInstitucion;
@@ -3724,6 +3726,56 @@ class AbonoController extends Controller
                 'data' => $institucion,
             ]);
         }
+
+        $cupoTotal = (float)$formulario->ffp_cupo;
+        $porcentajeFacturacion = $formulario->ffp_porcentaje_facturacion !== null ? (float)$formulario->ffp_porcentaje_facturacion : 100;
+
+        $saldoPrefacturas = $formulario->ffp_saldo_prefacturas !== null
+            ? (float)$formulario->ffp_saldo_prefacturas
+            : ($cupoTotal * $porcentajeFacturacion) / 100;
+
+        $saldoNotas = $formulario->ffp_saldo_notas !== null
+            ? (float)$formulario->ffp_saldo_notas
+            : ($cupoTotal - $saldoPrefacturas);
+
+        $formulario->ffp_porcentaje_facturacion = $porcentajeFacturacion;
+        $formulario->ffp_saldo_prefacturas = $saldoPrefacturas;
+        $formulario->ffp_saldo_notas = $saldoNotas;
+
+        $venTotalizado = $request->ven_totalizado;
+        $venCodigoExcluir = $request->ven_codigo_excluir;
+        $consumoPrefacturas = 0;
+        $consumoNotas = 0;
+
+        $ventasActivasQuery = DB::table('f_venta')
+            ->whereNotNull('ven_totalizado')
+            ->where('est_ven_codigo', '!=', 3)
+            ->where('periodo_id', $idPeriodo)
+            ->where('institucion_id', $idInstitucion)
+            ->where('ven_tipo_inst', 'L');
+
+        if (!empty($venCodigoExcluir)) {
+            $ventasActivasQuery->where('ven_codigo', '!=', $venCodigoExcluir);
+        }
+
+        $consumoPrefacturas = (float)(clone $ventasActivasQuery)
+            ->where('idtipodoc', 1)
+            ->sum('ven_valor');
+
+        $consumoNotas = (float)(clone $ventasActivasQuery)
+            ->whereIn('idtipodoc', [3, 4])
+            ->sum('ven_valor');
+
+        $ventasActivas = (int)(clone $ventasActivasQuery)->count();
+
+        $formulario->ffp_consumido_prefacturas = $consumoPrefacturas;
+        $formulario->ffp_consumido_notas = $consumoNotas;
+        $formulario->ffp_disponible_prefacturas = $saldoPrefacturas - $consumoPrefacturas > 0 ? $saldoPrefacturas - $consumoPrefacturas : 0;
+        $formulario->ffp_disponible_notas = $saldoNotas - $consumoNotas > 0 ? $saldoNotas - $consumoNotas : 0;
+        $formulario->ventas_activas_count = $ventasActivas;
+        $formulario->es_primera_venta = $ventasActivas === 0;
+        $formulario->control_aplicado_por = 'institucion_periodo';
+        $formulario->control_ven_totalizado_recibido = !empty($venTotalizado);
 
         return response()->json([
             'success' => true,

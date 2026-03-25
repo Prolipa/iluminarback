@@ -18,8 +18,13 @@ class f_formulario_proforma extends Model
         'ffp_credito',
         'ffp_cupo',
         'ffp_descuento',
+        'ffp_porcentaje_facturacion',
+        'ffp_saldo_prefacturas',
+        'ffp_saldo_notas',
+        'if_distribuidor',
         'ffp_estado',
         'user_created',
+        'user_update',
         'updated_at',
     ];
 }

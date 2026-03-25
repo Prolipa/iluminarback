@@ -28,6 +28,7 @@ use App\Models\PedidoDocumentoDocente;
 use App\Models\Pedidos;
 use App\Models\Periodo;
 use App\Models\RepresentanteEconomico;
+use App\Models\ConfiguracionGeneral;
 use App\Models\RepresentanteLegal;
 use App\Models\SallePreguntasEvaluacion;
 use App\Models\SeminarioCapacitador;
@@ -948,428 +949,431 @@ class AdminController extends Controller
         return $result;
     }
     public function pruebaData(Request $request){
-        $ids = [
-            "3138",
-            "3173",
-            "3364",
-            "3250",
-            "3569",
-            "2909",
-            "2947",
-            "2966",
-            "3184",
-            "3192",
-            "3216",
-            "3240",
-            "3472",
-            "3096",
-            "2946",
-            "2957",
-            "3000",
-            "3003",
-            "3461",
+        // aqui pon el codigo
+        $nuevoFormato = ConfiguracionGeneral::getMinimo(ConfiguracionGeneral::NUEVO_FORMATO_VENTAS);
+        return response()->json(['nuevo_formato_ventas' => $nuevoFormato]);
+        // $ids = [
+        //     "3138",
+        //     "3173",
+        //     "3364",
+        //     "3250",
+        //     "3569",
+        //     "2909",
+        //     "2947",
+        //     "2966",
+        //     "3184",
+        //     "3192",
+        //     "3216",
+        //     "3240",
+        //     "3472",
+        //     "3096",
+        //     "2946",
+        //     "2957",
+        //     "3000",
+        //     "3003",
+        //     "3461",
 
-            "3237",
-            "2916",
-            "2956",
-            "3186",
-            "2999",
-            "3078",
-            "2954",
-            "2968",
-            "2973",
-            "3205",
+        //     "3237",
+        //     "2916",
+        //     "2956",
+        //     "3186",
+        //     "2999",
+        //     "3078",
+        //     "2954",
+        //     "2968",
+        //     "2973",
+        //     "3205",
 
 
 
 
-            "3047",
-            "3122",
-            "3157",
-            "3170",
-            "3214",
-            "3228",
-            "3231",
-            "3267",
-            "3278",
-            "3283",
-            "3296",
-            "3298",
-            "3301",
-            "3307",
-            "3315",
-            "3319",
-            "3323",
-            "3355",
-            "3370",
-            "3389",
-            "3402",
-            "3414",
-            "3418",
-            "3440",
-            "3503",
-            "3504",
-            "3509",
-            "3573",
-            "3593",
-            "3624",
-            "3628",
-            "3631",
-            "3650",
-            "3722",
-            "3732",
-            "3813",
-            "3854",
-            "3924",
-            "3994",
-            "3054",
-            "3136",
-            "3243",
-            "3303",
-            "3309",
-            "3310",
-            "3316",
-            "3324",
-            "3327",
-            "3331",
-            "3341",
-            "3343",
-            "3396",
-            "3469",
-            "3502",
-            "3522",
-            "3536",
-            "3552",
-            "3553",
-            "3600",
-            "3610",
-            "3640",
-            "2937",
-            "2945",
-            "3079",
-            "3120",
-            "3142",
-            "3191",
-            "3232",
-            "3286",
-            "3466",
-            "3497",
-            "3654",
-            "2978",
-            "3027",
-            "3071",
-            "3153",
-            "3268",
-            "3302",
-            "3328",
-            "3347",
-            "3377",
-            "2888",
-            "2901",
-            "2912",
-            "2922",
-            "3008",
-            "3051",
-            "3052",
-            "3056",
-            "3111",
-            "3131",
-            "3185",
-            "3208",
-            "3221",
-            "3318",
-            "3424",
-            "3591",
-            "3756",
-            "2913",
-            "2928",
-            "3105",
-            "3155",
-            "3190",
-            "3304",
-            "3574",
-            "2926",
-            "2970",
-            "3224",
-            "3257",
-            "3258",
-            "3382",
-            "2884",
-            "2911",
-            "2938",
-            "2953",
-            "2997",
-            "3132",
-            "3133",
-            "3144",
-            "3161",
-            "3384",
-            "3432",
-            "3601",
-            "3029",
-            "2944",
-            "3171",
-            "2918",
-            "2930",
-            "2940",
-            "2975",
-            "3140",
-            "3194",
-            "2914",
-            "2931",
-            "2941",
-            "2965",
-            "3135",
-            "3015",
-            "3147",
-            "3193",
-            "3577",
-            "4038",
-            "2962",
-            "3130",
-            "3145",
-            "3104",
-            "3368",
-            "3374",
-            "3210",
-            "3321",
-            "3353",
-            "3360",
-            "3409",
-            "3435",
-            "3451",
-            "3463",
-            "3492",
-            "3517",
-            "3603",
-            "3735",
-            "3808",
-            "3867",
-            "3868",
-            "3970",
-            "3993",
-            "3340",
-            "3398",
-            "3471",
-            "3519",
-            "3530",
-            "3533",
-            "3747",
-            "2948",
-            "3086",
-            "3256",
-            "3271",
-            "3400",
-            "3420",
-            "2920",
-            "2955",
-            "3036",
-            "3460",
-            "3555",
-            "3176",
-            "3211",
-            "3273",
-            "3381",
-            "3465",
-            "3506",
-            "2951",
-            "3035",
-            "3511",
-            "2919",
-            "3038",
-            "3123",
-            "3207",
-            "3242",
-            "3540",
-            "3188",
-            "3212",
-            "2917",
-            "3953",
-            "3493",
-            "3662",
-            "2963",
-            "3247",
-            "3390",
-            "3410",
-            "3562",
-            "3234",
-            "3539",
-            "3549",
-            "3633",
-            "3001",
-            "3262",
-            "3069",
-            "3274",
-            "3388",
-            "3404",
-            "3408",
-            "3338",
-            "3076",
-            "3066",
-            "3363",
-            "3149",
-            "3124",
-            "3089",
-            "3564",
-            "3169",
-            "3178",
-            "3084",
-            "3039"
-        ];
-        $query = DB::SELECT("SELECT *
-            FROM (
-                SELECT
-                    CONCAT(u.nombres,' ', u.apellidos) AS docente,
-                    u.cedula,
+        //     "3047",
+        //     "3122",
+        //     "3157",
+        //     "3170",
+        //     "3214",
+        //     "3228",
+        //     "3231",
+        //     "3267",
+        //     "3278",
+        //     "3283",
+        //     "3296",
+        //     "3298",
+        //     "3301",
+        //     "3307",
+        //     "3315",
+        //     "3319",
+        //     "3323",
+        //     "3355",
+        //     "3370",
+        //     "3389",
+        //     "3402",
+        //     "3414",
+        //     "3418",
+        //     "3440",
+        //     "3503",
+        //     "3504",
+        //     "3509",
+        //     "3573",
+        //     "3593",
+        //     "3624",
+        //     "3628",
+        //     "3631",
+        //     "3650",
+        //     "3722",
+        //     "3732",
+        //     "3813",
+        //     "3854",
+        //     "3924",
+        //     "3994",
+        //     "3054",
+        //     "3136",
+        //     "3243",
+        //     "3303",
+        //     "3309",
+        //     "3310",
+        //     "3316",
+        //     "3324",
+        //     "3327",
+        //     "3331",
+        //     "3341",
+        //     "3343",
+        //     "3396",
+        //     "3469",
+        //     "3502",
+        //     "3522",
+        //     "3536",
+        //     "3552",
+        //     "3553",
+        //     "3600",
+        //     "3610",
+        //     "3640",
+        //     "2937",
+        //     "2945",
+        //     "3079",
+        //     "3120",
+        //     "3142",
+        //     "3191",
+        //     "3232",
+        //     "3286",
+        //     "3466",
+        //     "3497",
+        //     "3654",
+        //     "2978",
+        //     "3027",
+        //     "3071",
+        //     "3153",
+        //     "3268",
+        //     "3302",
+        //     "3328",
+        //     "3347",
+        //     "3377",
+        //     "2888",
+        //     "2901",
+        //     "2912",
+        //     "2922",
+        //     "3008",
+        //     "3051",
+        //     "3052",
+        //     "3056",
+        //     "3111",
+        //     "3131",
+        //     "3185",
+        //     "3208",
+        //     "3221",
+        //     "3318",
+        //     "3424",
+        //     "3591",
+        //     "3756",
+        //     "2913",
+        //     "2928",
+        //     "3105",
+        //     "3155",
+        //     "3190",
+        //     "3304",
+        //     "3574",
+        //     "2926",
+        //     "2970",
+        //     "3224",
+        //     "3257",
+        //     "3258",
+        //     "3382",
+        //     "2884",
+        //     "2911",
+        //     "2938",
+        //     "2953",
+        //     "2997",
+        //     "3132",
+        //     "3133",
+        //     "3144",
+        //     "3161",
+        //     "3384",
+        //     "3432",
+        //     "3601",
+        //     "3029",
+        //     "2944",
+        //     "3171",
+        //     "2918",
+        //     "2930",
+        //     "2940",
+        //     "2975",
+        //     "3140",
+        //     "3194",
+        //     "2914",
+        //     "2931",
+        //     "2941",
+        //     "2965",
+        //     "3135",
+        //     "3015",
+        //     "3147",
+        //     "3193",
+        //     "3577",
+        //     "4038",
+        //     "2962",
+        //     "3130",
+        //     "3145",
+        //     "3104",
+        //     "3368",
+        //     "3374",
+        //     "3210",
+        //     "3321",
+        //     "3353",
+        //     "3360",
+        //     "3409",
+        //     "3435",
+        //     "3451",
+        //     "3463",
+        //     "3492",
+        //     "3517",
+        //     "3603",
+        //     "3735",
+        //     "3808",
+        //     "3867",
+        //     "3868",
+        //     "3970",
+        //     "3993",
+        //     "3340",
+        //     "3398",
+        //     "3471",
+        //     "3519",
+        //     "3530",
+        //     "3533",
+        //     "3747",
+        //     "2948",
+        //     "3086",
+        //     "3256",
+        //     "3271",
+        //     "3400",
+        //     "3420",
+        //     "2920",
+        //     "2955",
+        //     "3036",
+        //     "3460",
+        //     "3555",
+        //     "3176",
+        //     "3211",
+        //     "3273",
+        //     "3381",
+        //     "3465",
+        //     "3506",
+        //     "2951",
+        //     "3035",
+        //     "3511",
+        //     "2919",
+        //     "3038",
+        //     "3123",
+        //     "3207",
+        //     "3242",
+        //     "3540",
+        //     "3188",
+        //     "3212",
+        //     "2917",
+        //     "3953",
+        //     "3493",
+        //     "3662",
+        //     "2963",
+        //     "3247",
+        //     "3390",
+        //     "3410",
+        //     "3562",
+        //     "3234",
+        //     "3539",
+        //     "3549",
+        //     "3633",
+        //     "3001",
+        //     "3262",
+        //     "3069",
+        //     "3274",
+        //     "3388",
+        //     "3404",
+        //     "3408",
+        //     "3338",
+        //     "3076",
+        //     "3066",
+        //     "3363",
+        //     "3149",
+        //     "3124",
+        //     "3089",
+        //     "3564",
+        //     "3169",
+        //     "3178",
+        //     "3084",
+        //     "3039"
+        // ];
+        // $query = DB::SELECT("SELECT *
+        //     FROM (
+        //         SELECT
+        //             CONCAT(u.nombres,' ', u.apellidos) AS docente,
+        //             u.cedula,
 
-                    (
-                        SELECT COUNT(*)
-                        FROM salle_preguntas_evaluacion p
-                        WHERE p.id_evaluacion = e.id_evaluacion
-                    ) AS total_preguntas,
+        //             (
+        //                 SELECT COUNT(*)
+        //                 FROM salle_preguntas_evaluacion p
+        //                 WHERE p.id_evaluacion = e.id_evaluacion
+        //             ) AS total_preguntas,
 
-                    (
-                        SELECT COUNT(*)
-                        FROM salle_respuestas_preguntas r
-                        WHERE r.id_evaluacion = e.id_evaluacion
-                    ) AS total_respuestas,
+        //             (
+        //                 SELECT COUNT(*)
+        //                 FROM salle_respuestas_preguntas r
+        //                 WHERE r.id_evaluacion = e.id_evaluacion
+        //             ) AS total_respuestas,
 
-                    e.*
-                FROM salle_evaluaciones e
-                LEFT JOIN usuario u ON u.idusuario = e.id_usuario
-                WHERE e.n_evaluacion = '7'
-                AND e.estado = '2'
-            ) t
-            WHERE t.total_preguntas <> t.total_respuestas
-            AND t.id_evaluacion in (" . implode(',', $ids) .  ")
-            ");
-        $dataResultados = [];
-        foreach($query as $key => $item){
-            $preguntasFaltantes = DB::SELECT("SELECT p.*, pe.puntaje_pregunta
-            FROM salle_preguntas_evaluacion p
-            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = p.id_pregunta
-            LEFT JOIN salle_respuestas_preguntas r
-                ON r.id_pregunta = p.id_pregunta
-            AND r.id_evaluacion = p.id_evaluacion
-            WHERE p.id_evaluacion = ?
-            AND r.id_pregunta IS NULL
-            AND pe.id_tipo_pregunta <> '1'
-            ", [$item->id_evaluacion]);
-            $contador = 0;
-            // por cada pregunta buscar una opcion aleatoria
-            foreach($preguntasFaltantes as $k => $tr){
-                $respuestaPregunta = null;
-                //
-                // $opcionAleatoria = DB::SELECT("SELECT t.id_opcion_pregunta
-                // FROM (
-                //     SELECT sor.id_opcion_pregunta
-                //     FROM salle_opciones_preguntas sor
-                //     WHERE sor.id_pregunta = ?
-                //     ORDER BY sor.id_opcion_pregunta ASC
-                //     LIMIT 2
-                // ) t
-                // ORDER BY RAND()
-                // LIMIT 1;
-                // ", [$tr->id_pregunta]);
-                //cambiar a opcion correcta
-                $opcionAleatoria = DB::SELECT("SELECT sor.id_opcion_pregunta
-                    FROM salle_opciones_preguntas sor
-                    WHERE sor.id_pregunta = ?
-                    AND sor.tipo = '1'
-                ", [$tr->id_pregunta]);
-                if($opcionAleatoria){
-                    $respuestaPregunta = $opcionAleatoria[0]->id_opcion_pregunta;
-                    $puntajeSet = 0;
-                    //evaluacion si es correcta o no
-                    $evaluateRespuesta = DB::SELECT("SELECT * FROM salle_opciones_preguntas sor
-                        WHERE sor.id_pregunta = ?
-                        AND sor.id_opcion_pregunta = ?
-                        AND sor.tipo = '1'
-                        ", [$tr->id_pregunta, $respuestaPregunta]);
-                    //SI ES MAYOR A CERO ES CORRECTA
-                    if(count($evaluateRespuesta) > 0){
-                        $puntajeSet = $tr->puntaje_pregunta;
-                    }else{
-                        $puntajeSet = 0;
-                    }
-                    //validar si ya existe la respuesta antes de insertar (para evitar duplicados)
-                    $validarExistencia = DB::SELECT("SELECT * FROM salle_respuestas_preguntas
-                        WHERE id_evaluacion = ?
-                        AND id_pregunta = ?
-                        AND id_usuario = ?
-                        ", [$tr->id_evaluacion, $tr->id_pregunta, $item->id_usuario]);
-                    if(count($validarExistencia) > 0){
-                        continue; //si ya existe continuar al siguiente
-                    }
-                    // insertar la respuesta
-                    DB::table('salle_respuestas_preguntas')->insert([
-                        'id_evaluacion'         => $tr->id_evaluacion,
-                        'id_pregunta'           => $tr->id_pregunta,
-                        'id_usuario'            => $item->id_usuario,
-                        'respuesta'             => $respuestaPregunta,
-                        'puntaje'               => $puntajeSet,
-                    ]);
-                    //actualizar salle_preguntas_evaluacion para sumar el puntaje
-                    DB::table('salle_preguntas_evaluacion')->where('id_evaluacion', $tr->id_evaluacion)
-                    ->where('id_pregunta', $tr->id_pregunta)
-                    ->update([
-                        'calificacion_final'  => $puntajeSet,
-                        'updated_at'          => now(),
-                    ]);
-                    //actualizar salle_evaluaciones para sumar el calificacion_total
-                    DB::table('salle_evaluaciones')->where('id_evaluacion', $tr->id_evaluacion)
-                    ->update([
-                        'calificacion_total'  => DB::raw('calificacion_total + ' . $puntajeSet),
-                        'updated_at'          => now(),
-                    ]);
-                    $contador++;
+        //             e.*
+        //         FROM salle_evaluaciones e
+        //         LEFT JOIN usuario u ON u.idusuario = e.id_usuario
+        //         WHERE e.n_evaluacion = '7'
+        //         AND e.estado = '2'
+        //     ) t
+        //     WHERE t.total_preguntas <> t.total_respuestas
+        //     AND t.id_evaluacion in (" . implode(',', $ids) .  ")
+        //     ");
+        // $dataResultados = [];
+        // foreach($query as $key => $item){
+        //     $preguntasFaltantes = DB::SELECT("SELECT p.*, pe.puntaje_pregunta
+        //     FROM salle_preguntas_evaluacion p
+        //     LEFT JOIN salle_preguntas pe ON pe.id_pregunta = p.id_pregunta
+        //     LEFT JOIN salle_respuestas_preguntas r
+        //         ON r.id_pregunta = p.id_pregunta
+        //     AND r.id_evaluacion = p.id_evaluacion
+        //     WHERE p.id_evaluacion = ?
+        //     AND r.id_pregunta IS NULL
+        //     AND pe.id_tipo_pregunta <> '1'
+        //     ", [$item->id_evaluacion]);
+        //     $contador = 0;
+        //     // por cada pregunta buscar una opcion aleatoria
+        //     foreach($preguntasFaltantes as $k => $tr){
+        //         $respuestaPregunta = null;
+        //         //
+        //         // $opcionAleatoria = DB::SELECT("SELECT t.id_opcion_pregunta
+        //         // FROM (
+        //         //     SELECT sor.id_opcion_pregunta
+        //         //     FROM salle_opciones_preguntas sor
+        //         //     WHERE sor.id_pregunta = ?
+        //         //     ORDER BY sor.id_opcion_pregunta ASC
+        //         //     LIMIT 2
+        //         // ) t
+        //         // ORDER BY RAND()
+        //         // LIMIT 1;
+        //         // ", [$tr->id_pregunta]);
+        //         //cambiar a opcion correcta
+        //         $opcionAleatoria = DB::SELECT("SELECT sor.id_opcion_pregunta
+        //             FROM salle_opciones_preguntas sor
+        //             WHERE sor.id_pregunta = ?
+        //             AND sor.tipo = '1'
+        //         ", [$tr->id_pregunta]);
+        //         if($opcionAleatoria){
+        //             $respuestaPregunta = $opcionAleatoria[0]->id_opcion_pregunta;
+        //             $puntajeSet = 0;
+        //             //evaluacion si es correcta o no
+        //             $evaluateRespuesta = DB::SELECT("SELECT * FROM salle_opciones_preguntas sor
+        //                 WHERE sor.id_pregunta = ?
+        //                 AND sor.id_opcion_pregunta = ?
+        //                 AND sor.tipo = '1'
+        //                 ", [$tr->id_pregunta, $respuestaPregunta]);
+        //             //SI ES MAYOR A CERO ES CORRECTA
+        //             if(count($evaluateRespuesta) > 0){
+        //                 $puntajeSet = $tr->puntaje_pregunta;
+        //             }else{
+        //                 $puntajeSet = 0;
+        //             }
+        //             //validar si ya existe la respuesta antes de insertar (para evitar duplicados)
+        //             $validarExistencia = DB::SELECT("SELECT * FROM salle_respuestas_preguntas
+        //                 WHERE id_evaluacion = ?
+        //                 AND id_pregunta = ?
+        //                 AND id_usuario = ?
+        //                 ", [$tr->id_evaluacion, $tr->id_pregunta, $item->id_usuario]);
+        //             if(count($validarExistencia) > 0){
+        //                 continue; //si ya existe continuar al siguiente
+        //             }
+        //             // insertar la respuesta
+        //             DB::table('salle_respuestas_preguntas')->insert([
+        //                 'id_evaluacion'         => $tr->id_evaluacion,
+        //                 'id_pregunta'           => $tr->id_pregunta,
+        //                 'id_usuario'            => $item->id_usuario,
+        //                 'respuesta'             => $respuestaPregunta,
+        //                 'puntaje'               => $puntajeSet,
+        //             ]);
+        //             //actualizar salle_preguntas_evaluacion para sumar el puntaje
+        //             DB::table('salle_preguntas_evaluacion')->where('id_evaluacion', $tr->id_evaluacion)
+        //             ->where('id_pregunta', $tr->id_pregunta)
+        //             ->update([
+        //                 'calificacion_final'  => $puntajeSet,
+        //                 'updated_at'          => now(),
+        //             ]);
+        //             //actualizar salle_evaluaciones para sumar el calificacion_total
+        //             DB::table('salle_evaluaciones')->where('id_evaluacion', $tr->id_evaluacion)
+        //             ->update([
+        //                 'calificacion_total'  => DB::raw('calificacion_total + ' . $puntajeSet),
+        //                 'updated_at'          => now(),
+        //             ]);
+        //             $contador++;
 
-                }
+        //         }
 
-            }
-            $totalPuntajeSet = 0;
-            $totalPuntajeEvaluacion = 0;
-            //actualizar salle_evaluaciones calificacion_total
-            $getPuntajeRespuestas = DB::SELECT("SELECT SUM(e.calificacion_final) AS totalRespuestas FROM salle_preguntas_evaluacion e
-            WHERE e.id_evaluacion = ?", [$item->id_evaluacion]);
-            $totalPuntajeSet  = !empty($getPuntajeRespuestas) ? $getPuntajeRespuestas[0]->totalRespuestas : 0;
-            //total puntaje evaluacion
-            $getPuntajeEvaluacion = DB::SELECT("SELECT sum(pe.puntaje_pregunta) as totalPuntajeEvaluacion FROM salle_preguntas_evaluacion e
-            LEFT JOIN salle_preguntas pe ON pe.id_pregunta = e.id_pregunta
-            WHERE e.id_evaluacion = ?
-            ;", [$item->id_evaluacion]);
-            $totalPuntajeEvaluacion = !empty($getPuntajeEvaluacion) ? $getPuntajeEvaluacion[0]->totalPuntajeEvaluacion : 0;
-            //calificacion final total puntaje respuestas / total puntaje evaluacion * 100
-            $calificacionFinal = 0;
-            if($totalPuntajeEvaluacion > 0){
-                $calificacionFinal = ($totalPuntajeSet / $totalPuntajeEvaluacion) * 100;
-            }
+        //     }
+        //     $totalPuntajeSet = 0;
+        //     $totalPuntajeEvaluacion = 0;
+        //     //actualizar salle_evaluaciones calificacion_total
+        //     $getPuntajeRespuestas = DB::SELECT("SELECT SUM(e.calificacion_final) AS totalRespuestas FROM salle_preguntas_evaluacion e
+        //     WHERE e.id_evaluacion = ?", [$item->id_evaluacion]);
+        //     $totalPuntajeSet  = !empty($getPuntajeRespuestas) ? $getPuntajeRespuestas[0]->totalRespuestas : 0;
+        //     //total puntaje evaluacion
+        //     $getPuntajeEvaluacion = DB::SELECT("SELECT sum(pe.puntaje_pregunta) as totalPuntajeEvaluacion FROM salle_preguntas_evaluacion e
+        //     LEFT JOIN salle_preguntas pe ON pe.id_pregunta = e.id_pregunta
+        //     WHERE e.id_evaluacion = ?
+        //     ;", [$item->id_evaluacion]);
+        //     $totalPuntajeEvaluacion = !empty($getPuntajeEvaluacion) ? $getPuntajeEvaluacion[0]->totalPuntajeEvaluacion : 0;
+        //     //calificacion final total puntaje respuestas / total puntaje evaluacion * 100
+        //     $calificacionFinal = 0;
+        //     if($totalPuntajeEvaluacion > 0){
+        //         $calificacionFinal = ($totalPuntajeSet / $totalPuntajeEvaluacion) * 100;
+        //     }
 
-            // $totalRespuestasTEST = 0;
-            // $respuestasTest = DB::SELECT("SELECT SUM(e.puntaje) as totalRespuestasTEST FROM salle_respuestas_preguntas e
-            // WHERE e.id_evaluacion = ?;", [$item->id_evaluacion]);
-            // $totalRespuestasTEST = $respuestasTest[0]->totalRespuestasTEST;
-            $dataResultados[$key] = (object)[
-                "docente"               => $item->docente,
-                "cedula"                => $item->cedula,
-                "id_evaluacion"         => $item->id_evaluacion,
-                "total_preguntas"       => $item->total_preguntas,
-                "total_respuestas"      => $item->total_respuestas,
-                "respuestas_insertadas"   => $contador,
-                "total_puntaje_obtenido" => $totalPuntajeSet,
-                "total_puntaje_evaluacion" => $totalPuntajeEvaluacion,
-                "calificacion_total"      => $calificacionFinal,
-                // "total_respuestas_test"   => $totalRespuestasTEST
-            ];
-            //actualizar salle_evaluaciones calificacion_final
-            DB::table('salle_evaluaciones')->where('id_evaluacion', $item->id_evaluacion)
-            ->update([
-                'calificacion_total'  => $calificacionFinal,
-                'updated_at'          => now(),
-            ]);
-        }
-        return $dataResultados;
-        return "hola mundo";
+        //     // $totalRespuestasTEST = 0;
+        //     // $respuestasTest = DB::SELECT("SELECT SUM(e.puntaje) as totalRespuestasTEST FROM salle_respuestas_preguntas e
+        //     // WHERE e.id_evaluacion = ?;", [$item->id_evaluacion]);
+        //     // $totalRespuestasTEST = $respuestasTest[0]->totalRespuestasTEST;
+        //     $dataResultados[$key] = (object)[
+        //         "docente"               => $item->docente,
+        //         "cedula"                => $item->cedula,
+        //         "id_evaluacion"         => $item->id_evaluacion,
+        //         "total_preguntas"       => $item->total_preguntas,
+        //         "total_respuestas"      => $item->total_respuestas,
+        //         "respuestas_insertadas"   => $contador,
+        //         "total_puntaje_obtenido" => $totalPuntajeSet,
+        //         "total_puntaje_evaluacion" => $totalPuntajeEvaluacion,
+        //         "calificacion_total"      => $calificacionFinal,
+        //         // "total_respuestas_test"   => $totalRespuestasTEST
+        //     ];
+        //     //actualizar salle_evaluaciones calificacion_final
+        //     DB::table('salle_evaluaciones')->where('id_evaluacion', $item->id_evaluacion)
+        //     ->update([
+        //         'calificacion_total'  => $calificacionFinal,
+        //         'updated_at'          => now(),
+        //     ]);
+        // }
+        // return $dataResultados;
+        // return "hola mundo";
         // $getCodigos = 'SMCLL3-CFZCY9WFCC,
         // PSMCLL3-8E7RBKE7Y7,
         // SMCLL3-N9TKFGNVT2,
@@ -3471,10 +3475,10 @@ class AdminController extends Controller
                 $campoPerseo = 'id_perseo_calmed_produccion';
                 $tipoEmpresa = 3;
             } elseif ($empresa == 'prolipa26') {
-                $campoPerseo = 'id_perseo_prolipa_produccion';
+                $campoPerseo = 'id_perseo_prolipa2026_produccion';
                 $tipoEmpresa = 5;
             } elseif ($empresa == 'calmed26') {
-                $campoPerseo = 'id_perseo_calmed_produccion';
+                $campoPerseo = 'id_perseo_calmed2026_produccion';
                 $tipoEmpresa = 4;
             }  else {
                 return response()->json([
@@ -3518,10 +3522,24 @@ class AdminController extends Controller
             $resultado = $this->guardarIdProductoPerseo($response, $producto->pro_codigo, $campoPerseo);
 
             if ($resultado === 1) {
-                return response()->json([
-                    'estado' => 1,
-                    'mensaje' => 'Actualización exitosa'
-                ]);
+                // Verificar en base de datos si el id realmente fue guardado con éxito
+                $verificacion = DB::table('1_4_cal_producto')
+                    ->where('pro_codigo', $producto->pro_codigo)
+                    ->whereNotNull($campoPerseo)
+                    ->where($campoPerseo, '!=', 0)
+                    ->first();
+
+                if ($verificacion) {
+                    return response()->json([
+                        'estado' => 1,
+                        'mensaje' => 'Actualización exitosa'
+                    ]);
+                } else {
+                    return response()->json([
+                        'estado' => 2,
+                        'mensaje' => 'Se obtuvo el ID pero no se logró guardar en la base de datos local'
+                    ]);
+                }
             } else {
                 return response()->json([
                     'estado' => 2,

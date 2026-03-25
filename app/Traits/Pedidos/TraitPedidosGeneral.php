@@ -207,12 +207,15 @@ trait TraitPedidosGeneral
         (p.TotalVentaReal - ((p.TotalVentaReal * p.descuento)/100)) AS ven_neta,
         (p.TotalVentaReal * p.descuento)/100 as valorDescuento,
         ps.id_grupo_finaliza, des.ca_descripcion as despacho,
-        CONCAT(editComsion.nombres, " ", editComsion.apellidos) AS asesor_editComision
+        CONCAT(editComsion.nombres, " ", editComsion.apellidos) AS asesor_editComision,
+        prov.nombreprovincia, par.parr_nombre, i.fecha_fundacion
         '))
         ->leftjoin('usuario as u',          'p.id_asesor',          'u.idusuario')
         ->leftjoin('usuario as uf',         'p.id_usuario_verif',   'uf.idusuario')
         ->leftjoin('institucion as i',      'p.id_institucion',     'i.idInstitucion')
         ->leftjoin('ciudad as c',           'i.ciudad_id',          'c.idciudad')
+        ->leftJoin('parroquia as par',      'i.parr_id',            'par.parr_id')
+        ->leftJoin('provincia as prov',     'i.idprovincia',        'prov.idprovincia')
         ->leftjoin('periodoescolar as pe',  'pe.idperiodoescolar',  'p.id_periodo')
         ->leftjoin('pedidos_historico as ph','p.id_pedido',         'ph.id_pedido')
         ->leftjoin('pedidos_solicitudes_gerencia as ps','p.id_solicitud_gerencia_comision','ps.id')
@@ -421,6 +424,51 @@ trait TraitPedidosGeneral
         if($filtro == 4) { $resultado->where('p.id_periodo','=',$parametro1)->where('p.estado','<>','0')->whereNull('p.ca_codigo_agrupado')->OrderBy('p.id_pedido','DESC'); }
         //filtro x periodo root
         if($filtro == 5) { $resultado->where('p.id_periodo','=',$parametro1)->OrderBy('p.id_pedido','DESC'); }
+        $consulta = $resultado->get();
+        return $consulta;
+    }
+
+
+    public function getPedidoContratoSinAnulados($parametro1=null){
+        $resultado = DB::table('pedidos as p')
+        ->select(DB::RAW('fm.fm_id ,p.*,
+        i.nombreInstitucion,i.zona_id,i.codigo_institucion_milton, c.nombre AS nombre_ciudad,
+        CONCAT(u.nombres," ",u.apellidos) as responsable, CONCAT(u.nombres," ",u.apellidos) as asesor, u.cedula as cedula_asesor,u.iniciales,
+        ph.estado as historicoEstado,ph.evidencia_cheque,ph.evidencia_pagare,
+        IF(p.estado = 2,"Anulado","Activo") AS estadoPedido,
+        (SELECT f.id_facturador from pedidos_asesores_facturador
+        f where f.id_asesor = p.id_asesor  LIMIT 1) as id_facturador,
+        i.ruc,i.nivel,i.tipo_descripcion,i.direccionInstitucion,i.telefonoInstitucion,
+        pe.periodoescolar as periodo,pe.codigo_contrato, pe.regaladosReporteNuevo,
+        CONCAT(uf.apellidos, " ",uf.nombres) as facturador,
+        i.region_idregion as region,uf.iniciales as iniciales_facturador,
+        ph.fecha_generar_contrato,
+        (p.TotalVentaReal - ((p.TotalVentaReal * p.descuento)/100)) AS ven_neta,
+        (p.TotalVentaReal * p.descuento)/100 as valorDescuento,
+        ps.id_grupo_finaliza, des.ca_descripcion as despacho,
+        CONCAT(editComsion.nombres, " ", editComsion.apellidos) AS asesor_editComision
+        '))
+        ->leftjoin('usuario as u',          'p.id_asesor',          'u.idusuario')
+        ->leftjoin('usuario as uf',         'p.id_usuario_verif',   'uf.idusuario')
+        ->leftjoin('institucion as i',      'p.id_institucion',     'i.idInstitucion')
+        ->leftjoin('ciudad as c',           'i.ciudad_id',          'c.idciudad')
+        ->leftjoin('periodoescolar as pe',  'pe.idperiodoescolar',  'p.id_periodo')
+        ->leftjoin('pedidos_historico as ph','p.id_pedido',         'ph.id_pedido')
+        ->leftjoin('pedidos_solicitudes_gerencia as ps','p.id_solicitud_gerencia_comision','ps.id')
+        ->leftJoin('usuario as editComsion',   'ps.user_finaliza',     'editComsion.idusuario')
+        ->leftjoin('fichero_mercado as fm', function($join) {
+            $join->on('i.idInstitucion', '=', 'fm.idInstitucion')
+                ->on('p.id_periodo', '=', 'fm.idperiodoescolar');
+        })
+        ->leftJoin('f_contratos_agrupados as des', function($join) {
+            $join->on('p.ca_codigo_agrupado', '=', 'des.ca_codigo_agrupado')
+                ->where('des.ca_estado', '=', 1);
+        })
+        ->where('p.tipo','=','0')
+        ->whereNotIn('p.estado', [0, 2])
+        ->whereNotNull('p.contrato_generado')
+        ->where('p.id_periodo','=',$parametro1);
+
         $consulta = $resultado->get();
         return $consulta;
     }

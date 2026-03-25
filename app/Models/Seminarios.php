@@ -26,7 +26,8 @@ class Seminarios extends Model
         'asistencia_activa',
         'id_usuario',
         'tipo',
-        'notificado'
+        'notificado',
+        'oferta_academica'
     ];
 
     public function institucion(): BelongsTo
@@ -51,5 +52,11 @@ class Seminarios extends Model
     public function capacitadores(): BelongsToMany
     {
         return $this->belongsToMany(Usuario::class, 'seminarios_capacitador', 'seminario_id', 'idusuario');
+    }
+
+    /** Encuestas asignadas a esta capacitación/seminario */
+    public function encuestaAsignaciones()
+    {
+        return $this->morphMany(\App\Models\EncuestaAsignacion::class, 'entidad', 'entidad_tipo', 'entidad_id', 'id_seminario');
     }
 }

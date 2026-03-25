@@ -136,6 +136,7 @@ class DevolucionController extends Controller
                 $join->on('ped.contrato_generado', '=', 'v.contrato')
                      ->where('ped.estado', '=', '1');
             })
+            ->leftJoin('empresas as e', 'v.id_empresa', '=', 'e.id')
             ->where('v.ven_codigo', 'LIKE', '%' . $documento . '%')
             ->whereIn('v.idtipodoc', [1,2,3,4])
             ->where('v.est_ven_codigo', '!=', 3) // Excluir anulados
@@ -204,7 +205,8 @@ class DevolucionController extends Controller
                 'p.periodoescolar as periodo',
                 'p.estado as statusPeriodo',
                 'c.nombre as ciudad',
-                'ped.id_institucion as id_institucionPedido'
+                'ped.id_institucion as id_institucionPedido',
+                'e.descripcion_corta as descripcion_empresa'
             )
             ->orderBy('v.ven_fecha', 'desc')
             ->limit(50)

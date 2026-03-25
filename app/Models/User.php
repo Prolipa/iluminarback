@@ -26,11 +26,25 @@ class User extends Authenticatable implements Auditable
     protected $primaryKey = 'idusuario';
 
     protected $fillable = [
-        'nombres', 'apellidos', 'name_usuario', 'email', 'password', 'cedula', 'id_group', 'remember_token', 'session_id', 'estado_idEstado', 'capacitador'
+        'nombres', 'apellidos', 'name_usuario', 'email', 'password', 'cedula',
+        'id_group', 'remember_token', 'session_id', 'estado_idEstado', 'capacitador'
     ];
 
     protected $rememberTokenName = false;
 
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at' => 'datetime',
+    ];
+
+    // Incluir en JSON automáticamente (opcional)
+    protected $appends = ['imgen_institucion'];
+
+    // Relaciones
     public function grupo()
     {
         return $this->belongsTo(Grupo::class, 'id_group', 'id');
@@ -41,12 +55,9 @@ class User extends Authenticatable implements Auditable
         return $this->belongsTo(Institucion::class, 'institucion_idInstitucion', 'idInstitucion');
     }
 
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
-
-    protected $casts = [
-        'email_verified_at' => 'datetime',
-    ];
+    // Accesor para imgenInstitucion
+    public function getImgenInstitucionAttribute()
+    {
+        return $this->institucion ? $this->institucion->imgenInstitucion : null;
+    }
 }

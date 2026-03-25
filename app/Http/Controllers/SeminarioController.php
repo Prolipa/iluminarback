@@ -197,7 +197,11 @@ class SeminarioController extends Controller
             (case when (s.estado_institucion_temporal = 1) then s.nombre_institucion_temporal  else i.nombreInstitucion end) as institucionFinal,
             (case when (s.estado_capacitacion = 2) then 'Realizada' when (s.estado_capacitacion = 1) then 'Pendiente' else 'Cancelada' end) as estadoCapacitacion,
             COUNT(sr.id_seminario) AS cant_respuestas,
-            CONCAT(cap.nombres,' ',cap.apellidos) as capacitador, s.capacitador as capacitadores
+            CONCAT(cap.nombres,' ',cap.apellidos) as capacitador, s.capacitador as capacitadores,
+            (SELECT COUNT(*) FROM encuesta_prolipa_asignaciones ea WHERE ea.entidad_tipo = 'capacitacion' AND ea.entidad_id = s.id_seminario) AS cant_encuestas,
+            s.oferta_academica,
+            oa.nombreofertaAcademica,
+            s.area_capacitacion
             FROM seminarios s
             LEFT JOIN institucion i ON s.id_institucion = i.idInstitucion
             LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
@@ -207,6 +211,7 @@ class SeminarioController extends Controller
             LEFT JOIN area a on te.area = a.idarea
             LEFT JOIN usuario u ON s.id_usuario = u.idusuario
             LEFT JOIN usuario cap ON s.capacitador_id = cap.idusuario
+            LEFT JOIN ofertaacademica oa ON s.oferta_academica = oa.idofertaAcademica
             WHERE s.estado = '1'
             and  s.periodo_id = '$id_periodo'
             GROUP BY s.id_seminario
@@ -700,6 +705,8 @@ class SeminarioController extends Controller
            $capacitacion->editor_id                     = $request->editor_id;
            $capacitacion->tipo                      = $request->tipo;
            $capacitacion->notificado                    = $request->notificado;
+           $capacitacion->oferta_academica              = $request->oferta_academica ?? null;
+           $capacitacion->area_capacitacion             = $request->area_capacitacion ?? null;
            $capacitacion->save();
            $this->crearCapacitadores($request,$capacitacion);
            if($capacitacion){
@@ -795,7 +802,9 @@ class SeminarioController extends Controller
     public function get_preguntas_seminario(){
 
 
-        $preguntas = DB::SELECT("SELECT p.*, s.nombre_seccion FROM seminario_preguntas p, seminario_secciones s WHERE p.estado = 1 AND p.seccion_pregunta = s.id_seccion ORDER BY p.id_pregunta");
+        $preguntas = DB::SELECT("SELECT p.*, s.nombre_seccion
+        FROM seminario_preguntas p, seminario_secciones s
+        WHERE p.estado = 1 AND p.seccion_pregunta = s.id_seccion ORDER BY p.id_pregunta");
 
         return $preguntas;
     }
@@ -806,7 +815,22 @@ class SeminarioController extends Controller
 
     }
     public function eliminar_seminario($id_seminario){
+        // Verificar si tiene respuestas de encuestas
+        $tieneRespuestas = DB::table('encuesta_prolipa_respuestas as r')
+            ->join('encuesta_prolipa_asignaciones as a', 'r.asignacion_id', '=', 'a.id')
+            ->where('a.entidad_tipo', 'capacitacion')
+            ->where('a.entidad_id', $id_seminario)
+            ->exists();
+
+        if ($tieneRespuestas) {
+            return response()->json([
+                'status'  => 0,
+                'message' => 'No se puede eliminar: esta capacitación tiene encuestas respondidas.'
+            ], 422);
+        }
+
         DB::UPDATE("UPDATE `seminarios` SET `estado` = 0 WHERE `id_seminario` = $id_seminario");
+        return response()->json(['status' => 1]);
     }
 
     public function asistentes_seminario($id_seminario){

@@ -3715,6 +3715,128 @@ class ProformaController extends Controller
     }
 
     /**
+     * Obtener ventas por totalizado (agrupación de contratos)
+     * GET /get_ventas_por_totalizado
+     */
+    public function get_ventas_por_totalizado(Request $request)
+    {
+        try {
+            $totalizado = $request->totalizado;
+
+            if (!$totalizado) {
+                return response()->json([
+                    "status" => 400,
+                    "message" => "El totalizado es requerido"
+                ], 400);
+            }
+
+            $ventas = DB::SELECT("
+                SELECT
+                    fv.ven_codigo,
+                    fv.id_empresa,
+                    fv.ven_idproforma,
+                    fv.est_ven_codigo,
+                    fv.idtipodoc,
+                    fv.ven_subtotal,
+                    fv.ven_descuento,
+                    fv.ven_iva,
+                    fv.ven_transporte,
+                    fv.ven_valor,
+                    fv.ven_observacion,
+                    fv.ven_desc_por,
+                    fv.user_created,
+                    fv.ven_fecha,
+                    fv.periodo_id,
+                    fv.ven_tipo_inst,
+                    fv.contrato,
+                    fv.ven_p_libros_obsequios,
+                    em.id as empresa_id,
+                    em.nombre as empresa_nombre,
+                    em.img_base64 as empresa_logo,
+                    CONCAT(COALESCE(uc.nombres, ''), ' ', COALESCE(uc.apellidos, '')) AS cliente_nombre,
+                    uc.cedula as cliente_ruc,
+                    uc.email as cliente_email,
+                    i.idInstitucion as institucion_id,
+                    i.nombreInstitucion as institucion_nombre,
+                    i.ruc as institucion_ruc,
+                    i.direccionInstitucion as institucion_direccion,
+                    i.telefonoInstitucion as institucion_telefono,
+                    COUNT(DISTINCT dfv.pro_codigo) as total_items,
+                    SUM(dfv.det_ven_cantidad) as total_cantidad,
+                    CONCAT(COALESCE(usr.nombres, ''), ' ', COALESCE(usr.apellidos, '')) AS creado_por,
+                    usr.cedula as creado_por_cedula,
+                    td.tdo_id,
+                    td.tdo_nombre,
+                    CASE
+                        WHEN fv.est_ven_codigo = 0 THEN 'Pendiente'
+                        WHEN fv.est_ven_codigo = 1 THEN 'Despachado'
+                        WHEN fv.est_ven_codigo = 2 THEN 'Liquidado'
+                        WHEN fv.est_ven_codigo = 3 THEN 'Anulado'
+                        ELSE 'Desconocido'
+                    END as estado_texto,
+                    CONCAT(COALESCE(ua.nombres, ''), ' ', COALESCE(ua.apellidos, '')) AS anulado_por,
+                    fv.user_anulado,
+                    fv.estadoPerseo,
+                    fv.anuladoEnPerseo,
+                    fv.pedido_codigo,
+                    fv.fecha_envio_perseo,
+                    fv.factura_perseo,
+                    fv.id_factura_perseo
+                FROM f_venta fv
+                LEFT JOIN empresas em ON fv.id_empresa = em.id
+                LEFT JOIN institucion i ON fv.institucion_id = i.idInstitucion
+                LEFT JOIN usuario uc ON fv.ven_cliente = uc.idusuario
+                LEFT JOIN usuario usr ON fv.user_created = usr.idusuario
+                LEFT JOIN usuario ua ON fv.user_anulado = ua.idusuario
+                LEFT JOIN f_detalle_venta dfv ON fv.ven_codigo = dfv.ven_codigo AND fv.id_empresa = dfv.id_empresa
+                LEFT JOIN f_tipo_documento td ON fv.idtipodoc = td.tdo_id
+                WHERE fv.ven_totalizado = ?
+                GROUP BY fv.ven_codigo, fv.id_empresa, fv.est_ven_codigo,
+                         fv.idtipodoc, fv.ven_subtotal, fv.ven_descuento, fv.ven_iva,
+                         fv.ven_transporte, fv.ven_valor, fv.ven_observacion, fv.ven_desc_por, fv.user_created,
+                         fv.ven_fecha, fv.periodo_id, fv.ven_tipo_inst, fv.ven_idproforma,
+                         fv.contrato, em.id, em.nombre, em.img_base64,
+                         uc.nombres, uc.apellidos, uc.cedula, uc.email,
+                         i.idInstitucion, i.nombreInstitucion, i.ruc, i.direccionInstitucion, i.telefonoInstitucion,
+                         usr.nombres, usr.apellidos, usr.cedula, td.tdo_id, td.tdo_nombre,
+                         ua.nombres, ua.apellidos, fv.user_anulado, fv.estadoPerseo, fv.anuladoEnPerseo,
+                         fv.pedido_codigo, fv.fecha_envio_perseo,fv.ven_p_libros_obsequios
+                ORDER BY fv.ven_fecha DESC
+            ", [$totalizado]);
+
+            // Calcular total del totalizado (suma de ventas no anuladas)
+            $totalTotalizado = array_reduce($ventas, function($carry, $venta) {
+                if ($venta->est_ven_codigo != 3) { // No incluir anuladas
+                    return $carry + floatval($venta->ven_valor);
+                }
+                return $carry;
+            }, 0);
+
+            // Agregar porcentaje a cada venta
+            foreach ($ventas as $venta) {
+                if ($totalTotalizado > 0 && $venta->est_ven_codigo != 3) {
+                    $venta->porcentaje_pedido = round((floatval($venta->ven_valor) / $totalTotalizado) * 100, 2);
+                } else {
+                    $venta->porcentaje_pedido = 0;
+                }
+            }
+
+            return response()->json([
+                "status" => 200,
+                "data" => $ventas
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                "status" => 500,
+                "error" => $e->getMessage(),
+                "message" => "Error al obtener ventas del totalizado",
+                "line" => $e->getLine()
+            ], 500);
+        }
+    }
+
+    /**
      * Obtener libros vendidos por contrato
      * Similar a get_libros_proformados_por_contrato pero para ventas
      * Agrupa por producto y descuento
@@ -3796,12 +3918,14 @@ class ProformaController extends Controller
                     SUM(dv.det_ven_cantidad * dv.det_ven_valor_u * (1 - COALESCE(fv.ven_desc_por, 0) / 100)) as total_vendido
                 FROM f_detalle_venta dv
                 INNER JOIN f_venta fv ON dv.ven_codigo = fv.ven_codigo AND dv.id_empresa = fv.id_empresa
+                INNER JOIN f_contratos_agrupados ca ON ca.ca_codigo_agrupado = fv.ven_totalizado AND ca.ca_estado = 1
                 INNER JOIN 1_4_cal_producto p ON dv.pro_codigo = p.pro_codigo
-                WHERE fv.ven_totalizado = ?
+                WHERE ca.ca_codigo_agrupado = ?
+                AND fv.ven_totalizado = ?
                 AND fv.est_ven_codigo <> 3
                 GROUP BY dv.pro_codigo, fv.ven_desc_por
                 ORDER BY MAX(p.pro_nombre), fv.ven_desc_por
-            ", [$totalizado]);
+            ", [$totalizado, $totalizado]);
 
             return response()->json([
                 "status" => 200,
@@ -4271,14 +4395,21 @@ class ProformaController extends Controller
 
             // 1. Obtener contratos pendientes del período (incluye nombreInstitucion)
             $contratos = DB::SELECT("
-                SELECT pe.id_pedido, pe.tipo_venta, pe.id_institucion, pe.contrato_generado,
+                SELECT pe.id_pedido, pe.tipo_venta, pe.id_institucion, pe.contrato_generado, pe.ca_codigo_agrupado,
                        pe.estadoPedido_Pagos, pe.id_periodo,
-                       i.nombreInstitucion
+                      i.nombreInstitucion,
+                      ca.ca_descripcion as nombre_totalizado
                 FROM pedidos pe
                 LEFT JOIN institucion i ON pe.id_institucion = i.idInstitucion
+                  LEFT JOIN f_contratos_agrupados ca ON pe.ca_codigo_agrupado = ca.ca_codigo_agrupado AND ca.ca_estado = 1
                 WHERE pe.contrato_generado IS NOT NULL
                   AND pe.estadoPedido_Pagos IS NULL
+                  AND pe.estado NOT IN (0, 2)
                   AND pe.id_periodo = ?
+                AND (
+                    pe.tipo_venta = 1
+                    OR (pe.tipo_venta <> 1 AND pe.ca_codigo_agrupado IS NOT NULL AND pe.ca_codigo_agrupado <> '')
+                )
                 ORDER BY i.nombreInstitucion ASC
             ", [$periodoescolar]);
 
@@ -4290,49 +4421,130 @@ class ProformaController extends Controller
             $pedidosCtrl = app()->make(\App\Http\Controllers\PedidosController::class);
 
             $resultado = [];
+            $grupos = [];
 
             foreach ($contratos as $contrato) {
-                $codigoContrato = $contrato->contrato_generado;
+                $esLista = ((int)$contrato->tipo_venta !== 1);
+                $codigoTotalizado = trim((string)$contrato->ca_codigo_agrupado);
+                $usarTotalizado = $esLista && $codigoTotalizado !== '';
 
-                // 2. Libros del pedido — delega en el método existente de PedidosController
-                $fakeRequest = new \Illuminate\Http\Request();
-                $fakeRequest->merge(['contrato' => $codigoContrato, 'periodo' => $periodoescolar]);
-                $librosRaw = $pedidosCtrl->get_libros_pedidosAlcancesXContrato($fakeRequest);
+                $claveGrupo = $usarTotalizado
+                    ? ('TVL:' . $codigoTotalizado)
+                    : ('CTR:' . $contrato->contrato_generado);
 
-                // 3. Libros vendidos — delega en el método existente de ProformaController
-                $fakeRequest2 = new \Illuminate\Http\Request();
-                $fakeRequest2->merge(['contrato' => $codigoContrato, 'periodo' => $periodoescolar]);
-                $ventasResp = $this->get_libros_vendidos_por_contrato($fakeRequest2);
-                $librosVendidosRaw = json_decode($ventasResp->getContent())->data ?? [];
+                if (!isset($grupos[$claveGrupo])) {
+                    $grupos[$claveGrupo] = [
+                        'tipo_venta' => (int)$contrato->tipo_venta,
+                        'codigo_totalizado' => $usarTotalizado ? $codigoTotalizado : null,
+                        'nombre_totalizado' => [],
+                        'id_periodo' => (int)$contrato->id_periodo,
+                        'id_pedido_referencia' => (int)$contrato->id_pedido,
+                        'id_instituciones' => [],
+                        'instituciones' => [],
+                        'contratos_origen' => [],
+                    ];
+                }
 
-                // 4. Consolidar libros duplicados por pro_codigo (suma cantidades de alcances)
-                $consolidados = [];
-                foreach ($librosRaw as $item) {
-                    $item = (array) $item;
-                    $qty  = (int)($item['cantidad'] ?? 0);
-                    $codigo = $item['pro_codigo'];
-                    if (isset($consolidados[$codigo])) {
-                        $consolidados[$codigo]['cantidad'] += $qty;
-                    } else {
-                        $consolidados[$codigo] = [
-                            'pro_codigo'   => $codigo,
-                            'nombre_libro' => $item['nombre_libro'],
-                            'precio'       => (float)($item['precio'] ?? 0),
-                            'descuento'    => (float)($item['descuento'] ?? 0),
-                            'cantidad'     => $qty,
-                        ];
+                $grupos[$claveGrupo]['id_instituciones'][] = (int)$contrato->id_institucion;
+                if (!empty($contrato->nombreInstitucion)) {
+                    $grupos[$claveGrupo]['instituciones'][] = $contrato->nombreInstitucion;
+                }
+                if (!empty($contrato->nombre_totalizado)) {
+                    $grupos[$claveGrupo]['nombre_totalizado'][] = $contrato->nombre_totalizado;
+                }
+                $grupos[$claveGrupo]['contratos_origen'][] = $contrato->contrato_generado;
+            }
+
+            foreach ($grupos as $grupo) {
+                $tipoVenta = (int)$grupo['tipo_venta'];
+                $codigoTotalizado = $grupo['codigo_totalizado'];
+                $esTotalizado = ($tipoVenta !== 1 && !empty($codigoTotalizado));
+
+                $contratosOrigen = array_values(array_unique($grupo['contratos_origen']));
+                $instituciones = array_values(array_unique($grupo['instituciones']));
+                $nombresTotalizado = array_values(array_unique($grupo['nombre_totalizado']));
+                $idsInstituciones = array_values(array_unique($grupo['id_instituciones']));
+
+                $nombreInstitucion = '';
+                if (count($instituciones) > 0) {
+                    $nombreInstitucion = implode(' / ', $instituciones);
+                }
+
+                $idInstitucion = 0;
+                if (count($idsInstituciones) === 1) {
+                    $idInstitucion = (int)$idsInstituciones[0];
+                }
+
+                $nombreTotalizado = '';
+                if ($esTotalizado && count($nombresTotalizado) > 0) {
+                    $nombreTotalizado = implode(' / ', $nombresTotalizado);
+                }
+
+                if ($esTotalizado && $nombreTotalizado === '' && !empty($codigoTotalizado)) {
+                    $totalizadoInfo = DB::table('f_contratos_agrupados')
+                        ->select('ca_descripcion')
+                        ->where('ca_codigo_agrupado', $codigoTotalizado)
+                        ->first();
+
+                    if ($totalizadoInfo && !empty($totalizadoInfo->ca_descripcion)) {
+                        $nombreTotalizado = $totalizadoInfo->ca_descripcion;
                     }
                 }
-                $librosPedido = array_values($consolidados);
 
-                // 5. Agregar libros extras (vendidos pero no en el contrato)
+                $codigoMostrar = $esTotalizado ? $codigoTotalizado : $contratosOrigen[0];
+
+                $librosConsolidados = [];
+                foreach ($contratosOrigen as $codigoContrato) {
+                    // 2. Libros del pedido por contrato y luego consolidar por totalizado si aplica
+                    $fakeRequest = new \Illuminate\Http\Request();
+                    $fakeRequest->merge(['contrato' => $codigoContrato, 'periodo' => $periodoescolar]);
+                    $librosRaw = $pedidosCtrl->get_libros_pedidosAlcancesXContrato($fakeRequest);
+
+                    foreach ($librosRaw as $item) {
+                        $item = (array) $item;
+                        $qty = (int)(isset($item['cantidad']) ? $item['cantidad'] : 0);
+                        $codigo = $item['pro_codigo'];
+
+                        if (isset($librosConsolidados[$codigo])) {
+                            $librosConsolidados[$codigo]['cantidad'] += $qty;
+                        } else {
+                            $librosConsolidados[$codigo] = [
+                                'pro_codigo'   => $codigo,
+                                'nombre_libro' => $item['nombre_libro'],
+                                'precio'       => (float)(isset($item['precio']) ? $item['precio'] : 0),
+                                'descuento'    => (float)(isset($item['descuento']) ? $item['descuento'] : 0),
+                                'cantidad'     => $qty,
+                            ];
+                        }
+                    }
+                }
+
+                $librosPedido = array_values($librosConsolidados);
+
+                // 3. Libros vendidos: por totalizado para lista agrupada, por contrato para venta directa
+                if ($esTotalizado) {
+                    $fakeRequest2 = new \Illuminate\Http\Request();
+                    $fakeRequest2->merge(['totalizado' => $codigoTotalizado, 'periodo' => $periodoescolar]);
+                    $ventasResp = $this->get_libros_vendidos_por_totalizado($fakeRequest2);
+                } else {
+                    $fakeRequest2 = new \Illuminate\Http\Request();
+                    $fakeRequest2->merge(['contrato' => $codigoMostrar, 'periodo' => $periodoescolar]);
+                    $ventasResp = $this->get_libros_vendidos_por_contrato($fakeRequest2);
+                }
+
+                $ventasDecoded = json_decode($ventasResp->getContent());
+                $librosVendidosRaw = [];
+                if ($ventasDecoded && isset($ventasDecoded->data) && is_array($ventasDecoded->data)) {
+                    $librosVendidosRaw = $ventasDecoded->data;
+                }
+                // 4. Agregar libros extras (vendidos pero no en el contrato/totalizado)
                 $codigosEnPedido = array_column($librosPedido, 'pro_codigo');
                 foreach ($librosVendidosRaw as $lv) {
                     if (!in_array($lv->pro_codigo, $codigosEnPedido)) {
                         $librosPedido[] = [
                             'pro_codigo'   => $lv->pro_codigo,
                             'nombre_libro' => $lv->nombre_libro,
-                            'precio'       => (float)($lv->precio_unitario ?? 0),
+                            'precio'       => (float)(isset($lv->precio_unitario) ? $lv->precio_unitario : 0),
                             'descuento'    => 0,
                             'cantidad'     => 0,
                             'esLibroExtra' => true,
@@ -4341,7 +4553,7 @@ class ProformaController extends Controller
                     }
                 }
 
-                // 6. Calcular totales del contrato + inyectar ventas en cada libro
+                // 5. Calcular totales del contrato/totalizado + inyectar ventas en cada libro
                 $totalContratoCantidad  = 0;
                 $totalContratoSubtotal  = 0.0;
                 $totalContratoTotal     = 0.0;
@@ -4352,16 +4564,16 @@ class ProformaController extends Controller
                 $totalPendienteValor    = 0.0;
 
                 foreach ($librosPedido as &$libro) {
-                    $cant   = (int)($libro['cantidad'] ?? 0);
-                    $precio = (float)($libro['precio'] ?? 0);
-                    $dscto  = (float)($libro['descuento'] ?? 0);
+                    $cant   = (int)(isset($libro['cantidad']) ? $libro['cantidad'] : 0);
+                    $precio = (float)(isset($libro['precio']) ? $libro['precio'] : 0);
+                    $dscto  = (float)(isset($libro['descuento']) ? $libro['descuento'] : 0);
                     $sub    = $precio * $cant;
                     $tot    = $sub - ($sub * $dscto / 100);
 
                     $ventasLibro = array_filter((array)$librosVendidosRaw, fn($v) => $v->pro_codigo === $libro['pro_codigo']);
-                    $ventaCant   = array_sum(array_map(fn($v) => (int)($v->cantidad_vendida ?? 0), $ventasLibro));
-                    $ventaSub    = array_sum(array_map(fn($v) => (float)($v->subtotal_vendido ?? 0), $ventasLibro));
-                    $ventaTot    = array_sum(array_map(fn($v) => (float)($v->total_vendido ?? 0), $ventasLibro));
+                    $ventaCant   = array_sum(array_map(fn($v) => (int)(isset($v->cantidad_vendida) ? $v->cantidad_vendida : 0), $ventasLibro));
+                    $ventaSub    = array_sum(array_map(fn($v) => (float)(isset($v->subtotal_vendido) ? $v->subtotal_vendido : 0), $ventasLibro));
+                    $ventaTot    = array_sum(array_map(fn($v) => (float)(isset($v->total_vendido) ? $v->total_vendido : 0), $ventasLibro));
 
                     $libro['ventas']            = array_values($ventasLibro);
                     $libro['pendiente_cantidad'] = $cant - $ventaCant;
@@ -4379,12 +4591,16 @@ class ProformaController extends Controller
                 unset($libro);
 
                 $resultado[] = [
-                    'id_pedido'         => $contrato->id_pedido,
-                    'tipo_venta'        => $contrato->tipo_venta,
-                    'id_institucion'    => $contrato->id_institucion,
-                    'nombreInstitucion' => $contrato->nombreInstitucion,
-                    'contrato_generado' => $codigoContrato,
-                    'id_periodo'        => $contrato->id_periodo,
+                    'id_pedido'         => $grupo['id_pedido_referencia'],
+                    'tipo_venta'        => $tipoVenta,
+                    'id_institucion'    => $idInstitucion,
+                    'nombreInstitucion' => $nombreInstitucion,
+                    'contrato_generado' => $codigoMostrar,
+                    'id_periodo'        => $grupo['id_periodo'],
+                    'es_totalizado'     => $esTotalizado ? 1 : 0,
+                    'codigo_totalizado' => $esTotalizado ? $codigoTotalizado : null,
+                    'nombre_totalizado' => $nombreTotalizado,
+                    'contratos_origen'  => $contratosOrigen,
                     'libros'            => $librosPedido,
                     'totales'           => [
                         'contrato_cantidad'  => $totalContratoCantidad,

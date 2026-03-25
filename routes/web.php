@@ -244,6 +244,7 @@ Route::get('institucionesTemporalesWebinar', 'SeminarioController@institucionesT
 
 //======================APIS PARA PLANIFICACIONES==============
 Route::get('verificarCedulaAsesor', 'AuthController@verificarCedulaAsesor');
+Route::get('verificarCedulaDocente', 'AuthController@verificarCedulaDocente');
 //=======================FIN APIS PARA PLANIFICACIONES=========
 
 //========================APIS PARA MATRICULAS=================================
@@ -1575,13 +1576,6 @@ Route::get('getCodigos/{codigo}', 'CodigoLibrosController@getCodigos');
 Route::post('guardarCodigoParametros', 'GestionCodigosController@guardarCodigoParametros');
 Route::get('traerCodigosParametros', 'GestionCodigosController@traerCodigosParametros');
 //==========FIN MANTENIMIENTO CODIGOS///===============
-//==========APIS ENCUESTA=============================================
-Route::resource('encuesta', 'EncuestaController');
-Route::post('guardarAsignacion', 'EncuestaController@guardarAsignacion');
-Route::get('verInfoCedulaEncuesta', 'EncuestaController@verInfoCedulaEncuesta');
-Route::post('guardarRespuestaEncuesta', 'EncuestaController@guardarRespuestaEncuesta');
-Route::get('getResultadoEncuestas', 'EncuestaController@getResultadoEncuestas');
-//==========FIN APIS ENCUESTA=========================================
 //====================REPORTES==========================================
 Route::get('reporteMesTareas', 'CursoController@reporteMesTareas');
 Route::get('reporteMesTareasAnios', 'CursoController@reporteMesTareasAnios');
@@ -2143,9 +2137,11 @@ Route::post('Proforma_Perseo_Actualizar_Desde_Modal','ProformaController@Proform
 Route::post('Proforma_Perseo_Actualizar_Con_Reservas','ProformaController@Proforma_Perseo_Actualizar_Con_Reservas');
 Route::get('get_libros_proformados_por_contrato','ProformaController@get_libros_proformados_por_contrato');
 Route::get('get_libros_vendidos_por_contrato','ProformaController@get_libros_vendidos_por_contrato');
+Route::get('get_libros_vendidos_por_totalizado','ProformaController@get_libros_vendidos_por_totalizado');
 Route::get('get_cantidades_vendidas_proforma','ProformaController@get_cantidades_vendidas_proforma');
 Route::get('get_proformas_por_contrato','ProformaController@get_proformas_por_contrato');
 Route::get('get_ventas_por_contrato','ProformaController@get_ventas_por_contrato');
+Route::get('get_ventas_por_totalizado','ProformaController@get_ventas_por_totalizado');
 Route::get('get_proforma_para_editar/{id}','ProformaController@get_proforma_para_editar');
 Route::get('get_proforma_para_editar_perseo/{id}','ProformaController@get_proforma_para_editar_perseo');
 Route::post('PostProforma_Editar','ProformaController@PostProforma_Editar');
@@ -2174,6 +2170,7 @@ Route::post('Venta_Perseo_Actualizar','Perseo\VentaPerseoController@actualizarVe
 
 //RUTAS PARA VENTAS DE OBSEQUIOS PERSEO
 Route::get('obtener_pedidos_obsequios_por_contrato','Perseo\VentaPerseoController@obtenerPedidosObsequiosPorContrato');
+Route::get('obtener_detalle_hijos_docentes_por_contratos','Perseo\VentaPerseoController@obtenerDetalleHijosDocentesPorContratos');
 Route::get('api/perseo/ventas/obtenerDatosDetalleLibros/{id}','Perseo\VentaPerseoController@obtenerDatosDetalleLibros');
 Route::post('Venta_Obsequios_Perseo_Generar','Perseo\VentaPerseoController@generarVentaObsequios');
 Route::post('Venta_Obsequios_Perseo_Anular','Perseo\VentaPerseoController@anularVentaObsequios');
@@ -2427,3 +2424,74 @@ Route::get('configuracion_general','ConfiguracionGeneralController@configuracion
 Route::get('metodosGetUsuario','UsuarioController@metodosGetUsuario');
 Route::post('metodosPostUsuario','UsuarioController@metodosPostUsuario');
 Route::get('codigosLibrosBuscarBtn','CodigosLibrosController@codigosLibrosBuscarBtn');
+
+
+Route::prefix('encuesta_prolipa')->group(function () {
+
+    // ── Rutas estáticas primero (deben ir ANTES de /{id} para evitar conflictos) ──
+
+    // 🔍 buscar por código de encuesta (legacy)
+    Route::get('/codigo/{codigo}', 'EncuestaProlipaController@porCodigo');
+
+    // � acceso público por código de asignación (QR de capacitación)
+    Route::get('/acceso/{codigo_acceso}', 'EncuestaProlipaController@porCodigoAcceso');
+
+    // � estadísticas globales (RN06 / RN07)
+    Route::get('/estadisticas/asesores',           'EncuestaProlipaController@estadisticasAsesores');
+    Route::get('/estadisticas/instituciones',      'EncuestaProlipaController@estadisticasInstituciones');
+    Route::get('/estadisticas/encuestas-detalle',  'EncuestaProlipaController@encuestasConDetalle');
+    Route::get('/estadisticas/top-docentes',       'EncuestaProlipaController@topDocentes');
+
+    // � asignaciones polimórficas (capacitaciones, seminarios, etc.)
+    Route::get('/asignaciones/{entidad_tipo}/{entidad_id}', 'EncuestaProlipaController@asignacionesPorEntidad');
+    Route::post('/asignaciones',                            'EncuestaProlipaController@crearAsignacion');
+    Route::delete('/asignaciones/{id}',                     'EncuestaProlipaController@eliminarAsignacion');
+    Route::post('/asignaciones/{id}/estado',                'EncuestaProlipaController@estadoAsignacion');
+    Route::post('/asignaciones/{id}/grupos',                'EncuestaProlipaController@actualizarAsignacion');
+
+    // 🧾 responder encuesta
+    Route::post('/responder', 'EncuestaProlipaController@responder');
+
+    // 📋 encuestas
+    Route::get('/', 'EncuestaProlipaController@index');
+    Route::post('/crear', 'EncuestaProlipaController@store');
+
+    // ── Rutas con {id} dinámico al final ──
+
+    Route::delete('/{id}', 'EncuestaProlipaController@destroy');
+    Route::post('/{id}/orden', 'EncuestaProlipaController@guardarOrden');
+    Route::delete('/pregunta/{id}', 'EncuestaProlipaController@eliminarPregunta');
+
+    Route::get('/{id}', 'EncuestaProlipaController@show');
+    Route::post('/actualizar/{id}', 'EncuestaProlipaController@update');
+
+    // ❓ preguntas
+    Route::post('/{id}/preguntas', 'EncuestaProlipaController@guardarPregunta');
+    Route::get('/{id}/preguntas', 'EncuestaProlipaController@obtenerPreguntas');
+
+    // 🔄 cambiar estado (borrador / habilitada / cerrada)
+    Route::post('/{id}/estado', 'EncuestaProlipaController@cambiarEstado');
+
+    // � estadísticas por encuesta
+    Route::get('/{id}/estadisticas', 'EncuestaProlipaController@estadisticas');
+    Route::get('/pregunta/{id}/abiertas', 'EncuestaProlipaController@respuestasAbiertas');
+    Route::get('/pregunta/{id}/top', 'EncuestaProlipaController@opcionMasVotada');
+    Route::get('/{id}/total', 'EncuestaProlipaController@totalRespuestas');
+    Route::get('/pregunta/{id}/promedio', 'EncuestaProlipaController@promedioPregunta');
+
+    // ✅ verificar si usuario ya respondió
+    Route::get('/{encuesta_id}/ya_respondio/{usuario_id}', 'EncuestaProlipaController@yaRespondio');
+
+    // 👥 participantes
+    Route::get('/{id}/participantes', 'EncuestaProlipaController@participantes');
+
+    // 📋 respuestas de un docente en una encuesta
+    Route::get('/{encuesta_id}/respuestas-docente/{usuario_id}', 'EncuestaProlipaController@respuestasDocente');
+
+    // 📊 resumen global por asesor (RN06)
+    Route::get('/asesor/{created_by}/resumen', 'EncuestaProlipaController@resumenAsesor');
+
+    // 🏫 por institución — ELIMINADO (institucion_id ya no existe en encuestas)
+    // Route::get('/institucion/{id}', 'EncuestaProlipaController@porInstitucion');
+
+});

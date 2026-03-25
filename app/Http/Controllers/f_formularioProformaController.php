@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\f_formulario_proforma;
-use DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class f_formularioProformaController extends Controller
 {
@@ -79,14 +80,66 @@ class f_formularioProformaController extends Controller
     public function Post_Registrar_modificar_formularioProforma(Request $request)
     {
         try {
+            $request->validate([
+                'idInstitucion' => 'required|integer',
+                'idperiodoescolar' => 'required|integer',
+                'ffp_credito' => 'required|numeric|min:0',
+                'ffp_cupo' => 'required|numeric|min:0',
+                'ffp_descuento' => 'required|numeric|min:0|max:100',
+                'ffp_porcentaje_facturacion' => 'required|integer|min:0|max:100',
+                'if_distribuidor' => 'required|integer|in:0,1',
+            ]);
+
+            $credito = (float)$request->ffp_credito;
+            $porcentajeFacturacion = (int)$request->ffp_porcentaje_facturacion;
+            if ($porcentajeFacturacion < 0) {
+                $porcentajeFacturacion = 0;
+            }
+            if ($porcentajeFacturacion > 100) {
+                $porcentajeFacturacion = 100;
+            }
+
+            $saldoPrefacturas = round(($credito * $porcentajeFacturacion) / 100, 2);
+            $saldoNotas = round($credito - $saldoPrefacturas, 2);
+
             // Buscar el formularioProforma por su ffp_id o crear uno nuevo
             $formularioProforma = f_formulario_proforma::firstOrNew(['ffp_id' => $request->ffp_id]);
+
+            // Bloquear edición del porcentaje de facturación para usuarios no root cuando ya existe el formulario
+            if ($formularioProforma->exists) {
+                $usuarioEditorId = $request->user_update;
+                if (empty($usuarioEditorId)) {
+                    return response()->json([
+                        "status" => "0",
+                        'message' => 'No se pudo validar el usuario que actualiza el formulario'
+                    ], 422);
+                }
+
+                $usuarioEditor = DB::table('usuario')
+                    ->select('idusuario', 'id_group')
+                    ->where('idusuario', $usuarioEditorId)
+                    ->first();
+
+                $esRoot = $usuarioEditor && isset($usuarioEditor->id_group) && in_array((int)$usuarioEditor->id_group, [1, 26]);
+                $porcentajeActual = (int)$formularioProforma->ffp_porcentaje_facturacion;
+
+                if (!$esRoot && $porcentajeActual !== $porcentajeFacturacion) {
+                    return response()->json([
+                        "status" => "0",
+                        'message' => 'El porcentaje/cupo de facturación solo puede ser modificado por usuario root'
+                    ], 403);
+                }
+            }
+
             // Asignar los demás datos del formularioProforma
             $formularioProforma->idInstitucion = $request->idInstitucion;
             $formularioProforma->idperiodoescolar = $request->idperiodoescolar;
             $formularioProforma->ffp_credito = $request->ffp_credito;
             $formularioProforma->ffp_cupo = $request->ffp_cupo;
             $formularioProforma->ffp_descuento = $request->ffp_descuento;
+            $formularioProforma->ffp_porcentaje_facturacion = $porcentajeFacturacion;
+            $formularioProforma->ffp_saldo_prefacturas = $saldoPrefacturas;
+            $formularioProforma->ffp_saldo_notas = $saldoNotas;
             $formularioProforma->if_distribuidor = $request->if_distribuidor;
             // Verificar si es un nuevo registro o una actualización
             if ($formularioProforma->exists){
@@ -109,6 +162,12 @@ class f_formularioProformaController extends Controller
             } else {
                 return "No se pudo guardar/actualizar";
             }
+        } catch (ValidationException $e) {
+            return response()->json([
+                "status" => "0",
+                'message' => 'Error de validación',
+                'errors' => $e->errors()
+            ], 422);
         } catch (\Exception $e) {
             return response()->json(["status" => "0", 'message' => 'Error al actualizar los datos: ' . $e->getMessage()], 500);
         }

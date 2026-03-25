@@ -43,7 +43,6 @@ class Usuario extends Model implements Auditable
     ];
     protected $hidden = [
         'password',
-        'password2',
         'remember_token',
     ];
 

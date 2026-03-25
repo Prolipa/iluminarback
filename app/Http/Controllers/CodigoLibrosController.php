@@ -16,8 +16,8 @@ use App\Models\CodigosLibrosDevolucionHeader;
 use App\Models\CodigosLibrosDevolucionSon;
 use App\Models\CodigosPaquete;
 use App\Models\CombosCodigos;
+use App\Models\ConfiguracionGeneral;
 use App\Models\f_tipo_documento;
-use App\Models\Facturacion\Inventario\ConfiguracionGeneral;
 use App\Models\HistoricoCodigos;
 use App\Models\Institucion;
 use App\Models\LibroSerie;
@@ -2589,6 +2589,9 @@ class CodigoLibrosController extends Controller
         $documento_cliente      = $request->documento_cliente;
         $documento_clienteId    = $request->documento_clienteId;
         $institucion_id_select  = $request->institucion_id_select;
+        $venta_lista_institucionSelect = $request->venta_lista_institucionSelect;
+        $nuevoFormato           = ConfiguracionGeneral::getMinimo(ConfiguracionGeneral::NUEVO_FORMATO_VENTAS);//con perseo
+        if($periodo_id >= $nuevoFormato) { $institucion_id_select = $venta_lista_institucionSelect; }
         try{
             //iniciales
             if($iniciales == null || $iniciales == "" || $iniciales == "null"){ return ["status" => "0", "message" => "No se pudo obtener la iniciales del usuario"]; }
@@ -2666,7 +2669,6 @@ class CodigoLibrosController extends Controller
                         "id_periodo"        => $periodo_id,
                         "id_empresa"        => $proforma_empresa
                     ];
-
                     //VALIDAR QUE EL DOCUMENTO ACTUAL ESTE DISPONIBLE
                     $getDisponibilidadDocumento = $this->devolucionRepository->getFacturaAvailable($datos, $cantidadLibroDescontar, [],$codigo_proforma);
                     if($getDisponibilidadDocumento){
@@ -2706,7 +2708,7 @@ class CodigoLibrosController extends Controller
                 $messageProforma                = "";
                 $ingreso                        = 0;
                 $messageIngreso                 = "";
-                $id_cliente                     = $item->institucion_id_select;
+                $id_cliente                     = $institucion_id_select;
                 $bc_periodo                     = $item->bc_periodo;
                 $libro_idlibro                  = $item->libro_idReal;
                 $codigo_liquidacion             = $item->codigo_liquidacion;
@@ -5434,6 +5436,7 @@ class CodigoLibrosController extends Controller
             return [
                 'institucion_id_select' => $institucionId,
                 'institucion_select'    => $primerItem['institucion_select'] ?? 'Institución no encontrada', // Agregar institucion_select
+                'venta_lista_institucion' => $primerItem['venta_lista_institucion'] ?? '0', // Agregar venta_lista_institucion
                 'data'                  => $items->pluck('data')->flatten() // Extraer y aplanar el data de cada item
             ];
         })->values();
@@ -5711,6 +5714,7 @@ class CodigoLibrosController extends Controller
                 'institucionPuntoVenta'    => $items->first()->institucionPuntoVenta ?? 'Institución no encontrada',
                 'institucion_select'       => $nombreInstitucionSeleccionado,
                 'institucion_id_select'    => $institucionIdSeleccionado,
+                'venta_lista_institucion'  => $items->first()->venta_lista_institucion ?? '0',
                 'data'                     => $items
             ];
         })->values();

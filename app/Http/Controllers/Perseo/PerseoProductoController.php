@@ -386,7 +386,7 @@ class PerseoProductoController extends Controller
                     } catch (\Exception $e) {
                         // Si falla uno, continuar con los demás
                         $productos_no_encontrados[] = $codigo;
-                        \Log::error("Error consultando producto {$codigo}: " . $e->getMessage());
+                        // \Log::error("Error consultando producto {$codigo}: " . $e->getMessage());
                     }
                 }
                 
@@ -864,4 +864,222 @@ class PerseoProductoController extends Controller
         }
     }
     //INVENTARIO PRODUCTOS FIN
+
+    /**
+     * Sincronizar existencias o vincular IDs desde Perseo → tabla 1_4_cal_producto
+     * api:post /perseo/productos/sincronizar_existencias_perseo
+     *
+     * Recibe:
+     *   - id_empresa (1=Prolipa, 3=Calmed, 4=Calmed2026, 5=Prolipa2026)
+     *   - tipo: 'stock' | 'ids'
+     *
+     * tipo = 'stock':
+     *   Por cada producto de Perseo donde pro_codigo == productocodigo
+     *   Y productosid == campo id_perseo correspondiente:
+     *   → UPDATE pro_reservar = existenciastotales, pro_stockCalmed = existenciastotales
+     *
+     * tipo = 'ids':
+     *   Por cada producto de Perseo donde pro_codigo == productocodigo
+     *   Y el campo id_perseo local es NULL o 0:
+     *   → UPDATE id_perseo_*_produccion = productosid
+     */
+    public function sincronizarExistenciasPerseo(Request $request)
+    {
+        try {
+            set_time_limit(600); // 10 minutos
+            ini_set('max_execution_time', 600);
+
+            $id_empresa = $request->input('id_empresa');
+            $tipo       = $request->input('tipo', 'stock'); // 'stock' o 'ids'
+
+            // Mapeo de empresa → campo id_perseo en tabla 1_4_cal_producto
+            $mapeoEmpresa = [
+                1 => 'id_perseo_prolipa_produccion',
+                3 => 'id_perseo_calmed_produccion',
+                4 => 'id_perseo_calmed2026_produccion',
+                5 => 'id_perseo_prolipa2026_produccion',
+            ];
+
+            $nombresEmpresa = [
+                1 => 'Prolipa Producción',
+                3 => 'Calmed Producción',
+                4 => 'Calmed 2026 Producción',
+                5 => 'Prolipa 2026 Producción',
+            ];
+
+            if (!isset($mapeoEmpresa[$id_empresa])) {
+                return response()->json([
+                    'status'  => 0,
+                    'mensaje' => 'Empresa no válida. Use: 1 (Prolipa), 3 (Calmed), 4 (Calmed2026), 5 (Prolipa2026)'
+                ], 400);
+            }
+
+            if (!in_array($tipo, ['stock', 'ids'])) {
+                return response()->json([
+                    'status'  => 0,
+                    'mensaje' => 'Tipo no válido. Use: stock o ids'
+                ], 400);
+            }
+
+            $campoPerseo   = $mapeoEmpresa[$id_empresa];
+            $nombreEmpresa = $nombresEmpresa[$id_empresa];
+            $etiquetaTipo  = $tipo === 'stock' ? 'Sincronizar Stock' : 'Vincular IDs';
+
+            // 1. Consultar TODOS los productos de Perseo (formData vacío = todos)
+            $formData = [];
+            $url      = "productos_consulta";
+            $response = $this->tr_PerseoPost($url, $formData, $id_empresa);
+
+            // Validar respuesta
+            if (!isset($response['productos']) || empty($response['productos'])) {
+                return response()->json([
+                    'status'  => 0,
+                    'mensaje' => 'No se recibieron productos de Perseo. Verifique la conexión con la API.',
+                    'detalle' => $response
+                ]);
+            }
+
+            $productosPerseo     = $response['productos'];
+            $totalRecibidos      = count($productosPerseo);
+            $actualizados        = 0;
+            $ignorados           = 0;
+            $errores             = [];
+            $detalleActualizados = [];
+
+            if ($tipo === 'stock') {
+                // ============ MODO STOCK ============
+                // Obtener productos locales que YA tienen id_perseo vinculado
+                $productosLocales = \DB::table('1_4_cal_producto')
+                    ->select('pro_codigo', $campoPerseo, 'pro_reservar', 'pro_stockCalmed')
+                    ->whereNotNull($campoPerseo)
+                    ->where($campoPerseo, '>', 0)
+                    ->get()
+                    ->keyBy('pro_codigo');
+
+                foreach ($productosPerseo as $productoPerseo) {
+                    $productocodigo     = $productoPerseo['productocodigo'] ?? null;
+                    $productosid        = $productoPerseo['productosid'] ?? null;
+                    $existenciastotales = $productoPerseo['existenciastotales'] ?? 0;
+
+                    if (!$productocodigo || !$productosid) {
+                        $ignorados++;
+                        continue;
+                    }
+
+                    // Condición 1: pro_codigo == productocodigo
+                    $productoLocal = $productosLocales[$productocodigo] ?? null;
+                    if (!$productoLocal) {
+                        $ignorados++;
+                        continue;
+                    }
+
+                    // Condición 2: productosid == campo id_perseo correspondiente
+                    $idPerseoLocal = $productoLocal->$campoPerseo;
+                    if ($idPerseoLocal != $productosid) {
+                        $ignorados++;
+                        continue;
+                    }
+
+                    // Ambas condiciones se cumplen → Actualizar stock
+                    try {
+                        \DB::table('1_4_cal_producto')
+                            ->where('pro_codigo', $productocodigo)
+                            ->update([
+                                'pro_reservar'       => $existenciastotales,
+                                'pro_stockCalmed'    => $existenciastotales,
+                                'pro_stock'          => 0,
+                                'pro_depositoCalmed' => 0,
+                                'pro_deposito'       => 0,
+                                'updated_at'         => now(),
+                            ]);
+
+                        $detalleActualizados[] = [
+                            'pro_codigo'               => $productocodigo,
+                            'existenciastotales'       => $existenciastotales,
+                            'pro_reservar_anterior'    => $productoLocal->pro_reservar,
+                            'pro_stockCalmed_anterior' => $productoLocal->pro_stockCalmed,
+                        ];
+                        $actualizados++;
+                    } catch (\Exception $e) {
+                        $errores[] = [
+                            'pro_codigo' => $productocodigo,
+                            'error'      => $e->getMessage()
+                        ];
+                    }
+                }
+
+            } else {
+                // ============ MODO IDS ============
+                // Obtener productos locales que NO tienen id_perseo (NULL o 0)
+                $productosLocales = \DB::table('1_4_cal_producto')
+                    ->select('pro_codigo', $campoPerseo)
+                    ->where(function ($q) use ($campoPerseo) {
+                        $q->whereNull($campoPerseo)
+                          ->orWhere($campoPerseo, 0);
+                    })
+                    ->get()
+                    ->keyBy('pro_codigo');
+
+                foreach ($productosPerseo as $productoPerseo) {
+                    $productocodigo = $productoPerseo['productocodigo'] ?? null;
+                    $productosid   = $productoPerseo['productosid'] ?? null;
+
+                    if (!$productocodigo || !$productosid) {
+                        $ignorados++;
+                        continue;
+                    }
+
+                    // Condición: pro_codigo == productocodigo Y aún no tiene id_perseo
+                    $productoLocal = $productosLocales[$productocodigo] ?? null;
+                    if (!$productoLocal) {
+                        $ignorados++;
+                        continue;
+                    }
+
+                    // Vincular el productosid de Perseo al campo id_perseo local
+                    try {
+                        \DB::table('1_4_cal_producto')
+                            ->where('pro_codigo', $productocodigo)
+                            ->update([
+                                $campoPerseo => $productosid,
+                                'updated_at' => now(),
+                            ]);
+
+                        $detalleActualizados[] = [
+                            'pro_codigo'  => $productocodigo,
+                            'productosid' => $productosid,
+                            'campo'       => $campoPerseo,
+                        ];
+                        $actualizados++;
+                    } catch (\Exception $e) {
+                        $errores[] = [
+                            'pro_codigo' => $productocodigo,
+                            'error'      => $e->getMessage()
+                        ];
+                    }
+                }
+            }
+
+            $accion = $tipo === 'stock' ? 'stock actualizado' : 'IDs vinculados';
+
+            return response()->json([
+                'status'                 => 1,
+                'tipo'                   => $tipo,
+                'mensaje'                => "{$etiquetaTipo} finalizado correctamente. Se actualizaron {$actualizados} productos ({$accion}) de {$nombreEmpresa}.",
+                'empresa'                => $nombreEmpresa,
+                'productos_recibidos'    => $totalRecibidos,
+                'productos_actualizados' => $actualizados,
+                'productos_ignorados'    => $ignorados,
+                'errores'                => $errores,
+                'detalle_actualizados'   => $detalleActualizados,
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Error en sincronizarExistenciasPerseo: ' . $e->getMessage());
+            return response()->json([
+                'status'  => 0,
+                'mensaje' => 'Error al sincronizar: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
