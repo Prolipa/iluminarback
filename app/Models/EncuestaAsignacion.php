@@ -15,6 +15,8 @@ class EncuestaAsignacion extends Model
         'estado',
         'codigo_acceso',
         'created_by',
+        'tipo_acceso',
+        'usuarios_acceso',
     ];
 
     /** Relación polimórfica — resuelve el modelo según entidad_tipo via morphMap */

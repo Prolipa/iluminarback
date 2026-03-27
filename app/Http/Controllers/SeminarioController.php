@@ -912,4 +912,34 @@ class SeminarioController extends Controller
 
     }
 
+    // Obtener firma del capacitador de una capacitación
+    public function get_capacitador_firma($id_seminario) {
+        try {
+            $capacitador = DB::table('seminarios_capacitador as sc')
+                ->join('usuario as u', 'sc.idusuario', '=', 'u.idusuario')
+                ->where('sc.seminario_id', $id_seminario)
+                ->select('u.firma', 'u.nombres', 'u.apellidos', 'u.idusuario')
+                ->first();
+
+            if ($capacitador) {
+                return response()->json([
+                    'firma' => $capacitador->firma,
+                    'nombre' => trim($capacitador->nombres . ' ' . $capacitador->apellidos),
+                    'idusuario' => $capacitador->idusuario
+                ]);
+            }
+
+            return response()->json([
+                'firma' => null,
+                'nombre' => null,
+                'idusuario' => null
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error al obtener firma del capacitador',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
 }

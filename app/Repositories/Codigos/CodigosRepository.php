@@ -1097,7 +1097,7 @@ class  CodigosRepository extends BaseRepository
 
     public function getLibrosAsesores_new($periodo,$asesor_id){
         $val_pedido = DB::SELECT("SELECT DISTINCT pv.pvn_id AS id, pv.id_pedido,
-        pv.pvn_cantidad AS valor,
+        (pv.pvn_cantidad - pv.cantidad_pendiente) AS valor,
         CASE
             WHEN s.id_serie = 6 THEN l.idlibro
             ELSE ar.idarea
@@ -1131,6 +1131,7 @@ class  CodigosRepository extends BaseRepository
         AND p.tipo              = '1'
         AND p.estado            = '1'
         AND p.estado_entrega    = '2'
+        AND p.guias_version_perseo = '0'
         GROUP BY pv.pvn_id, s.nombre_serie, ls.year, s.id_serie, ls.version, ls.codigo_liquidacion;
         ");
         if(empty($val_pedido)){
@@ -1651,7 +1652,7 @@ class  CodigosRepository extends BaseRepository
        $query = DB::SELECT("SELECT
                 ls.codigo_liquidacion AS codigo,
                 l.nombrelibro,
-                SUM(pv.pvn_cantidad) AS valor
+                SUM(pv.pvn_cantidad - pv.cantidad_pendiente) AS valor
             FROM pedidos_val_area_new pv
             LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
             LEFT JOIN libro l ON l.idlibro = pv.idlibro
@@ -1661,6 +1662,7 @@ class  CodigosRepository extends BaseRepository
                 AND p.tipo = '1'
                 AND p.id_periodo = '$periodo'
                 AND p.estado_entrega = '2'
+                AND p.guias_version_perseo = '0'
             GROUP BY ls.codigo_liquidacion, l.nombrelibro
             ORDER BY l.nombrelibro
         ");
@@ -1672,7 +1674,7 @@ class  CodigosRepository extends BaseRepository
         return $query;
     }
     public function guiasXAsesorPeriodoOld($periodo, $asesor_id){
-       $query = DB::SELECT("SELECT ls.codigo_liquidacion AS codigo, l.nombrelibro, sum(pv.valor) AS valor
+       $query = DB::SELECT("SELECT ls.codigo_liquidacion AS codigo, l.nombrelibro, sum(pv.valor - pv.cantidad_pendiente) AS valor
             FROM pedidos_val_area pv
             LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
             LEFT JOIN libro l ON l.idlibro = pv.id_libro
@@ -1682,6 +1684,7 @@ class  CodigosRepository extends BaseRepository
             AND p.tipo = '1'
             AND p.id_periodo = '$periodo'
             AND p.estado_entrega = '2'
+            AND p.guias_version_perseo = '0'
             GROUP BY  ls.codigo_liquidacion, l.nombrelibro
             ORDER BY l.nombrelibro
             ;
@@ -1691,6 +1694,43 @@ class  CodigosRepository extends BaseRepository
             $q->valor = (float) $q->valor;
             $q->cantidadGuiasXPedidos = (int) $q->valor;
         }
+        return $query;
+    }
+    public function guiasXAsesorPeriodoPerseoOld($periodo, $asesor_id){
+        $query = DB::SELECT("SELECT distinct p.id_pedido
+            FROM pedidos_val_area pv
+            LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
+            WHERE p.estado = '1'
+            AND p.id_asesor = '$asesor_id'
+            AND p.tipo = '1'
+            AND p.id_periodo = '$periodo'
+            AND p.estado_entrega in ('1','2','3')
+            AND p.guias_version_perseo = '1'
+            ;
+        ");
+        return $query;
+    }
+    public function guiasXAsesorPeriodoPerseoNew($periodo, $asesor_id){
+       $query = DB::SELECT("SELECT distinct p.id_pedido
+            FROM pedidos_val_area_new pv
+            LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
+            WHERE p.estado = '1'
+            AND p.id_asesor = '$asesor_id'
+            AND p.tipo = '1'
+            AND p.id_periodo = '$periodo'
+            AND p.estado_entrega in ('1','2','3')
+            AND p.guias_version_perseo = '1'
+        ");
+        return $query;
+    }
+
+    public function detalleVentaXIdGuia($id_pedido_guia){
+        $query = DB::SELECT("SELECT v.*, p.pro_nombre FROM f_detalle_venta v
+            LEFT JOIN f_venta v2 ON v2.ven_codigo = v.ven_codigo
+            LEFT JOIN 1_4_cal_producto p ON p.pro_codigo = v.pro_codigo
+            WHERE v2.id_pedido_guia ='$id_pedido_guia'
+            AND v2.est_ven_codigo = '1';
+        ");
         return $query;
     }
 }

@@ -23,6 +23,7 @@ use App\Models\Institucion;
 use App\Models\LibroSerie;
 use App\Models\Series;
 use App\Models\Ventas;
+use App\Http\Controllers\_14ProductoController;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\Facturacion\DevolucionRepository;
 use App\Repositories\Facturacion\ProformaRepository;
@@ -2178,6 +2179,12 @@ class CodigoLibrosController extends Controller
                     $this->NotificacionRepository->notificacionVerificaciones($channel, $event, $data);
                     DB::commit();
                 }
+
+                // SECCION PARA ACTUALIZAR STOCK
+                $productoController = new _14ProductoController();
+                // Llamar al método Mover_Stock_SoloTxt_Todo_A_DepositoCALMED
+                $productoController->Mover_Stock_SoloTxt_Todo_A_pro_stockCalmed();
+
                 return [
                     "cambiados"             => $porcentaje,
                     "codigosNoCambiados"    => $codigosNoCambiados,
@@ -3981,7 +3988,6 @@ class CodigoLibrosController extends Controller
         if($request->reporteBodegaCombos)                       { return $this->reporteBodegaCombos($request); }
         if($request->reporteBodegaCombos_new)                   { return $this->reporteBodegaCombos_new($request); }
         if($request->getCombos)                                 { return $this->codigosRepository->getCombos(); }
-        if($request->getReporteLibrosAsesores)                  { return $this->getReporteLibrosAsesores($request); }
         if($request->getReporteLibrosAsesores_new)              { return $this->getReporteLibrosAsesores_new($request); }
         if($request->getCodigosIndividuales)                    { return $this->getCodigosIndividuales($request); }
         if($request->getReporteXTipoVenta)                      { return $this->getReporteXTipoVenta($request); }
@@ -4181,233 +4187,6 @@ class CodigoLibrosController extends Controller
             $item->precio_total = number_format($precio * $item->cantidad, 2, '.', '');
         }
         return $result;
-    }
-    //api:get/metodosGetCodigos?getReporteLibrosAsesores=1&periodo=24&codigo=SM1
-    public function getReporteLibrosAsesores($request){
-        set_time_limit(6000000);
-        ini_set('max_execution_time', 6000000);
-        $periodo        = $request->periodo;
-        $codigoBusqueda = $request->codigo;
-        // $GuiasBodega   = $this->codigosRepository->getCodigosBodega(1,$periodo,0,4179);
-        // return $GuiasBodega;
-        // $val_pedido2 = DB::SELECT("SELECT DISTINCT p.id_asesor, CONCAT(u.nombres,' ',u.apellidos) as asesor
-        // FROM pedidos_val_area pv
-        // LEFT JOIN area ar ON  pv.id_area = ar.idarea
-        // LEFT JOIN series se ON pv.id_serie = se.id_serie
-        // LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
-        // LEFT JOIN usuario u ON p.id_asesor = u.idusuario
-        // where p.tipo        = '1'
-        // and p.id_periodo  = '$periodo'
-        // AND p.estado        = '1'
-        // AND p.estado_entrega = '2'
-        // GROUP BY u.nombres ORDER BY u.nombres
-        // ");
-        $val_pedido2 = DB::SELECT("SELECT u.idusuario as id_asesor, CONCAT(u.nombres,' ',u.apellidos) as asesor from usuario u where id_group = '11'");
-
-        foreach($val_pedido2 as $key11 => $itemAsesor){
-            $guias = $this->codigosRepository->getLibrosAsesores($periodo,$itemAsesor->id_asesor);
-            $resultado = [];
-            //filtrar por el libro_id = 652 los libros
-            $guiasPedidos = collect($guias)->where('codigo',$codigoBusqueda)->values();
-            //    $resultado = $guiasPedidos;
-            if(count($guiasPedidos) == 0){
-                $GuiasBodega   = $this->codigosRepository->getCodigosBodega(1,$periodo,0,$itemAsesor->id_asesor);
-                //filtrar por codigo
-                $resultado          = collect($GuiasBodega)->where('codigo',$codigoBusqueda)->values();
-            }else{
-                $getBodega   = $this->codigosRepository->getCodigosBodega(1,$periodo,0,$itemAsesor->id_asesor);
-                $GuiasBodega = collect($getBodega)->where('codigo',$codigoBusqueda)->values();
-                if(count($GuiasBodega) == 0){
-                    $resultado = $guiasPedidos;
-                }else{
-                    $resultado = $guiasPedidos;
-                    $resultado[0]->valor = $resultado[0]->valor + $GuiasBodega[0]->cantidad;
-                }
-            }
-
-            //guardar un campo totalguias obtener el [0]->valor
-            $itemAsesor->guias      = $resultado;
-            if(count($resultado) == 0){
-                $itemAsesor->totalguias = 0;
-            }else{
-                $itemAsesor->totalguias = $resultado[0]->valor;
-            }
-            //ESCUELAS
-            $pedidos = $this->tr_institucionesAsesorPedidos($periodo,$itemAsesor->id_asesor);
-            foreach($pedidos as $key8 => $itempedido){
-                $val_pedido = DB::table('pedidos_val_area as pv')
-                ->selectRaw('DISTINCT pv.valor, pv.id_area, pv.tipo_val, pv.id_serie, pv.year, pv.plan_lector, pv.alcance,
-                            p.id_periodo,
-                            CONCAT(se.nombre_serie, " ", ar.nombrearea) as serieArea,
-                            se.nombre_serie')
-                ->leftJoin('area as ar', 'pv.id_area', '=', 'ar.idarea')
-                ->leftJoin('series as se', 'pv.id_serie', '=', 'se.id_serie')
-                ->leftJoin('pedidos as p', 'pv.id_pedido', '=', 'p.id_pedido')
-                ->leftJoin('usuario as u', 'p.id_asesor', '=', 'u.idusuario')
-                // ->whereIn('p.id_pedido', $ids)
-                ->where('p.id_pedido',$itempedido->id_pedido)
-                ->where('p.tipo', '0')
-                ->where('p.estado', '1')
-                ->where('p.id_periodo',$periodo)
-                ->groupBy('pv.id')
-                ->get();
-                if(empty($val_pedido)){
-                    // return $val_pedido;
-                }else{
-                    $arreglo = [];
-                    $cont    = 0;
-                    //obtener solo los alcances activos
-                    foreach($val_pedido as $k => $tr){
-                        //Cuando es el pedido original
-                        $alcance_id = 0;
-                        $alcance_id = $tr->alcance;
-                        if($alcance_id == 0){
-                            $arreglo[$cont] =   (object)[
-                                "valor"             => $tr->valor,
-                                "id_area"           => $tr->id_area,
-                                "tipo_val"          => $tr->tipo_val,
-                                "id_serie"          => $tr->id_serie,
-                                "year"              => $tr->year,
-                                "plan_lector"       => $tr->plan_lector,
-                                "id_periodo"        => $tr->id_periodo,
-                                "serieArea"         => $tr->serieArea,
-                                "nombre_serie"      => $tr->nombre_serie,
-                                "alcance"           => $tr->alcance,
-                                "alcance"           => $alcance_id
-                            ];
-                        }else{
-                            //validate que el alcance este cerrado o aprobado
-                            $query = $this->codigosRepository->getAlcanceAbiertoXId($alcance_id);
-                            if(count($query) > 0){
-                                $arreglo[$cont] = (object) [
-                                    "valor"             => $tr->valor,
-                                    "id_area"           => $tr->id_area,
-                                    "tipo_val"          => $tr->tipo_val,
-                                    "id_serie"          => $tr->id_serie,
-                                    "year"              => $tr->year,
-                                    "plan_lector"       => $tr->plan_lector,
-                                    "id_periodo"        => $tr->id_periodo,
-                                    "serieArea"         => $tr->serieArea,
-                                    "nombre_serie"      => $tr->nombre_serie,
-                                    "alcance"           => $tr->alcance,
-                                    "alcance"           => $alcance_id
-                                ];
-                            }
-                        }
-                        $cont++;
-                    }
-                    //mostrar el arreglo bien
-                    $renderSet = [];
-                    $renderSet = array_values($arreglo);
-                    if(count($renderSet) == 0){
-                        return $renderSet;
-                    }
-                    $datos = [];
-                    $contador = 0;
-                    //return $renderSet;
-                    foreach($renderSet as $key => $item){
-                        $valores = [];
-                        //plan lector
-                        if($item->plan_lector > 0 ){
-                            $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,pro.pro_reservar, l.descripcionlibro,
-                            (
-                                SELECT f.pvp AS precio
-                                FROM pedidos_formato f
-                                WHERE f.id_serie = '6'
-                                AND f.id_area = '69'
-                                AND f.id_libro = '$item->plan_lector'
-                                AND f.id_periodo = '$item->id_periodo'
-                            )as precio, ls.codigo_liquidacion,ls.version,ls.year
-                            FROM libro l
-                            left join libros_series ls  on ls.idLibro = l.idlibro
-                            inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
-                            WHERE l.idlibro = '$item->plan_lector'
-                            ");
-                            $valores = $getPlanlector;
-                        }else{
-                            $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,pro.pro_reservar, l.descripcionlibro,
-                            (
-                                SELECT f.pvp AS precio
-                                FROM pedidos_formato f
-                                WHERE f.id_serie = ls.id_serie
-                                AND f.id_area = a.area_idarea
-                                AND f.id_periodo = '$item->id_periodo'
-                            )as precio
-                            FROM libros_series ls
-                            LEFT JOIN libro l ON ls.idLibro = l.idlibro
-                            inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
-                            LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
-                            WHERE ls.id_serie = '$item->id_serie'
-                            AND a.area_idarea  = '$item->id_area'
-                            AND l.Estado_idEstado = '1'
-                            AND a.estado = '1'
-                            AND ls.year = '$item->year'
-                            LIMIT 1
-                            ");
-                            $valores = $getLibros;
-                        }
-                        $datos[$contador] = (Object)[
-                            "id_area"           => $item->id_area,
-                            "valor"             => $item->valor,
-                            // "tipo_val"          => $item->tipo_val,
-                            "id_serie"          => $item->id_serie,
-                            // "year"              => $item->year,
-                            // "anio"              => $valores[0]->year,
-                            // "version"           => $valores[0]->version,
-                            // "plan_lector"       => $item->plan_lector,
-                            "serieArea"         => $item->id_serie == 6 ? $item->nombre_serie." ".$valores[0]->nombrelibro : $item->serieArea,
-                            "libro_id"          => $valores[0]->idlibro,
-                            "nombrelibro"       => $valores[0]->nombrelibro,
-                            "nombre_serie"      => $item->nombre_serie,
-                            "precio"            => $valores[0]->precio,
-                            "codigo"            => $valores[0]->codigo_liquidacion,
-                            "stock"             => $valores[0]->pro_reservar,
-                            "descripcion"       => $valores[0]->descripcionlibro,
-                        ];
-                        $contador++;
-                    }
-                       //si el codigo de liquidacion se repite sumar en el valor
-                    // Crear un array asociativo para agrupar por codigo_liquidacion
-                    $grouped = [];
-
-                    foreach ($datos as $item) {
-                        $codigo = $item->codigo;
-
-                        if (!isset($grouped[$codigo])) {
-                            $grouped[$codigo] = $item;
-                        } else {
-                            $grouped[$codigo]->valor += $item->valor;
-                        }
-                    }
-
-                    // Convertir el array asociativo de nuevo a un array indexado
-                    $result = array_values($grouped);
-                    //subtotal
-                    foreach($result as $key => $item){
-                        $result[$key]->subtotal = $item->valor * $item->precio;
-                    }
-                    //filtrar por el codigo
-                    $resultadoLibros = collect($result)->where('codigo',$codigoBusqueda)->values();
-                    $itempedido->librosEscuela = $resultadoLibros;
-                }
-
-            }
-            //excluyo dentro del array de pedidos los que tiene la propiedad librosEscuela length == 0
-            $pedidos = collect($pedidos)->filter(function ($value, $key) {
-                return count($value->librosEscuela) > 0;
-            })->values();
-            $val_pedido2[$key11]->pedidos = $pedidos;
-            // $val_pedido2[$key11]->pedidos = $pedidos;
-            //contar en los pedidos cuantos librosEscuela mayor a 0 hay
-            $contador = 0;
-            foreach($pedidos as $key => $item20){
-                if(count($item20->librosEscuela) > 0){
-                    $contador++;
-                }
-            }
-            $val_pedido2[$key11]->totalLibrosConPedido = $contador;
-        }
-        return $val_pedido2;
     }
     //api:get/metodosGetCodigos?getCodigosIndividuales=1&periodo=25
     public function getCodigosIndividuales($request) {
@@ -5726,6 +5505,7 @@ class CodigoLibrosController extends Controller
             return [
                 'institucion_id_select' => $institucionId,
                 'institucion_select'    => $primerItem['institucion_select'] ?? 'Institución no encontrada',
+                'venta_lista_institucion' => $primerItem['venta_lista_institucion'] ?? '0',
                 'data'                  => $items->pluck('data')->flatten()
             ];
         })->values();
@@ -6287,35 +6067,99 @@ class CodigoLibrosController extends Controller
         return $result;
     }
      //api:get/metodosGetCodigos?getReporteLibrosAsesores_new=1&periodo=24&codigo=SM1
+    /**
+     * Método unificado para obtener reporte de libros por asesores
+     * Soporta periodos viejos y nuevos automáticamente
+     * Incluye módulo PERSEO optimizado para ambos casos
+     */
      public function getReporteLibrosAsesores_new($request){
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
         $periodo        = $request->periodo;
         $codigoBusqueda = $request->codigo;
-        // $GuiasBodega   = $this->codigosRepository->getCodigosBodega(1,$periodo,0,4179);
-        // return $GuiasBodega;
-        // $val_pedido2 = DB::SELECT("SELECT DISTINCT p.id_asesor, CONCAT(u.nombres,' ',u.apellidos) as asesor
-        // FROM pedidos_val_area_new pv
-        // LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
-        // LEFT JOIN usuario u ON p.id_asesor = u.idusuario
-        // where p.tipo        = '1'
-        // and p.id_periodo  = '$periodo'
-        // AND p.estado        = '1'
-        // AND p.estado_entrega = '2'
-        // GROUP BY u.nombres ORDER BY u.nombres
-        // ");
+
         $val_pedido2 = DB::SELECT("SELECT u.idusuario as id_asesor, CONCAT(u.nombres,' ',u.apellidos) as asesor from usuario u where id_group = '11'");
+
+        ///========= MODULO PERSEO F_VENTA - OPTIMIZADO ===================
+        // Determinar si usar tablas viejas o nuevas (automático según periodo)
+        $nuevo = ($periodo <= $this->tr_periodoPedido) ? 0 : 1;
+
+        // Traer TODOS los pedidos de guías PERSEO de TODOS los asesores en UNA sola consulta
+        $tablaPedidos = $nuevo == 0 ? 'pedidos_val_area' : 'pedidos_val_area_new';
+        $queryPedidosPerseo = DB::SELECT("SELECT DISTINCT p.id_pedido, p.id_asesor
+            FROM {$tablaPedidos} pv
+            LEFT JOIN pedidos p ON p.id_pedido = pv.id_pedido
+            WHERE p.estado = '1'
+            AND p.tipo = '1'
+            AND p.id_periodo = '$periodo'
+            AND p.estado_entrega IN ('1','2','3')
+            AND p.guias_version_perseo = '1'
+        ");
+
+        // Traer TODOS los detalles de venta en UNA sola consulta
+        $pedidosIds = collect($queryPedidosPerseo)->pluck('id_pedido')->toArray();
+        $arrayDetallePerseoGlobal = [];
+
+        if(!empty($pedidosIds)){
+            $pedidosIdsString = implode(',', $pedidosIds);
+            $queryDetallesPerseo = DB::SELECT("SELECT v.*, p.pro_nombre, p.pro_codigo, v2.id_pedido_guia, ped.id_asesor
+                FROM f_detalle_venta v
+                LEFT JOIN f_venta v2 ON v2.ven_codigo = v.ven_codigo
+                LEFT JOIN 1_4_cal_producto p ON p.pro_codigo = v.pro_codigo
+                LEFT JOIN pedidos ped ON ped.id_pedido = v2.id_pedido_guia
+                WHERE v2.id_pedido_guia IN ($pedidosIdsString)
+                AND v2.est_ven_codigo = '1'
+            ");
+
+            // Agrupar por asesor y código
+            foreach($queryDetallesPerseo as $detalle){
+                $asesor_id  = $detalle->id_asesor;
+                $pro_codigo = $detalle->pro_codigo;
+
+                if(!isset($arrayDetallePerseoGlobal[$asesor_id])){
+                    $arrayDetallePerseoGlobal[$asesor_id] = [];
+                }
+
+                if(!isset($arrayDetallePerseoGlobal[$asesor_id][$pro_codigo])){
+                    $arrayDetallePerseoGlobal[$asesor_id][$pro_codigo] = (object)[
+                        'pro_codigo'        => $pro_codigo,
+                        'pro_nombre'        => $detalle->pro_nombre,
+                        'det_ven_cantidad'  => 0
+                    ];
+                }
+
+                $arrayDetallePerseoGlobal[$asesor_id][$pro_codigo]->det_ven_cantidad += $detalle->det_ven_cantidad;
+            }
+        }
+        //========== FIN MODULO PERSEO F_VENTA - OPTIMIZADO ===================
+
         foreach($val_pedido2 as $key11 => $itemAsesor){
-            $guias = $this->codigosRepository->getLibrosAsesores_new($periodo,$itemAsesor->id_asesor);
+            // Usar método correcto según periodo (automático)
+            if($nuevo == 0){
+                $guias = $this->codigosRepository->getLibrosAsesores($periodo,$itemAsesor->id_asesor);
+            } else {
+                $guias = $this->codigosRepository->getLibrosAsesores_new($periodo,$itemAsesor->id_asesor);
+            }
+
             $resultado = [];
             //filtrar por el libro_id = 652 los libros
             $guiasPedidos = collect($guias)->where('codigo',$codigoBusqueda)->values();
             if(count($guiasPedidos) == 0){
-                $GuiasBodega   = $this->codigosRepository->getCodigosBodega_new(1,$periodo,0,$itemAsesor->id_asesor);
+                // Usar método correcto de bodega según periodo
+                if($nuevo == 0){
+                    $GuiasBodega = $this->codigosRepository->getCodigosBodega(1,$periodo,0,$itemAsesor->id_asesor);
+                } else {
+                    $GuiasBodega = $this->codigosRepository->getCodigosBodega_new(1,$periodo,0,$itemAsesor->id_asesor);
+                }
                 //filtrar por codigo
-                $resultado          = collect($GuiasBodega)->where('codigo',$codigoBusqueda)->values();
+                $resultado = collect($GuiasBodega)->where('codigo',$codigoBusqueda)->values();
             }else{
-                $getBodega   = $this->codigosRepository->getCodigosBodega_new(1,$periodo,0,$itemAsesor->id_asesor);
+                // Usar método correcto de bodega según periodo
+                if($nuevo == 0){
+                    $getBodega = $this->codigosRepository->getCodigosBodega(1,$periodo,0,$itemAsesor->id_asesor);
+                } else {
+                    $getBodega = $this->codigosRepository->getCodigosBodega_new(1,$periodo,0,$itemAsesor->id_asesor);
+                }
                 $GuiasBodega = collect($getBodega)->where('codigo',$codigoBusqueda)->values();
                 if(count($GuiasBodega) == 0){
                     $resultado = $guiasPedidos;
@@ -6324,6 +6168,52 @@ class CodigoLibrosController extends Controller
                     $resultado[0]->valor = $resultado[0]->valor + $GuiasBodega[0]->cantidad;
                 }
             }
+            //========== COMBINAR RESULTADO CON PERSEO (por asesor) ===================
+            $asesorPerseoData = $arrayDetallePerseoGlobal[$itemAsesor->id_asesor] ?? [];
+
+            if(!empty($asesorPerseoData)){
+                // Convertir resultado a array para manipulación
+                $resultadoArray = [];
+                if(count($resultado) > 0 && isset($resultado[0])){
+                    $resultadoArray = [$resultado[0]];
+                }
+
+                // Caso 1: Si resultado está vacío pero hay datos en Perseo
+                if(empty($resultadoArray) && !empty($asesorPerseoData)){
+                    // Buscar solo el código específico en PERSEO
+                    foreach($asesorPerseoData as $codigoPerseo => $dataPerseo){
+                        // Comparar con G adelante (codigoBusqueda puede venir con o sin G)
+                        $codigoBusquedaSinG = str_replace('G', '', $codigoBusqueda);
+                        $codigoComparar = str_replace('G', '', $codigoPerseo);
+
+                        if($codigoComparar == $codigoBusquedaSinG){
+                            $resultado = collect([(object)[
+                                'codigo'        => $codigoBusquedaSinG,
+                                'nombrelibro'   => $dataPerseo->pro_nombre ?? '',
+                                'valor'         => (int) $dataPerseo->det_ven_cantidad,
+                                'cantidad'      => 0
+                            ]]);
+                            break;
+                        }
+                    }
+                }
+                // Caso 2: Si hay datos en resultado y también en Perseo, sumar
+                elseif(!empty($resultadoArray) && !empty($asesorPerseoData)){
+                    $codigoBusquedaSinG = str_replace('G', '', $codigoBusqueda);
+
+                    foreach($asesorPerseoData as $codigoPerseo => $dataPerseo){
+                        $codigoComparar = str_replace('G', '', $codigoPerseo);
+
+                        if($codigoComparar == $codigoBusquedaSinG){
+                            // Sumar la cantidad de PERSEO al resultado existente
+                            $resultado[0]->valor += (int) $dataPerseo->det_ven_cantidad;
+                            break;
+                        }
+                    }
+                }
+            }
+            //========== FIN COMBINAR RESULTADO CON PERSEO ===================
+
             //guardar un campo totalguias obtener el [0]->valor
             $itemAsesor->guias      = $resultado;
             if(count($resultado) == 0){
@@ -6339,45 +6229,79 @@ class CodigoLibrosController extends Controller
             //     'val_pedido2' => $guias
             // ];
             foreach($pedidos as $key8 => $itempedido){
-                $val_pedido = DB::table('pedidos_val_area_new as pv')
-                ->selectRaw('DISTINCT pv.pvn_cantidad as valor,
-                            CASE
-                                WHEN se.id_serie = 6 THEN l.idlibro
-                                ELSE ar.idarea
-                            END as id_area,
-                            se.id_serie,
-                            CASE
-                                WHEN se.id_serie = 6 THEN 0
-                                ELSE ls.year
-                            END as year,
-                            CASE
-                                WHEN se.id_serie = 6 THEN l.idlibro
-                                ELSE 0
-                            END as plan_lector,
-                            pv.pvn_tipo as alcance,
-                            p.id_periodo,
-                            CASE
-                                WHEN se.id_serie = 6 THEN NULL
-                                ELSE CONCAT(se.nombre_serie, " ", ar.nombrearea)
-                            END as serieArea,
-                            se.nombre_serie,
-                            ls.codigo_liquidacion as codigo,
-                            l.nombrelibro,
-                            l.idlibro,
-                            l.descripcionlibro')  // Añadimos el campo plan_lector
-                ->leftJoin('libro as l', 'pv.idlibro', '=', 'l.idlibro')
-                ->leftJoin('libros_series as ls', 'pv.idlibro', '=', 'ls.idLibro')
-                ->leftJoin('asignatura as asi', 'l.asignatura_idasignatura', '=', 'asi.idasignatura')
-                ->leftJoin('area as ar', 'asi.area_idarea', '=', 'ar.idarea')
-                ->leftJoin('series as se', 'ls.id_serie', '=', 'se.id_serie')
-                ->leftJoin('pedidos as p', 'pv.id_pedido', '=', 'p.id_pedido')
-                ->leftJoin('usuario as u', 'p.id_asesor', '=', 'u.idusuario')
-                ->where('p.id_pedido', $itempedido->id_pedido)
-                ->where('p.tipo', '0')
-                ->where('p.estado', '1')
-                ->where('p.id_periodo', $periodo)
-                ->groupBy('pv.pvn_id')
-                ->get();
+                // Usar tabla correcta según periodo
+                $tablaPedidosVal = $nuevo == 0 ? 'pedidos_val_area' : 'pedidos_val_area_new';
+                $groupByField = $nuevo == 0 ? 'pv.id' : 'pv.pvn_id';
+
+                if($nuevo == 0){
+                    // Periodo viejo - agregar campos adicionales necesarios
+                    $val_pedido = DB::table($tablaPedidosVal . ' as pv')
+                    ->selectRaw('DISTINCT pv.valor, pv.id_area, pv.tipo_val, pv.id_serie, pv.year, pv.plan_lector, pv.alcance,
+                                p.id_periodo,
+                                CONCAT(se.nombre_serie, " ", ar.nombrearea) as serieArea,
+                                se.nombre_serie,
+                                COALESCE(ls.codigo_liquidacion, "") as codigo,
+                                COALESCE(l.nombrelibro, "") as nombrelibro,
+                                COALESCE(l.idlibro, 0) as idlibro,
+                                COALESCE(l.descripcionlibro, "") as descripcionlibro')
+                    ->leftJoin('area as ar', 'pv.id_area', '=', 'ar.idarea')
+                    ->leftJoin('series as se', 'pv.id_serie', '=', 'se.id_serie')
+                    ->leftJoin('libros_series as ls', function($join) {
+                        $join->on('ls.id_serie', '=', 'pv.id_serie')
+                             ->on('ls.year', '=', 'pv.year');
+                    })
+                    ->leftJoin('libro as l', 'ls.idLibro', '=', 'l.idlibro')
+                    ->leftJoin('asignatura as asi', 'l.asignatura_idasignatura', '=', 'asi.idasignatura')
+                    ->leftJoin('pedidos as p', 'pv.id_pedido', '=', 'p.id_pedido')
+                    ->leftJoin('usuario as u', 'p.id_asesor', '=', 'u.idusuario')
+                    ->where('p.id_pedido', $itempedido->id_pedido)
+                    ->where('p.tipo', '0')
+                    ->where('p.estado', '1')
+                    ->where('p.id_periodo', $periodo)
+                    ->groupBy($groupByField)
+                    ->get();
+                } else {
+                    // Periodo nuevo
+                    $val_pedido = DB::table($tablaPedidosVal . ' as pv')
+                    ->selectRaw('DISTINCT pv.pvn_cantidad as valor,
+                                CASE
+                                    WHEN se.id_serie = 6 THEN l.idlibro
+                                    ELSE ar.idarea
+                                END as id_area,
+                                se.id_serie,
+                                CASE
+                                    WHEN se.id_serie = 6 THEN 0
+                                    ELSE ls.year
+                                END as year,
+                                CASE
+                                    WHEN se.id_serie = 6 THEN l.idlibro
+                                    ELSE 0
+                                END as plan_lector,
+                                pv.pvn_tipo as alcance,
+                                p.id_periodo,
+                                CASE
+                                    WHEN se.id_serie = 6 THEN NULL
+                                    ELSE CONCAT(se.nombre_serie, " ", ar.nombrearea)
+                                END as serieArea,
+                                se.nombre_serie,
+                                ls.codigo_liquidacion as codigo,
+                                l.nombrelibro,
+                                l.idlibro,
+                                l.descripcionlibro')
+                    ->leftJoin('libro as l', 'pv.idlibro', '=', 'l.idlibro')
+                    ->leftJoin('libros_series as ls', 'pv.idlibro', '=', 'ls.idLibro')
+                    ->leftJoin('asignatura as asi', 'l.asignatura_idasignatura', '=', 'asi.idasignatura')
+                    ->leftJoin('area as ar', 'asi.area_idarea', '=', 'ar.idarea')
+                    ->leftJoin('series as se', 'ls.id_serie', '=', 'se.id_serie')
+                    ->leftJoin('pedidos as p', 'pv.id_pedido', '=', 'p.id_pedido')
+                    ->leftJoin('usuario as u', 'p.id_asesor', '=', 'u.idusuario')
+                    ->where('p.id_pedido', $itempedido->id_pedido)
+                    ->where('p.tipo', '0')
+                    ->where('p.estado', '1')
+                    ->where('p.id_periodo', $periodo)
+                    ->groupBy($groupByField)
+                    ->get();
+                }
                 if(empty($val_pedido)){
                     // return $val_pedido;
                 }else{
@@ -6441,33 +6365,60 @@ class CodigoLibrosController extends Controller
                     //return $renderSet;
                     foreach($renderSet as $item){
                         $valores = [];
-                        $pfn_pvp_result = (float) DB::table('pedidos_formato_new')
-                        ->where('idperiodoescolar', $item->id_periodo)
-                        ->where('idlibro', $item->idlibro)
-                        ->value('pfn_pvp');
 
-                        // Obtener los valores de pro_stock y pro_deposito
+                        // Obtener precio según periodo
+                        if($nuevo == 0){
+                            // Periodo viejo: usar pedidos_formato
+                            if($item->plan_lector > 0){
+                                $pfn_pvp_result = (float) DB::table('pedidos_formato')
+                                    ->where('id_serie', '6')
+                                    ->where('id_area', '69')
+                                    ->where('id_libro', $item->plan_lector)
+                                    ->where('id_periodo', $item->id_periodo)
+                                    ->value('pvp');
+                            } else {
+                                $pfn_pvp_result = (float) DB::table('pedidos_formato as f')
+                                    ->leftJoin('libros_series as ls', function($join) use ($item) {
+                                        $join->on('ls.id_serie', '=', 'f.id_serie')
+                                             ->where('ls.year', '=', $item->year);
+                                    })
+                                    ->leftJoin('libro as l', 'ls.idLibro', '=', 'l.idlibro')
+                                    ->leftJoin('asignatura as a', 'l.asignatura_idasignatura', '=', 'a.idasignatura')
+                                    ->where('f.id_serie', $item->id_serie)
+                                    ->where('a.area_idarea', $item->id_area)
+                                    ->where('f.id_periodo', $item->id_periodo)
+                                    ->value('f.pvp');
+                            }
+                        } else {
+                            // Periodo nuevo: usar pedidos_formato_new
+                            $pfn_pvp_result = (float) DB::table('pedidos_formato_new')
+                                ->where('idperiodoescolar', $item->id_periodo)
+                                ->where('idlibro', $item->idlibro)
+                                ->value('pfn_pvp');
+                        }
+
+                        // Obtener stock (común para ambos)
+                        $codigo_producto = $nuevo == 0
+                            ? DB::table('libros_series')->where('idLibro', $item->idlibro)->where('year', $item->year)->value('codigo_liquidacion')
+                            : $item->codigo;
+
                         $stock_producto = DB::table('1_4_cal_producto')
-                        ->where('pro_codigo', $item->codigo)
-                        ->select('pro_reservar')
-                        ->first();
+                            ->where('pro_codigo', $codigo_producto)
+                            ->select('pro_reservar')
+                            ->first();
+
                         $datos[$contador] = (Object)[
                             "id_area"           => $item->id_area,
                             "valor"             => $item->valor,
-                            // "tipo_val"          => $item->tipo_val,
                             "id_serie"          => $item->id_serie,
-                            // "year"              => $item->year,
-                            // "anio"              => $valores[0]->year,
-                            // "version"           => $valores[0]->version,
-                            // "plan_lector"       => $item->plan_lector,
                             "serieArea"         => $item->id_serie == 6 ? $item->nombre_serie." ".$item->nombrelibro : $item->serieArea,
                             "libro_id"          => $item->idlibro,
                             "nombrelibro"       => $item->nombrelibro,
                             "nombre_serie"      => $item->nombre_serie,
-                            "precio"            => $pfn_pvp_result,
-                            "codigo"            => $item->codigo,
-                            "stock"             => $stock_producto->pro_reservar,
-                            "descripcion"       => $item->descripcionlibro,
+                            "precio"            => $pfn_pvp_result ?? 0,
+                            "codigo"            => $codigo_producto,
+                            "stock"             => $stock_producto->pro_reservar ?? 0,
+                            "descripcion"       => $item->descripcionlibro ?? '',
                         ];
                         $contador++;
                     }

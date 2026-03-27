@@ -137,20 +137,61 @@ class AuthController extends Controller {
 
     //api:get>//verificarCedulaDocente
     public function verificarCedulaDocente(Request $request){
-        // Si viene asignacion_id, validamos contra los grupos_acceso de la asignación
-        // Si no, usamos los grupos por defecto (6, 13 = docentes)
-        $gruposPermitidos = [6, 13];
 
         if ($request->filled('asignacion_id')) {
             $asignacion = DB::table('encuesta_prolipa_asignaciones')
                 ->where('id', $request->asignacion_id)
                 ->first();
 
-            if ($asignacion && $asignacion->grupos_acceso) {
-                $gruposPermitidos = array_map('intval', explode(',', $asignacion->grupos_acceso));
+            if ($asignacion) {
+                $tipoAcceso = $asignacion->tipo_acceso ?? 'grupos';
+
+                if ($tipoAcceso === 'usuarios') {
+                    // Solo usuarios específicos en la lista JSON
+                    $ids = json_decode($asignacion->usuarios_acceso ?? '[]', true) ?: [];
+                    $ids = array_map('intval', $ids);
+
+                    $usuario = DB::table('usuario')
+                        ->where('cedula', $request->cedula)
+                        ->where('estado_idEstado', 1)
+                        ->first();
+
+                    if (!$usuario) {
+                        return ['status' => 0, 'message' => 'No se encontró un usuario activo con esta cédula'];
+                    }
+                    if (!in_array((int)$usuario->idusuario, $ids)) {
+                        return ['status' => 0, 'message' => 'No tienes acceso a esta encuesta'];
+                    }
+                    return ['status' => 1, 'message' => 'Usuario encontrado', 'usuario' => $usuario];
+                }
+
+                // tipo_acceso = grupos
+                $gruposPermitidos = $asignacion->grupos_acceso
+                    ? array_map('intval', explode(',', $asignacion->grupos_acceso))
+                    : [6, 13];
+
+                $placeholders = implode(',', array_fill(0, count($gruposPermitidos), '?'));
+                $params = array_merge([$request->cedula], $gruposPermitidos);
+
+                $buscarCedula = DB::SELECT("
+                    SELECT u.idusuario, u.cedula, u.nombres, u.apellidos,
+                           u.name_usuario, u.email, u.institucion_idInstitucion, u.id_group
+                    FROM usuario u
+                    WHERE u.cedula = ?
+                    AND u.id_group IN ({$placeholders})
+                    AND u.estado_idEstado = 1
+                    LIMIT 1
+                ", $params);
+
+                if (count($buscarCedula) === 0) {
+                    return ['status' => 0, 'message' => 'No se encontró un usuario activo con esta cédula o no tienes acceso a esta encuesta'];
+                }
+                return ['status' => 1, 'message' => 'Usuario encontrado', 'usuario' => $buscarCedula[0]];
             }
         }
 
+        // Sin asignacion_id — grupos por defecto
+        $gruposPermitidos = [6, 13];
         $placeholders = implode(',', array_fill(0, count($gruposPermitidos), '?'));
         $params = array_merge([$request->cedula], $gruposPermitidos);
 
@@ -165,17 +206,9 @@ class AuthController extends Controller {
         ", $params);
 
         if (count($buscarCedula) === 0) {
-            return [
-                "status"  => 0,
-                "message" => "No se encontró un usuario activo con esta cédula o no tienes acceso a esta encuesta"
-            ];
+            return ['status' => 0, 'message' => 'No se encontró un usuario activo con esta cédula o no tienes acceso a esta encuesta'];
         }
-
-        return [
-            "status"  => 1,
-            "message" => "Usuario encontrado",
-            "usuario" => $buscarCedula[0]
-        ];
+        return ['status' => 1, 'message' => 'Usuario encontrado', 'usuario' => $buscarCedula[0]];
     }
 
     //api:get>//verificarCedulaAsesor

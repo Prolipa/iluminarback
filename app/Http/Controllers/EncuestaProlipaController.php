@@ -30,7 +30,16 @@ class EncuestaProlipaController extends Controller
             $query->where('created_by', request('created_by'));
         }
 
-        return $query->orderByDesc('id')->get();
+        // Agregar conteo de descargas de certificado
+        $encuestas = $query->orderByDesc('id')->get();
+
+        $encuestas->each(function ($e) {
+            $e->descargas_count = EncuestaRespuestaProlipa::where('encuesta_id', $e->id)
+                ->where('descargo_certificado', 1)
+                ->count();
+        });
+
+        return $encuestas;
     }
 
     // Crear encuesta
@@ -158,10 +167,23 @@ class EncuestaProlipaController extends Controller
 
         DB::beginTransaction();
         try {
+            // Obtener periodo_id desde el seminario si la asignación es de tipo capacitacion
+            $periodo_id = null;
+            if ($request->asignacion_id) {
+                $asignacion = EncuestaAsignacion::find($request->asignacion_id);
+                if ($asignacion && $asignacion->entidad_tipo === 'capacitacion') {
+                    $seminario = DB::table('seminarios')
+                        ->where('id_seminario', $asignacion->entidad_id)
+                        ->value('periodo_id');
+                    $periodo_id = $seminario ?: null;
+                }
+            }
+
             $respuesta = EncuestaRespuestaProlipa::create([
                 'encuesta_id'    => $encuesta_id,
                 'usuario_id'     => $request->usuario_id,
                 'asignacion_id'  => $request->asignacion_id ?? null,
+                'periodo_id'     => $periodo_id,
             ]);
 
             foreach ($request->respuestas as $r) {
@@ -552,7 +574,9 @@ class EncuestaProlipaController extends Controller
                 u.apellidos,
                 u.id_group,
                 r.id           AS respuesta_id,
-                r.fecha_respuesta
+                r.fecha_respuesta,
+                r.descargo_certificado,
+                r.fecha_descarga
             FROM encuesta_prolipa_respuestas r
             JOIN usuario u ON u.idusuario = r.usuario_id
             WHERE r.encuesta_id = ?
@@ -579,15 +603,17 @@ class EncuestaProlipaController extends Controller
             $grupo = DB::table('sys_group_users')->where('id', $d->id_group)->value('deskripsi');
 
             return [
-                'idusuario'       => $d->idusuario,
-                'cedula'          => $d->cedula,
-                'nombres'         => $d->nombres,
-                'apellidos'       => $d->apellidos,
-                'rol'             => $grupo ?: '—',
-                'respondio'       => true,
-                'respuesta_id'    => $d->respuesta_id,
-                'fecha_respuesta' => $d->fecha_respuesta,
-                'promedio'        => $avg ? round($avg, 2) : null,
+                'idusuario'             => $d->idusuario,
+                'cedula'                => $d->cedula,
+                'nombres'               => $d->nombres,
+                'apellidos'             => $d->apellidos,
+                'rol'                   => $grupo ?: '—',
+                'respondio'             => true,
+                'respuesta_id'          => $d->respuesta_id,
+                'fecha_respuesta'       => $d->fecha_respuesta,
+                'promedio'              => $avg ? round($avg, 2) : null,
+                'descargo_certificado'  => (bool) $d->descargo_certificado,
+                'fecha_descarga'        => $d->fecha_descarga,
             ];
         }, $respuestas);
 
@@ -599,6 +625,92 @@ class EncuestaProlipaController extends Controller
             'pendientes'   => 0,
             'docentes'     => $resultado
         ]);
+    }
+
+    public function misEncuestas($usuario_id)
+    {
+        $periodo_id = request('periodo_id');
+
+        $sql = "
+            SELECT
+                r.id                    AS respuesta_id,
+                r.encuesta_id,
+                r.asignacion_id,
+                r.periodo_id,
+                r.fecha_respuesta,
+                r.descargo_certificado,
+                r.fecha_descarga,
+                e.titulo                AS encuesta_titulo,
+                e.codigo                AS encuesta_codigo,
+                -- Nombre y firma del capacitador si es capacitacion
+                CASE
+                    WHEN a.entidad_tipo = 'capacitacion' THEN s.nombre
+                    ELSE NULL
+                END                     AS nombre_capacitacion,
+                CASE
+                    WHEN a.entidad_tipo = 'capacitacion' THEN ucap.firma
+                    ELSE NULL
+                END                     AS firma_capacitador,
+                a.entidad_tipo,
+                a.codigo_acceso,
+                -- Periodo
+                p.idperiodoescolar,
+                p.periodoescolar,
+                p.descripcion           AS periodo_descripcion
+            FROM encuesta_prolipa_respuestas r
+            JOIN encuesta_prolipa_encuestas e   ON e.id = r.encuesta_id
+            LEFT JOIN encuesta_prolipa_asignaciones a ON a.id = r.asignacion_id
+            LEFT JOIN seminarios s              ON s.id_seminario = a.entidad_id AND a.entidad_tipo = 'capacitacion'
+            LEFT JOIN seminarios_capacitador sc ON sc.seminario_id = s.id_seminario
+            LEFT JOIN usuario ucap              ON ucap.idusuario = sc.idusuario
+            LEFT JOIN periodoescolar p          ON p.idperiodoescolar = r.periodo_id
+            WHERE r.usuario_id = ?
+        ";
+
+        $params = [$usuario_id];
+
+        if ($periodo_id) {
+            $sql    .= " AND r.periodo_id = ?";
+            $params[] = $periodo_id;
+        }
+
+        $sql .= " GROUP BY r.id ORDER BY r.fecha_respuesta DESC";
+
+        $respuestas = DB::select($sql, $params);
+
+        // Periodos distintos que tiene este usuario (para el select del filtro)
+        $periodos = DB::select("
+            SELECT DISTINCT p.idperiodoescolar, p.periodoescolar, p.descripcion
+            FROM encuesta_prolipa_respuestas r
+            JOIN periodoescolar p ON p.idperiodoescolar = r.periodo_id
+            WHERE r.usuario_id = ?
+            ORDER BY p.idperiodoescolar DESC
+        ", [$usuario_id]);
+
+        return response()->json([
+            'encuestas' => $respuestas,
+            'periodos'  => $periodos,
+        ]);
+    }
+
+    public function registrarDescarga(Request $request)
+    {
+        $query = EncuestaRespuestaProlipa::where('encuesta_id', $request->encuesta_id)
+            ->where('usuario_id', $request->usuario_id);
+
+        if ($request->filled('asignacion_id')) {
+            $query->where('asignacion_id', $request->asignacion_id);
+        }
+
+        $respuesta = $query->first();
+
+        if ($respuesta && !$respuesta->descargo_certificado) {
+            $respuesta->descargo_certificado = 1;
+            $respuesta->fecha_descarga       = now();
+            $respuesta->save();
+        }
+
+        return response()->json(['status' => 1]);
     }
 
     public function yaRespondio($encuesta_id, $usuario_id)
@@ -635,20 +747,34 @@ class EncuestaProlipaController extends Controller
 
         $encuesta = $asignacion->encuesta;
 
-        // Obtener nombre de la entidad (capacitación/seminario)
+        // Obtener nombre de la entidad (capacitación/seminario) y firma del capacitador
         $nombreEntidad = null;
+        $firmaCapacitador = null;
+
         if ($asignacion->entidad_tipo === 'capacitacion') {
             $entidad = DB::table('seminarios')->where('id_seminario', $asignacion->entidad_id)->first();
             $nombreEntidad = $entidad ? $entidad->nombre : null;
+
+            // Obtener firma del primer capacitador de esta capacitación
+            $capacitador = DB::table('seminarios_capacitador as sc')
+                ->leftJoin('usuario as u', 'u.idusuario', '=', 'sc.idusuario')
+                ->select('u.firma')
+                ->where('sc.seminario_id', $asignacion->entidad_id)
+                ->first();
+
+            $firmaCapacitador = $capacitador ? $capacitador->firma : null;
         }
 
         return response()->json([
-            'asignacion_id'  => $asignacion->id,
-            'codigo_acceso'  => $asignacion->codigo_acceso,
-            'estado'         => $asignacion->estado,
-            'grupos_acceso'  => $asignacion->grupos_acceso,
-            'nombre_entidad' => $nombreEntidad,
-            'encuesta'       => $encuesta,
+            'asignacion_id'       => $asignacion->id,
+            'codigo_acceso'       => $asignacion->codigo_acceso,
+            'estado'              => $asignacion->estado,
+            'grupos_acceso'       => $asignacion->grupos_acceso,
+            'tipo_acceso'         => $asignacion->tipo_acceso ?? 'grupos',
+            'usuarios_acceso'     => $asignacion->usuarios_acceso,
+            'nombre_entidad'      => $nombreEntidad,
+            'firma_capacitador'   => $firmaCapacitador,
+            'encuesta'            => $encuesta,
         ]);
     }
 
@@ -679,6 +805,13 @@ class EncuestaProlipaController extends Controller
             ->where('entidad_id', $entidad_id)
             ->orderByDesc('id')
             ->get();
+
+        // Agregar conteos por asignación
+        $asignaciones->each(function ($a) {
+            $a->total_respuestas = EncuestaRespuestaProlipa::where('asignacion_id', $a->id)->count();
+            $a->total_descargas  = EncuestaRespuestaProlipa::where('asignacion_id', $a->id)
+                ->where('descargo_certificado', 1)->count();
+        });
 
         return response()->json($asignaciones);
     }
@@ -757,6 +890,109 @@ class EncuestaProlipaController extends Controller
         $request->validate(['grupos_acceso' => 'required|string']);
         $asignacion = EncuestaAsignacion::findOrFail($id);
         $asignacion->grupos_acceso = $request->grupos_acceso;
+        $asignacion->save();
+        return response()->json(['status' => 1]);
+    }
+
+    // ─── USUARIOS INDIVIDUALES EN ASIGNACIÓN ─────────────────────────────────────
+
+    /** Listar usuarios asignados individualmente */
+    public function usuariosAsignacion($id)
+    {
+        $asignacion = EncuestaAsignacion::findOrFail($id);
+        $raw = $asignacion->usuarios_acceso;
+
+        // Limpiar y decodificar
+        $ids = [];
+        if ($raw) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                $ids = array_map('intval', $decoded);
+            }
+        }
+
+        if (empty($ids)) return response()->json([]);
+
+        $usuarios = DB::table('usuario as u')
+            ->leftJoin('sys_group_users as g', 'g.id', '=', 'u.id_group')
+            ->whereIn('u.idusuario', $ids)
+            ->select('u.idusuario', 'u.nombres', 'u.apellidos', 'u.cedula', 'u.email', 'g.deskripsi as perfil')
+            ->get();
+
+        return response()->json($usuarios);
+    }
+
+    /** Agregar un usuario individual (por idusuario) */
+    public function agregarUsuarioAsignacion(Request $request, $id)
+    {
+        $request->validate(['idusuario' => 'required|integer']);
+        $asignacion = EncuestaAsignacion::findOrFail($id);
+
+        $raw = $asignacion->usuarios_acceso;
+        $ids = [];
+        if ($raw) {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) $ids = array_map('intval', $decoded);
+        }
+
+        if (in_array((int)$request->idusuario, $ids)) {
+            return response()->json(['status' => 0, 'message' => 'El usuario ya está asignado']);
+        }
+
+        $ids[] = (int) $request->idusuario;
+        $asignacion->usuarios_acceso = json_encode(array_values($ids));
+        $asignacion->save();
+        return response()->json(['status' => 1]);
+    }
+
+    /** Quitar un usuario individual */
+    public function quitarUsuarioAsignacion($id, $uid)
+    {
+        $asignacion = EncuestaAsignacion::findOrFail($id);
+        $ids = json_decode($asignacion->usuarios_acceso ?? '[]', true) ?: [];
+        $ids = array_values(array_filter($ids, fn($i) => $i != $uid));
+        $asignacion->usuarios_acceso = json_encode($ids);
+        $asignacion->save();
+        return response()->json(['status' => 1]);
+    }
+
+    /** Importar usuarios por cédula desde Excel */
+    public function importarUsuariosAsignacion(Request $request, $id)
+    {
+        $request->validate(['cedulas' => 'required|array']);
+        $asignacion = EncuestaAsignacion::findOrFail($id);
+        $ids = json_decode($asignacion->usuarios_acceso ?? '[]', true) ?: [];
+
+        $cedulas      = array_map('trim', $request->cedulas);
+        $noExisten    = [];
+        $yaAsignados  = [];
+        $agregados    = 0;
+
+        foreach ($cedulas as $cedula) {
+            $usuario = DB::table('usuario')->where('cedula', $cedula)->first();
+            if (!$usuario) { $noExisten[] = $cedula; continue; }
+            if (in_array($usuario->idusuario, $ids)) { $yaAsignados[] = $cedula; continue; }
+            $ids[] = $usuario->idusuario;
+            $agregados++;
+        }
+
+        $asignacion->usuarios_acceso = json_encode(array_values($ids));
+        $asignacion->save();
+
+        return response()->json([
+            'status'      => 1,
+            'agregados'   => $agregados,
+            'no_existen'  => $noExisten,
+            'ya_asignados'=> $yaAsignados,
+        ]);
+    }
+
+    /** Cambiar tipo de acceso (grupos / usuarios / ambos) */
+    public function cambiarTipoAcceso(Request $request, $id)
+    {
+        $request->validate(['tipo_acceso' => 'required|in:grupos,usuarios']);
+        $asignacion = EncuestaAsignacion::findOrFail($id);
+        $asignacion->tipo_acceso = $request->tipo_acceso;
         $asignacion->save();
         return response()->json(['status' => 1]);
     }

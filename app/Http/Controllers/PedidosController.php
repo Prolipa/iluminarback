@@ -4997,108 +4997,198 @@ class PedidosController extends Controller
 
     //API:GET/getStockProlipaDevolucion?asesor_id=69366&periodo_id=27
     public function getStockProlipaDevolucion(Request $request){
+        try {
+                $periodo                        = $request->periodo_id;
+                $id_asesor                      = $request->asesor_id;
+                $guias                          = [];
+                $resultado                      = [];
+                // Si el periodo es menor o igual al configurado -> usa pedidos viejos
+                $nuevo = ($periodo <= $this->tr_periodoPedido) ? 0 : 1;
+            // Pedidos (viejo o nuevo según $nuevo)
+            if ($nuevo == 0) {
+                $guias                       = $this->codigosRepository->guiasXAsesorPeriodoOld($periodo, $id_asesor);
+            } else {
+                $guias                       = $this->codigosRepository->guiasXAsesorPeriodoNew($periodo, $id_asesor);
+            }
+            $guiasPedidos = collect($guias);
+            $GuiasBodega  = collect($this->codigosRepository->getCodigosBodega(1, $periodo, 0, $id_asesor));
 
-        $periodo                        = $request->periodo_id;
-        $id_asesor                      = $request->asesor_id;
-        $guias                          = [];
-        $resultado                      = [];
-        // Si el periodo es menor o igual al configurado -> usa pedidos viejos
-        $nuevo = ($periodo <= $this->tr_periodoPedido) ? 0 : 1;
-          // Pedidos (viejo o nuevo según $nuevo)
-        if ($nuevo == 0) {
-            $guias                       = $this->codigosRepository->guiasXAsesorPeriodoOld($periodo, $id_asesor);
-        } else {
-            $guias                       = $this->codigosRepository->guiasXAsesorPeriodoNew($periodo, $id_asesor);
-        }
+            if ($guiasPedidos->isEmpty()) {
 
-        $guiasPedidos = collect($guias);
-        $GuiasBodega  = collect($this->codigosRepository->getCodigosBodega(1, $periodo, 0, $id_asesor));
-
-        if ($guiasPedidos->isEmpty()) {
-
-            // Si no hay pedidos, devolver bodega tal cual
-            $resultado = $GuiasBodega;
-
-        } else {
-
-            if ($GuiasBodega->isEmpty()) {
-
-                // Si no hay bodega → todos los pedidos con cantidadDisponibleBodega = 0
-                $resultado = $guiasPedidos->map(function($item){
-                    $item->cantidadDisponibleBodega = $item->cantidadDisponibleBodega ?? 0;
-                    $item->cantidadGuiasXPedidos   = $item->cantidadGuiasXPedidos   ?? 0;
-                    return $item;
-                });
+                // Si no hay pedidos, devolver bodega tal cual
+                $resultado = $GuiasBodega;
 
             } else {
 
-                // Combinar bodega con pedidos sin modificar su estructura
-                $GuiasBodega->each(function($item) use ($guiasPedidos) {
-                    $existing = $guiasPedidos->firstWhere('codigo', $item->codigo);
+                if ($GuiasBodega->isEmpty()) {
 
-                    if ($existing) {
+                    // Si no hay bodega → todos los pedidos con cantidadDisponibleBodega = 0
+                    $resultado = $guiasPedidos->map(function($item){
+                        $item->cantidadDisponibleBodega = $item->cantidadDisponibleBodega ?? 0;
+                        $item->cantidadGuiasXPedidos   = $item->cantidadGuiasXPedidos   ?? 0;
+                        return $item;
+                    });
 
-                        // No sumar valor ni cambiar estructura
-                        // Solo actualizar stock de bodega
-                        $existing->cantidadDisponibleBodega = $item->cantidadDisponibleBodega;
+                } else {
 
-                    } else {
+                    // Combinar bodega con pedidos sin modificar su estructura
+                    $GuiasBodega->each(function($item) use ($guiasPedidos) {
+                        $existing = $guiasPedidos->firstWhere('codigo', $item->codigo);
 
-                        // Si no existe en pedidos, agregarlo tal cual viene de bodega
-                        $guiasPedidos->push($item);
-                    }
-                });
+                        if ($existing) {
 
-                // Asegurar que todos tengan los campos obligatorios
-                $resultado = $guiasPedidos->map(function($item){
-                    $item->cantidadDisponibleBodega = $item->cantidadDisponibleBodega ?? 0;
-                    $item->cantidadGuiasXPedidos   = $item->cantidadGuiasXPedidos   ?? 0;
-                    return $item;
-                });
+                            // No sumar valor ni cambiar estructura
+                            // Solo actualizar stock de bodega
+                            $existing->cantidadDisponibleBodega = $item->cantidadDisponibleBodega;
+
+                        } else {
+
+                            // Si no existe en pedidos, agregarlo tal cual viene de bodega
+                            $guiasPedidos->push($item);
+                        }
+                    });
+
+                    // Asegurar que todos tengan los campos obligatorios
+                    $resultado = $guiasPedidos->map(function($item){
+                        $item->cantidadDisponibleBodega = $item->cantidadDisponibleBodega ?? 0;
+                        $item->cantidadGuiasXPedidos   = $item->cantidadGuiasXPedidos   ?? 0;
+                        return $item;
+                    });
+                }
             }
+
+
+            // agregar la G adelante de la propiedad codigo
+
+            $resultado = $resultado->map(function($item) {
+                $codigo = 'G' . $item->codigo ?? null;
+                $nombrelibro = $item->nombrelibro ?? null;
+
+                // Obtener el nombre del producto desde el modelo _14Producto
+                try {
+                    $producto = _14Producto::obtenerProducto($codigo);
+                    $nombrelibro = $producto->pro_nombre ?? $nombrelibro;
+                } catch (\Exception $e) {
+                    throw new \Exception("Error al obtener el producto con código: $codigo. Detalles: " . $e->getMessage());
+                    // Si no se encuentra el producto, mantener el nombre original
+                }
+
+                return [
+                    "codigo"                    => $codigo,
+                    "nombrelibro"               => $nombrelibro,
+                    "cantidadGuiasXPedidos"     => $item->cantidadGuiasXPedidos ?? 0,
+                    "cantidadDisponibleBodega"  => $item->cantidadDisponibleBodega ?? 0,
+                ];
+            });
+
+
+            ///========= MODULO PERSEO F_VENTA  ===================
+            // Pedidos (viejo o nuevo según $nuevo)
+            $arrayPedidosPerseo = [];
+            $arrayDetallePerseo = [];
+            if ($nuevo == 0) {
+                $arrayPedidosPerseo          = $this->codigosRepository->guiasXAsesorPeriodoPerseoOld($periodo, $id_asesor);
+            } else {
+                $arrayPedidosPerseo          = $this->codigosRepository->guiasXAsesorPeriodoPerseoNew($periodo, $id_asesor);
+            }
+            foreach($arrayPedidosPerseo as $key => $itemPerseo){
+                $detalleXPedidoGuia = $this->codigosRepository->detalleVentaXIdGuia($itemPerseo->id_pedido);
+
+                // Agrupar por pro_codigo y sumar cantidades
+                foreach($detalleXPedidoGuia as $detalle){
+                    $pro_codigo = $detalle->pro_codigo;
+
+                    if(isset($arrayDetallePerseo[$pro_codigo])){
+                        // Si ya existe, sumar la cantidad
+                        $arrayDetallePerseo[$pro_codigo]->det_ven_cantidad += $detalle->det_ven_cantidad;
+                    } else {
+                        // Si no existe, agregarlo
+                        $arrayDetallePerseo[$pro_codigo] = $detalle;
+                    }
+                }
+            }
+            // Convertir a array de valores
+            $arrayDetallePerseo = array_values($arrayDetallePerseo);
+
+            //========== COMBINAR RESULTADO CON PERSEO ===================
+            // Convertir resultado a array para evaluar si está vacío
+            $resultadoArray = $resultado->toArray();
+
+            // Caso 1: Si resultado está vacío pero hay datos en Perseo
+            if(empty($resultadoArray) && !empty($arrayDetallePerseo)){
+                $resultado = [];
+                foreach($arrayDetallePerseo as $item){
+                    $resultado[] = [
+                        "codigo"                    => $item->pro_codigo,
+                        "nombrelibro"               => $item->pro_nombre ?? '',
+                        "cantidadGuiasXPedidos"     => (int) $item->det_ven_cantidad,
+                        "cantidadDisponibleBodega"  => 0
+                    ];
+                }
+            }
+            // Caso 2: Si hay datos en resultado y también en Perseo, combinar y sumar
+            elseif(!empty($resultadoArray) && !empty($arrayDetallePerseo)){
+                $resultado = collect($resultadoArray)->map(function($item) use ($arrayDetallePerseo) {
+                    $codigo = $item['codigo'] ?? $item->codigo;
+                    $cantidadGuiasXPedidos = $item['cantidadGuiasXPedidos'] ?? $item->cantidadGuiasXPedidos ?? 0;
+
+                    // Buscar si existe en Perseo (comparar códigos con y sin G)
+                    foreach($arrayDetallePerseo as $detallePerseo){
+                        // Comparar directamente o agregar G al código de Perseo para comparar
+                        if($detallePerseo->pro_codigo == $codigo){
+                            // Sumar las cantidades
+                            $cantidadGuiasXPedidos += (int) $detallePerseo->det_ven_cantidad;
+                            break;
+                        }
+                    }
+
+                    return [
+                        "codigo"                    => $codigo,
+                        "nombrelibro"               => $item['nombrelibro'] ?? $item->nombrelibro,
+                        "cantidadGuiasXPedidos"     => (int) $cantidadGuiasXPedidos,
+                        "cantidadDisponibleBodega"  => (int) ($item['cantidadDisponibleBodega'] ?? $item->cantidadDisponibleBodega ?? 0)
+                    ];
+                })->toArray();
+            }
+            //========== FIN COMBINAR RESULTADO CON PERSEO ===================
+            //========== FIN MODULO PERSEO F_VENTA ===================
+
+
+            // collecionar a array
+            $resultado = collect($resultado);
+            // Agregar pro_codigo al campo codigo y procesar cantidad y stock
+
+            foreach ($resultado as $key => $item) {
+                $codigo                                              = $item['codigo'];
+                $cantidadGuiasXPedidos                               = $item['cantidadGuiasXPedidos'];
+                $cantidadDisponibleBodega                            = $item['cantidadDisponibleBodega'];
+                $datosDevolucion                                     = $this->tr_cantidadDevueltaGuias($id_asesor, $codigo, $periodo);
+                $cantidad_devuelta_total                             = $datosDevolucion[0]->cantidad_devuelta_total ?? 0;
+                $devuelto_pedidos_total_aprobada                     = $datosDevolucion[0]->devuelto_pedidos_total_aprobada ?? 0;
+                $devuelto_codigoslibros_total_aprobada               = $datosDevolucion[0]->devuelto_codigoslibros_total_aprobada ?? 0;
+                $devuelto_total_pendiente                            = $datosDevolucion[0]->devuelto_total_pendiente ?? 0;
+                $cantidadGuiasXPedidosReal                           = $cantidadGuiasXPedidos - $devuelto_pedidos_total_aprobada;
+                //lo disponible seria la cantidad de guias pedidos - cantidad devuelto en guias en pedidos + codigoslibros en guias (ya que en codigoslibros si se va la guia pero en pedidos se mantiene por eso sumamos lo devuelto en codigoslibros) + lo disponible en bodega
+                $stockAsesor                                         = $cantidadGuiasXPedidosReal + $cantidadDisponibleBodega;
+                //pedido y bodega = seria lo devuelto en pedidos + devuelto en codigoslibros + lo disponible en bodega + lo real pedido en guias pedidos(descontamos lo devuelto en pedido ya que en codigoslibros si se va y pedidos en guias se mantiene por eso restamos lo devuelto)
+                $cantidadPedidaActual                                = $devuelto_pedidos_total_aprobada + $devuelto_codigoslibros_total_aprobada + $cantidadDisponibleBodega + $cantidadGuiasXPedidosReal;
+                $resultado[$key]                    = (object) [
+                        'pro_codigo'                => $codigo,
+                        'nombrelibro'               => "Guia " . $item['nombrelibro'],
+                        'cantidadGuiasXPedidos'     => (int) $cantidadGuiasXPedidos,
+                        'cantidadDisponiblePedido'  => (int) $cantidadGuiasXPedidosReal,
+                        'cantidadDisponibleBodega'  => (int) $cantidadDisponibleBodega,
+                        'stockAsesor'               => (int) $stockAsesor,
+                        'cantidad_devuelta_total'   => (int) $cantidad_devuelta_total,
+                        'cantidadPedidaActual'      => (int) $cantidadPedidaActual,
+                        'formato'                   => (int) $devuelto_total_pendiente ?? 0,
+                ];
+            }
+            return $resultado;
+
+        } catch (\Exception $e) {
+            return ["status" => "0", "message" => "Error: " . $e->getMessage()];
         }
-
-
-        // agregar la G adelante de la propiedad codigo
-
-        $resultado = $resultado->map(function($item) {
-            return [
-                "codigo"                    => 'G' . $item->codigo ?? null,
-                "nombrelibro"               => $item->nombrelibro ?? null,
-                "cantidadGuiasXPedidos"     => $item->cantidadGuiasXPedidos ?? 0,
-                "cantidadDisponibleBodega"  => $item->cantidadDisponibleBodega ?? 0,
-            ];
-        });
-        // collecionar a array
-        $resultado = collect($resultado);
-        // Agregar pro_codigo al campo codigo y procesar cantidad y stock
-        foreach ($resultado as $key => $item) {
-            $codigo = $item['codigo'];
-            $cantidadGuiasXPedidos                      = $item['cantidadGuiasXPedidos'];
-            $cantidadDisponibleBodega                   = $item['cantidadDisponibleBodega'];
-            $datosDevolucion                            = $this->tr_cantidadDevueltaGuias($id_asesor, $codigo, $periodo);
-            $devuelto_pedidos_codigoslibros_total       = $datosDevolucion[0]->devuelto_pedidos_codigoslibros_total ?? 0;
-            $devuelto_pedidos_total                     = $datosDevolucion[0]->devuelto_pedidos_total ?? 0;
-            $devuelto_codigoslibros_total               = $datosDevolucion[0]->devuelto_codigoslibros_total ?? 0;
-            $devuelto_total_pendiente                   = $datosDevolucion[0]->devuelto_total_pendiente ?? 0;
-            $cantidadGuiasXPedidosReal                  = $cantidadGuiasXPedidos - $devuelto_pedidos_total;
-            //lo disponible seria la cantidad de guias pedidos - cantidad devuelto en guias en pedidos + codigoslibros en guias
-            $stockAsesor                                = $cantidadGuiasXPedidosReal + $cantidadDisponibleBodega;
-            //la pedido en pedido y bodega = seria lo devuelto en pedidos + devuelto en codigoslibros + lo disponible en bodega + lo real pedido en guias pedidos(descontamos lo devuelto en pedido ya que en codigoslibros si se va y pedidos en guias se mantiene por eso restamos lo devuelto)
-            $cantidadPedidaActual                       = $devuelto_pedidos_total + $devuelto_codigoslibros_total + $cantidadDisponibleBodega + $cantidadGuiasXPedidosReal;
-            $resultado[$key]                    = (object) [
-                    'pro_codigo'                => $codigo,
-                    'nombrelibro'               => "Guia " . $item['nombrelibro'],
-                    'cantidadGuiasXPedidos'     => (int) $cantidadGuiasXPedidos,
-                    'cantidadDisponiblePedido'  => (int) $cantidadGuiasXPedidosReal,
-                    'cantidadDisponibleBodega'  => (int) $cantidadDisponibleBodega,
-                    'stockAsesor'               => (int) $stockAsesor,
-                    'cantidad_devuelta_total'   => (int) $devuelto_pedidos_codigoslibros_total,
-                    'cantidadPedidaActual'      => (int) $cantidadPedidaActual,
-                    'formato'                   => (int) $devuelto_total_pendiente ?? 0,
-            ];
-        }
-        return $resultado;
     }
     //api para mostrar las entregas de guias a instituciones
     public function getEntregasGuias(Request $request){
@@ -5754,8 +5844,8 @@ class PedidosController extends Controller
                 $validateUserSuper = PermisoSuper::where('usuario_id', $user_created)->first();
                 if(!$validateUserSuper){
                     $validateDocumentoVenta = DB::SELECT("SELECT p.* FROM pedidos p
-                    INNER  JOIN f_venta v ON v.contrato = p.contrato_generado
-                    AND p.id_pedido = '$request->id_pedido'
+                    INNER  JOIN f_venta v ON (v.contrato = p.contrato_generado OR v.ven_totalizado = p.ca_codigo_agrupado)
+                    WHERE p.id_pedido = '$request->id_pedido'
                     AND v.est_ven_codigo <> '3'
                     ");
                     if(count($validateDocumentoVenta) > 0){

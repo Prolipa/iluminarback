@@ -44,10 +44,10 @@ class UsuarioController extends Controller
     public function userInformacion(Request $request){
         $usuario = DB::select("SELECT u.idusuario, u.cedula,u.nombres,u.apellidos,
         u.name_usuario,u.email, u.id_group, u.institucion_idInstitucion, u.iniciales,
-        u.foto_user,u.telefono, i.idInstitucion, i.nombreInstitucion, c.nombre as ciudad,
+        u.foto_user,u.telefono, u.firma, i.idInstitucion, i.nombreInstitucion, c.nombre as ciudad,
         u.nacionalidad, fecha_nacimiento, curso, paralelo, sexo,n.nombrenivel ,p.descripcion,
         u.cli_ins_codigo, u.estado_idEstado, g.level as perfil, u.cargo_id, u.change_password,
-        u.fecha_change_password, u.capacitador ,ca.cargo
+        u.fecha_change_password, u.capacitador ,ca.cargo, u.id_facturador_perseo
         FROM usuario u
         LEFT JOIN institucion i ON i.idInstitucion = u.institucion_idInstitucion
         LEFT JOIN sys_group_users g ON g.id = u.id_group
@@ -589,6 +589,7 @@ class UsuarioController extends Controller
             $usuario->cli_ins_codigo = $request->cli_ins_codigo == null || $request->cli_ins_codigo == "null" ? null : $request->cli_ins_codigo;
             $usuario->fecha_nacimiento = $request->fecha_nacimiento;
             $usuario->cargo_id = $request->cargo_id;
+            $usuario->id_facturador_perseo = $request->id_facturador_perseo;
             $usuario->save();
         }else{
             $datosValidados=$request->validate([
@@ -618,6 +619,7 @@ class UsuarioController extends Controller
             $usuario->fecha_nacimiento = $request->fecha_nacimiento;
             //cargo
             $usuario->cargo_id = $request->cargo_id;
+            $usuario->id_facturador_perseo = $request->id_facturador_perseo;
             $usuario->save();
 
         }
@@ -1133,6 +1135,9 @@ class UsuarioController extends Controller
         $usuario->cli_ins_codigo    = $request->cli_ins_codigo == null || $request->cli_ins_codigo == "null" || $request->cli_ins_codigo == "" ? null : $request->cli_ins_codigo;
         if($request->grupo == 6){
             $usuario->cargo_id      = $request->cargo_id;
+        }
+        if($request->id_facturador_perseo){
+            $usuario->id_facturador_perseo = $request->id_facturador_perseo;
         }
         $usuario->save();
         return $usuario;

@@ -2444,6 +2444,13 @@ Route::prefix('encuesta_prolipa')->group(function () {
     Route::get('/estadisticas/encuestas-detalle',  'EncuestaProlipaController@encuestasConDetalle');
     Route::get('/estadisticas/top-docentes',       'EncuestaProlipaController@topDocentes');
 
+    // 👤 usuarios individuales en asignación (ANTES de la ruta dinámica de 2 params)
+    Route::get('/asignaciones/{id}/usuarios',               'EncuestaProlipaController@usuariosAsignacion');
+    Route::post('/asignaciones/{id}/usuarios',              'EncuestaProlipaController@agregarUsuarioAsignacion');
+    Route::delete('/asignaciones/{id}/usuarios/{uid}',      'EncuestaProlipaController@quitarUsuarioAsignacion');
+    Route::post('/asignaciones/{id}/usuarios/import',       'EncuestaProlipaController@importarUsuariosAsignacion');
+    Route::post('/asignaciones/{id}/tipo-acceso',           'EncuestaProlipaController@cambiarTipoAcceso');
+
     // � asignaciones polimórficas (capacitaciones, seminarios, etc.)
     Route::get('/asignaciones/{entidad_tipo}/{entidad_id}', 'EncuestaProlipaController@asignacionesPorEntidad');
     Route::post('/asignaciones',                            'EncuestaProlipaController@crearAsignacion');
@@ -2456,6 +2463,9 @@ Route::prefix('encuesta_prolipa')->group(function () {
 
     // 📥 registrar descarga de certificado
     Route::post('/registrar-descarga', 'EncuestaProlipaController@registrarDescarga');
+
+    // 👤 encuestas respondidas por un usuario (perfil)
+    Route::get('/mis-encuestas/{usuario_id}', 'EncuestaProlipaController@misEncuestas');
 
     // 📋 encuestas
     Route::get('/', 'EncuestaProlipaController@index');

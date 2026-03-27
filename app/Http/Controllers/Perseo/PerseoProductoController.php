@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Perseo;
 use App\Http\Controllers\Controller;
 use App\Traits\Pedidos\TraitPedidosGeneral;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class PerseoProductoController extends Controller
 {
@@ -890,7 +892,14 @@ class PerseoProductoController extends Controller
             ini_set('max_execution_time', 600);
 
             $id_empresa = $request->input('id_empresa');
-            $tipo       = $request->input('tipo', 'stock'); // 'stock' o 'ids'
+            $tipoInput = $request->input('tipo');
+            $tipo      = $tipoInput ? $tipoInput : 'stock'; // 'stock' o 'ids'
+            $accionInput = $request->input('accion');
+            $accion      = $accionInput ? $accionInput : 'ejecutar'; // consultar | confirmar | ejecutar
+            $modoInput = $request->input('modo');
+            $modo = $modoInput ? $modoInput : 'auto'; // auto | manual
+            $detalleSeleccionadoInput = $request->input('detalle_seleccionado');
+            $detalleSeleccionado = is_array($detalleSeleccionadoInput) ? $detalleSeleccionadoInput : [];
 
             // Mapeo de empresa → campo id_perseo en tabla 1_4_cal_producto
             $mapeoEmpresa = [
@@ -921,6 +930,20 @@ class PerseoProductoController extends Controller
                 ], 400);
             }
 
+            if (!in_array($accion, ['consultar', 'confirmar', 'ejecutar'])) {
+                return response()->json([
+                    'status'  => 0,
+                    'mensaje' => 'Acción no válida. Use: consultar, confirmar o ejecutar'
+                ], 400);
+            }
+
+            if (!in_array($modo, ['auto', 'manual'])) {
+                return response()->json([
+                    'status'  => 0,
+                    'mensaje' => 'Modo no válido. Use: auto o manual'
+                ], 400);
+            }
+
             $campoPerseo   = $mapeoEmpresa[$id_empresa];
             $nombreEmpresa = $nombresEmpresa[$id_empresa];
             $etiquetaTipo  = $tipo === 'stock' ? 'Sincronizar Stock' : 'Vincular IDs';
@@ -939,143 +962,427 @@ class PerseoProductoController extends Controller
                 ]);
             }
 
-            $productosPerseo     = $response['productos'];
-            $totalRecibidos      = count($productosPerseo);
-            $actualizados        = 0;
-            $ignorados           = 0;
-            $errores             = [];
-            $detalleActualizados = [];
+            $productosPerseo = $response['productos'];
+            $totalRecibidos = count($productosPerseo);
 
-            if ($tipo === 'stock') {
-                // ============ MODO STOCK ============
-                // Obtener productos locales que YA tienen id_perseo vinculado
-                $productosLocales = \DB::table('1_4_cal_producto')
-                    ->select('pro_codigo', $campoPerseo, 'pro_reservar', 'pro_stockCalmed')
-                    ->whereNotNull($campoPerseo)
-                    ->where($campoPerseo, '>', 0)
-                    ->get()
-                    ->keyBy('pro_codigo');
+            $normalizarTotal = function ($valor) {
+                if ($valor === null || $valor === '') {
+                    return null;
+                }
+                if (is_numeric($valor)) {
+                    return (float)$valor;
+                }
+                return null;
+            };
 
-                foreach ($productosPerseo as $productoPerseo) {
-                    $productocodigo     = $productoPerseo['productocodigo'] ?? null;
-                    $productosid        = $productoPerseo['productosid'] ?? null;
-                    $existenciastotales = $productoPerseo['existenciastotales'] ?? 0;
+            // Mapa de productos de Perseo por código (si hay repetidos, se guarda lista)
+            $mapaPerseoPorCodigo = [];
+            foreach ($productosPerseo as $productoPerseo) {
+                $codigo = isset($productoPerseo['productocodigo']) ? trim($productoPerseo['productocodigo']) : null;
+                if (!$codigo) {
+                    continue;
+                }
 
-                    if (!$productocodigo || !$productosid) {
-                        $ignorados++;
-                        continue;
+                if (!isset($mapaPerseoPorCodigo[$codigo])) {
+                    $mapaPerseoPorCodigo[$codigo] = [];
+                }
+                $mapaPerseoPorCodigo[$codigo][] = $productoPerseo;
+            }
+
+            // Siempre se toma toda la plataforma para mostrar KPIs completos
+            $productosLocales = DB::table('1_4_cal_producto')
+                ->select('pro_codigo', $campoPerseo, 'pro_reservar', 'pro_stockCalmed')
+                ->orderBy('pro_codigo', 'asc')
+                ->get();
+
+            $detalleConsulta = [];
+            $consultasIndividuales = 0;
+            $consultasIndividualesConDato = 0;
+            $idsParaConsultaIndividual = []; // Acumular IDs sin total para batch query
+
+            $kpi = [
+                'plataforma_total' => count($productosLocales),
+                'perseo_total' => $totalRecibidos,
+                'encontrados_codigo' => 0,
+                'no_encontrados_codigo' => 0,
+                'candidatos_actualizacion' => 0,
+                'sin_id_local' => 0,
+                'id_no_coincide' => 0,
+                'ya_vinculados' => 0,
+                'sin_total_perseo' => 0,
+                'consultas_individuales' => 0,
+                'consultas_individuales_con_dato' => 0,
+            ];
+
+            // PASO 1: Análisis inicial y acumulación de IDs sin total
+            foreach ($productosLocales as $productoLocal) {
+                $codigoLocal = isset($productoLocal->pro_codigo) ? trim($productoLocal->pro_codigo) : null;
+                $idLocal = isset($productoLocal->$campoPerseo) ? (int)$productoLocal->$campoPerseo : 0;
+
+                $perseoEncontrado = null;
+                $listaPerseoMismoCodigo = isset($mapaPerseoPorCodigo[$codigoLocal]) ? $mapaPerseoPorCodigo[$codigoLocal] : [];
+
+                if (count($listaPerseoMismoCodigo) > 0) {
+                    $kpi['encontrados_codigo']++;
+
+                    if ($idLocal > 0) {
+                        foreach ($listaPerseoMismoCodigo as $itemPerseo) {
+                            $itemId = isset($itemPerseo['productosid']) ? (int)$itemPerseo['productosid'] : 0;
+                            if ($itemId === $idLocal) {
+                                $perseoEncontrado = $itemPerseo;
+                                break;
+                            }
+                        }
                     }
 
-                    // Condición 1: pro_codigo == productocodigo
-                    $productoLocal = $productosLocales[$productocodigo] ?? null;
-                    if (!$productoLocal) {
-                        $ignorados++;
-                        continue;
+                    if (!$perseoEncontrado) {
+                        $perseoEncontrado = $listaPerseoMismoCodigo[0];
                     }
+                } else {
+                    $kpi['no_encontrados_codigo']++;
+                }
 
-                    // Condición 2: productosid == campo id_perseo correspondiente
-                    $idPerseoLocal = $productoLocal->$campoPerseo;
-                    if ($idPerseoLocal != $productosid) {
-                        $ignorados++;
-                        continue;
-                    }
+                $idPerseo = $perseoEncontrado && isset($perseoEncontrado['productosid']) ? (int)$perseoEncontrado['productosid'] : 0;
+                $totalPerseo = $perseoEncontrado && array_key_exists('existenciastotales', $perseoEncontrado)
+                    ? $normalizarTotal($perseoEncontrado['existenciastotales'])
+                    : null;
 
-                    // Ambas condiciones se cumplen → Actualizar stock
-                    try {
-                        \DB::table('1_4_cal_producto')
-                            ->where('pro_codigo', $productocodigo)
-                            ->update([
-                                'pro_reservar'       => $existenciastotales,
-                                'pro_stockCalmed'    => $existenciastotales,
-                                'pro_stock'          => 0,
-                                'pro_depositoCalmed' => 0,
-                                'pro_deposito'       => 0,
-                                'updated_at'         => now(),
-                            ]);
+                $estado = 'sin_coincidencia_codigo';
+                $motivo = 'No se encontró el código en Perseo';
+                $candidato = 0;
 
-                        $detalleActualizados[] = [
-                            'pro_codigo'               => $productocodigo,
-                            'existenciastotales'       => $existenciastotales,
-                            'pro_reservar_anterior'    => $productoLocal->pro_reservar,
-                            'pro_stockCalmed_anterior' => $productoLocal->pro_stockCalmed,
-                        ];
-                        $actualizados++;
-                    } catch (\Exception $e) {
-                        $errores[] = [
-                            'pro_codigo' => $productocodigo,
-                            'error'      => $e->getMessage()
-                        ];
+                if ($perseoEncontrado) {
+                    if ($tipo === 'ids') {
+                        if ($idLocal > 0) {
+                            if ($idLocal === $idPerseo) {
+                                $estado = 'ya_vinculado';
+                                $motivo = 'Ya tiene el ID de Perseo correcto';
+                                $kpi['ya_vinculados']++;
+                            } else {
+                                $estado = 'id_no_coincide';
+                                $motivo = 'El ID local no coincide con el ID retornado por Perseo';
+                                $kpi['id_no_coincide']++;
+                            }
+                        } else {
+                            if ($idPerseo > 0) {
+                                $estado = 'candidato_ids';
+                                $motivo = 'Puede vincularse el productosid de Perseo';
+                                $candidato = 1;
+                                $kpi['candidatos_actualizacion']++;
+                            } else {
+                                $estado = 'sin_id_perseo';
+                                $motivo = 'Perseo no retornó productosid válido';
+                            }
+                        }
+                    } else {
+                        if ($idLocal <= 0) {
+                            $estado = 'sin_id_local';
+                            $motivo = 'No tiene ID de Perseo vinculado en plataforma';
+                            $kpi['sin_id_local']++;
+                        } else if ($idPerseo <= 0 || $idLocal !== $idPerseo) {
+                            $estado = 'id_no_coincide';
+                            $motivo = 'El ID local no coincide con el ID retornado por Perseo';
+                            $kpi['id_no_coincide']++;
+                        } else if ($totalPerseo === null) {
+                            // Acumular para batch query después
+                            $idsParaConsultaIndividual[] = [
+                                'productosid' => $idPerseo,
+                                'pro_codigo' => $codigoLocal,
+                                'id_perseo_local' => $idLocal,
+                            ];
+                        } else {
+                            $estado = 'candidato_stock';
+                            $motivo = 'Cumple para actualizar stock con existenciastotales';
+                            $candidato = 1;
+                            $kpi['candidatos_actualizacion']++;
+                        }
                     }
                 }
 
-            } else {
-                // ============ MODO IDS ============
-                // Obtener productos locales que NO tienen id_perseo (NULL o 0)
-                $productosLocales = \DB::table('1_4_cal_producto')
-                    ->select('pro_codigo', $campoPerseo)
-                    ->where(function ($q) use ($campoPerseo) {
-                        $q->whereNull($campoPerseo)
-                          ->orWhere($campoPerseo, 0);
-                    })
-                    ->get()
-                    ->keyBy('pro_codigo');
+                $detalleConsulta[] = [
+                    'pro_codigo' => $codigoLocal,
+                    'id_perseo_local' => $idLocal,
+                    'pro_reservar_local' => isset($productoLocal->pro_reservar) ? (float)$productoLocal->pro_reservar : 0,
+                    'pro_stock_local' => isset($productoLocal->pro_stockCalmed) ? (float)$productoLocal->pro_stockCalmed : 0,
+                    'productosid_perseo' => $idPerseo,
+                    'existenciastotales' => $totalPerseo,
+                    'estado' => $estado,
+                    'motivo' => $motivo,
+                    'candidato' => $candidato,
+                ];
+            }
 
-                foreach ($productosPerseo as $productoPerseo) {
-                    $productocodigo = $productoPerseo['productocodigo'] ?? null;
-                    $productosid   = $productoPerseo['productosid'] ?? null;
-
-                    if (!$productocodigo || !$productosid) {
-                        $ignorados++;
-                        continue;
-                    }
-
-                    // Condición: pro_codigo == productocodigo Y aún no tiene id_perseo
-                    $productoLocal = $productosLocales[$productocodigo] ?? null;
-                    if (!$productoLocal) {
-                        $ignorados++;
-                        continue;
-                    }
-
-                    // Vincular el productosid de Perseo al campo id_perseo local
+            // PASO 2: Batch query de IDs sin total en lotes de 10
+            if (!empty($idsParaConsultaIndividual)) {
+                $consultasIndividuales = count($idsParaConsultaIndividual);
+                $mapResultadosPorId = [];
+                
+                // Procesar en lotes de 10
+                $lotes = array_chunk($idsParaConsultaIndividual, 10);
+                
+                foreach ($lotes as $lote) {
                     try {
-                        \DB::table('1_4_cal_producto')
-                            ->where('pro_codigo', $productocodigo)
-                            ->update([
-                                $campoPerseo => $productosid,
-                                'updated_at' => now(),
-                            ]);
+                        $codigosLote = array_map(function($item) { return $item['pro_codigo']; }, $lote);
+                        
+                        // Usar productos_consulta_x_id para batch
+                        $resultadoBatch = $this->productos_consulta_x_id(
+                            new \Illuminate\Http\Request([
+                                'id_empresa' => $id_empresa,
+                                'codigos' => $codigosLote
+                            ])
+                        );
+                        
+                        $datosRespuesta = json_decode($resultadoBatch->getContent(), true);
+                        
+                        if (isset($datosRespuesta['productos']) && is_array($datosRespuesta['productos'])) {
+                            foreach ($datosRespuesta['productos'] as $prodPerseo) {
+                                if (isset($prodPerseo['productocodigo']) && isset($prodPerseo['existenciastotales'])) {
+                                    $totalNormalizado = $normalizarTotal($prodPerseo['existenciastotales']);
+                                    if ($totalNormalizado !== null) {
+                                        $mapResultadosPorId[$prodPerseo['productocodigo']] = $totalNormalizado;
+                                        $consultasIndividualesConDato++;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        // Continuar con siguiente lote
+                    }
+                }
+                
+                // Actualizar detalle_consulta con resultados de batch
+                foreach ($detalleConsulta as &$itemDetalle) {
+                    if (
+                        $itemDetalle['existenciastotales'] === null 
+                        && $itemDetalle['estado'] !== 'sin_id_local' 
+                        && $itemDetalle['estado'] !== 'id_no_coincide'
+                        && isset($mapResultadosPorId[$itemDetalle['pro_codigo']])
+                    ) {
+                        $itemDetalle['existenciastotales'] = $mapResultadosPorId[$itemDetalle['pro_codigo']];
+                        $itemDetalle['estado'] = 'candidato_stock';
+                        $itemDetalle['motivo'] = 'Consulta individual: Cumple para actualizar stock';
+                        $itemDetalle['candidato'] = 1;
+                        $kpi['candidatos_actualizacion']++;
+                        $kpi['sin_total_perseo']--;
+                    }
+                }
+            }
 
-                        $detalleActualizados[] = [
-                            'pro_codigo'  => $productocodigo,
-                            'productosid' => $productosid,
-                            'campo'       => $campoPerseo,
-                        ];
+            $kpi['consultas_individuales'] = $consultasIndividuales;
+            $kpi['consultas_individuales_con_dato'] = $consultasIndividualesConDato;
+
+            if ($accion === 'consultar') {
+                return response()->json([
+                    'status' => 1,
+                    'tipo' => $tipo,
+                    'empresa' => $nombreEmpresa,
+                    'mensaje' => 'Consulta previa completada. Revise KPIs y confirme para aplicar cambios.',
+                    'requiere_confirmacion' => 1,
+                    'productos_recibidos' => $totalRecibidos,
+                    'productos_actualizados' => 0,
+                    'productos_ignorados' => $kpi['plataforma_total'] - $kpi['candidatos_actualizacion'],
+                    'errores' => [],
+                    'kpis' => $kpi,
+                    'detalle_consulta' => $detalleConsulta,
+                    'detalle_actualizados' => [],
+                ]);
+            }
+
+            // confirmar / ejecutar: aplicar cambios en candidatos
+            $actualizados = 0;
+            $errores = [];
+            $detalleActualizados = [];
+
+            $mapDetalleConsultaPorCodigo = [];
+            foreach ($detalleConsulta as $itemDetalle) {
+                $codigoItem = isset($itemDetalle['pro_codigo']) ? $itemDetalle['pro_codigo'] : null;
+                if ($codigoItem) {
+                    $mapDetalleConsultaPorCodigo[$codigoItem] = $itemDetalle;
+                }
+            }
+
+            $mapSeleccionManual = [];
+            if ($modo === 'manual') {
+                foreach ($detalleSeleccionado as $itemSeleccionado) {
+                    $codigoSel = isset($itemSeleccionado['pro_codigo']) ? trim($itemSeleccionado['pro_codigo']) : null;
+                    if (!$codigoSel) {
+                        continue;
+                    }
+
+                    $aplicarSel = isset($itemSeleccionado['aplicar']) ? (int)$itemSeleccionado['aplicar'] : 0;
+                    if ($aplicarSel !== 1) {
+                        continue;
+                    }
+
+                    $mapSeleccionManual[$codigoSel] = $itemSeleccionado;
+                }
+            }
+
+            $usarSeleccionManual = $modo === 'manual' && count($mapSeleccionManual) > 0;
+
+            if ($usarSeleccionManual) {
+                foreach ($mapSeleccionManual as $codigo => $filaManual) {
+                    $referencia = isset($mapDetalleConsultaPorCodigo[$codigo]) ? $mapDetalleConsultaPorCodigo[$codigo] : [];
+
+                    try {
+                        if ($tipo === 'ids') {
+                            $idPerseo = 0;
+
+                            if (isset($filaManual['productosid_perseo_edit']) && $filaManual['productosid_perseo_edit'] !== '' && is_numeric($filaManual['productosid_perseo_edit'])) {
+                                $idPerseo = (int)$filaManual['productosid_perseo_edit'];
+                            } else if (isset($referencia['productosid_perseo']) && is_numeric($referencia['productosid_perseo'])) {
+                                $idPerseo = (int)$referencia['productosid_perseo'];
+                            }
+
+                            if ($idPerseo <= 0) {
+                                $errores[] = [
+                                    'pro_codigo' => $codigo,
+                                    'error' => 'No se pudo determinar productosid para vincular'
+                                ];
+                                continue;
+                            }
+
+                            DB::table('1_4_cal_producto')
+                                ->where('pro_codigo', $codigo)
+                                ->update([
+                                    $campoPerseo => $idPerseo,
+                                    'updated_at' => now(),
+                                ]);
+
+                            $detalleActualizados[] = [
+                                'pro_codigo' => $codigo,
+                                'productosid' => $idPerseo,
+                                'campo' => $campoPerseo,
+                                'modo' => 'manual',
+                            ];
+                        } else {
+                            $totalPerseo = null;
+
+                            if (isset($filaManual['existenciastotales_edit']) && $filaManual['existenciastotales_edit'] !== '' && is_numeric($filaManual['existenciastotales_edit'])) {
+                                $totalPerseo = (float)$filaManual['existenciastotales_edit'];
+                            } else if (isset($referencia['existenciastotales']) && $referencia['existenciastotales'] !== '' && is_numeric($referencia['existenciastotales'])) {
+                                $totalPerseo = (float)$referencia['existenciastotales'];
+                            }
+
+                            if ($totalPerseo === null) {
+                                $errores[] = [
+                                    'pro_codigo' => $codigo,
+                                    'error' => 'No se pudo determinar existenciastotales para sincronizar stock'
+                                ];
+                                continue;
+                            }
+
+                            DB::table('1_4_cal_producto')
+                                ->where('pro_codigo', $codigo)
+                                ->update([
+                                    'pro_reservar' => $totalPerseo,
+                                    'pro_stockCalmed' => $totalPerseo,
+                                    'pro_stock' => 0,
+                                    'pro_depositoCalmed' => 0,
+                                    'pro_deposito' => 0,
+                                    'updated_at' => now(),
+                                ]);
+
+                            $detalleActualizados[] = [
+                                'pro_codigo' => $codigo,
+                                'existenciastotales' => $totalPerseo,
+                                'modo' => 'manual',
+                            ];
+                        }
+
                         $actualizados++;
                     } catch (\Exception $e) {
                         $errores[] = [
-                            'pro_codigo' => $productocodigo,
-                            'error'      => $e->getMessage()
+                            'pro_codigo' => $codigo,
+                            'error' => $e->getMessage(),
+                        ];
+                    }
+                }
+            } else {
+                foreach ($detalleConsulta as $row) {
+                    if (!isset($row['candidato']) || (int)$row['candidato'] !== 1) {
+                        continue;
+                    }
+
+                    $codigo = isset($row['pro_codigo']) ? $row['pro_codigo'] : null;
+                    if (!$codigo) {
+                        continue;
+                    }
+
+                    try {
+                        if ($tipo === 'ids') {
+                            $idPerseo = isset($row['productosid_perseo']) ? (int)$row['productosid_perseo'] : 0;
+                            if ($idPerseo <= 0) {
+                                continue;
+                            }
+
+                            DB::table('1_4_cal_producto')
+                                ->where('pro_codigo', $codigo)
+                                ->update([
+                                    $campoPerseo => $idPerseo,
+                                    'updated_at' => now(),
+                                ]);
+
+                            $detalleActualizados[] = [
+                                'pro_codigo' => $codigo,
+                                'productosid' => $idPerseo,
+                                'campo' => $campoPerseo,
+                                'modo' => 'auto',
+                            ];
+                        } else {
+                            $totalPerseo = isset($row['existenciastotales']) ? $row['existenciastotales'] : null;
+                            if ($totalPerseo === null) {
+                                continue;
+                            }
+
+                            DB::table('1_4_cal_producto')
+                                ->where('pro_codigo', $codigo)
+                                ->update([
+                                    'pro_reservar' => $totalPerseo,
+                                    'pro_stockCalmed' => $totalPerseo,
+                                    'pro_stock' => 0,
+                                    'pro_depositoCalmed' => 0,
+                                    'pro_deposito' => 0,
+                                    'updated_at' => now(),
+                                ]);
+
+                            $detalleActualizados[] = [
+                                'pro_codigo' => $codigo,
+                                'existenciastotales' => $totalPerseo,
+                                'modo' => 'auto',
+                            ];
+                        }
+
+                        $actualizados++;
+                    } catch (\Exception $e) {
+                        $errores[] = [
+                            'pro_codigo' => $codigo,
+                            'error' => $e->getMessage(),
                         ];
                     }
                 }
             }
 
-            $accion = $tipo === 'stock' ? 'stock actualizado' : 'IDs vinculados';
+            $textoAccion = $tipo === 'stock' ? 'stock actualizado' : 'IDs vinculados';
 
             return response()->json([
-                'status'                 => 1,
-                'tipo'                   => $tipo,
-                'mensaje'                => "{$etiquetaTipo} finalizado correctamente. Se actualizaron {$actualizados} productos ({$accion}) de {$nombreEmpresa}.",
-                'empresa'                => $nombreEmpresa,
-                'productos_recibidos'    => $totalRecibidos,
+                'status' => 1,
+                'tipo' => $tipo,
+                'empresa' => $nombreEmpresa,
+                'mensaje' => "{$etiquetaTipo} finalizado correctamente. Se actualizaron {$actualizados} productos ({$textoAccion}) de {$nombreEmpresa}.",
+                'modo' => $usarSeleccionManual ? 'manual' : 'auto',
+                'requiere_confirmacion' => 0,
+                'productos_recibidos' => $totalRecibidos,
                 'productos_actualizados' => $actualizados,
-                'productos_ignorados'    => $ignorados,
-                'errores'                => $errores,
-                'detalle_actualizados'   => $detalleActualizados,
+                'productos_ignorados' => $kpi['plataforma_total'] - $actualizados,
+                'errores' => $errores,
+                'kpis' => $kpi,
+                'detalle_consulta' => $detalleConsulta,
+                'detalle_actualizados' => $detalleActualizados,
             ]);
 
         } catch (\Exception $e) {
-            \Log::error('Error en sincronizarExistenciasPerseo: ' . $e->getMessage());
+            // Log::error('Error en sincronizarExistenciasPerseo: ' . $e->getMessage());
             return response()->json([
                 'status'  => 0,
                 'mensaje' => 'Error al sincronizar: ' . $e->getMessage()

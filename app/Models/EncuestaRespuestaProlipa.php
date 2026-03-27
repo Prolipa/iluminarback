@@ -14,6 +14,9 @@ class EncuestaRespuestaProlipa extends Model
         'encuesta_id',
         'usuario_id',
         'asignacion_id',
+        'periodo_id',
+        'descargo_certificado',
+        'fecha_descarga',
     ];
 
     public function detalles()

@@ -40,10 +40,11 @@ class Usuario extends Model implements Auditable
         'cargo_id',
         'iniciales',
         'capacitador',
+        'cli_ins_codigo',
+        'id_facturador_perseo',
     ];
     protected $hidden = [
         'password',
-        'password2',
         'remember_token',
     ];
 

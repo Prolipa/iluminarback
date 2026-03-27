@@ -23,7 +23,8 @@ class PerseoConsultasController extends Controller
         try {
             $formData = [];
             $url        = "facturadores_consulta";
-            $process    = $this->tr_PerseoPost($url, $formData);
+            $empresa_id = $request->input('empresa_id', 1);
+            $process    = $this->tr_PerseoPost($url, $formData, $empresa_id);
             return $process;
         } catch (\Exception $e) {
             return response()->json([

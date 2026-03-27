@@ -262,10 +262,13 @@ class SeguimientoInstitucionController extends Controller
 
             }
         }
+         if($request->admin){
+            $agenda->usuario_editor  = $request->usuario_editor;
+        }
         $agenda->id_usuario = $request->idusuario;
         $agenda->title = $request->title;
-        $agenda->label = $request->label;
-        $agenda->classes = $request->classes;
+        // $agenda->label = $request->label;
+        // $agenda->classes = $request->classes;
         $agenda->startDate = $request->startDate;
         $agenda->endDate = $request->endDate;
         $agenda->hora_inicio = $request->hora_inicio;

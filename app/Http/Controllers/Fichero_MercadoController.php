@@ -597,6 +597,7 @@ class Fichero_MercadoController extends Controller
                 'ins.parr_id',
                 'fm.fm_id',
                 'fm.fm_estado',
+                'fm.fm_es_distribuidor',
                 'fm.fm_observacion',
                 'fm.created_at',
                 'fm.updated_at',
@@ -671,6 +672,7 @@ class Fichero_MercadoController extends Controller
                 'ins.parr_id',
                 'fm.fm_id',
                 'fm.fm_estado',
+                'fm.fm_es_distribuidor',
                 'fm.fm_observacion',
                 'fm.created_at',
                 'fm.updated_at',
@@ -739,6 +741,7 @@ class Fichero_MercadoController extends Controller
                 'fm.fm_convenio',
                 'fm.fm_cantidad_anios_trabaja_con_prolipa',
                 'fm.fm_tipo_venta',
+                'fm.fm_es_distribuidor',
                 'fm.idperiodoescolar',
                 'fm.fm_decide_compra',
                 'fm.fm_factores_inciden_en_compra',
@@ -949,6 +952,7 @@ class Fichero_MercadoController extends Controller
             $fichero->fm_convenio = $request->input('fm_convenio');
             $fichero->fm_cantidad_anios_trabaja_con_prolipa = $request->input('fm_cantidad_anios_trabaja_con_prolipa');
             $fichero->fm_tipo_venta = $request->input('fm_tipo_venta');
+            $fichero->fm_es_distribuidor = $request->input('fm_es_distribuidor');
             $fichero->fm_decide_compra = json_encode($request->input('fm_decide_compra'));
             $fichero->fm_factores_inciden_en_compra = json_encode($request->input('fm_factores_inciden_en_compra'));
             $fichero->fm_niveles_educativos = json_encode($request->input('fm_niveles_educativos'));
@@ -1541,6 +1545,7 @@ class Fichero_MercadoController extends Controller
                 $nuevoFichero->fm_convenio = 0;
                 $nuevoFichero->fm_cantidad_anios_trabaja_con_prolipa = null;
                 $nuevoFichero->fm_tipo_venta = null;
+                $nuevoFichero->fm_es_distribuidor = '2';
                 $nuevoFichero->fm_establecimientos_para_despacho = null;
             }
             // ---------------- FACTORES ----------------

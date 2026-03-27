@@ -69,13 +69,13 @@ trait TraitGuiasGeneral
         ");
         foreach ($query as $key => $value) {
             //devuelto_pedidos_codigoslibros_total
-            $value->devuelto_pedidos_codigoslibros_total = $value->cantidad_devuelta_pedidos_aprobada + $value->cantidad_devuelta_codigoslibros_aprobada;
+            $value->cantidad_devuelta_total                          = $value->cantidad_devuelta_pedidos_aprobada + $value->cantidad_devuelta_codigoslibros_aprobada;
             //devuelto_pedidos_total
-            $value->devuelto_pedidos_total = $value->cantidad_devuelta_pedidos_aprobada;
+            $value->devuelto_pedidos_total_aprobada                  = $value->cantidad_devuelta_pedidos_aprobada;
             //devuelto_codigoslibros_total
-            $value->devuelto_codigoslibros_total = $value->cantidad_devuelta_codigoslibros_aprobada;
+            $value->devuelto_codigoslibros_total_aprobada            = $value->cantidad_devuelta_codigoslibros_aprobada;
             //devuelto_total_pendiente
-            $value->devuelto_total_pendiente = $value->cantidad_devuelta_pedidos_pendiente + $value->cantidad_devuelta_codigoslibros_pendiente;
+            $value->devuelto_total_pendiente                         = $value->cantidad_devuelta_pedidos_pendiente + $value->cantidad_devuelta_codigoslibros_pendiente;
         }
         return $query;
     }

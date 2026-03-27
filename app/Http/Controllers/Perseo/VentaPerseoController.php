@@ -1496,6 +1496,94 @@ class VentaPerseoController extends Controller
     }
     
     /**
+     * Devolver stock a inventario cuando se anula una venta
+     * Suma cantidades a pro_stockCalmed y registra en histórico
+     * psh_tipo: 15 = Anulación venta normal, 11 = Anulación obsequios
+     */
+    private function devolverStockYHistorico($venCodigo, $idEmpresa, $idUsuario, $pshTipo = 15)
+    {
+        // Obtener todos los detalles de la venta
+        $detalles = DB::table('f_detalle_venta')
+            ->where('ven_codigo', $venCodigo)
+            ->where('id_empresa', $idEmpresa)
+            ->get();
+
+        if ($detalles->isEmpty()) {
+            return; // No hay detalles que devolver
+        }
+
+        $oldGrouped = [];
+        $newGrouped = [];
+
+        // Procesar cada detalle: SUMAR el stock devuelto
+        foreach ($detalles as $detalle) {
+            $producto = DB::table('1_4_cal_producto')
+                ->where('pro_codigo', $detalle->pro_codigo)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$producto) {
+                continue; // Producto no encontrado, continuar
+            }
+
+            // Guardar valores ANTES de la devolución
+            $oldValues = [
+                'pro_codigo' => $producto->pro_codigo,
+                'pro_reservar' => intval($producto->pro_reservar),
+                'pro_stock' => intval($producto->pro_stock),
+                'pro_stockCalmed' => intval($producto->pro_stockCalmed),
+                'pro_deposito' => intval($producto->pro_deposito),
+                'pro_depositoCalmed' => intval($producto->pro_depositoCalmed),
+            ];
+
+            // SUMAR cantidad devuelta a pro_stockCalmed (inverso de lo que se restó)
+            $stockCalmedActual = intval($producto->pro_stockCalmed);
+            $cantidadDevuelta = intval($detalle->det_ven_cantidad);
+            $nuevoStockCalmed = $stockCalmedActual + $cantidadDevuelta;
+
+            // Recalcular pro_reservar (debe ser la suma de todos los stocks)
+            $nuevoProducto = $producto;
+            $nuevoProducto->pro_stockCalmed = $nuevoStockCalmed;
+            $nuevoReserva = $this->calcularReservaDesdeStocks($nuevoProducto);
+
+            // Actualizar en base de datos
+            DB::table('1_4_cal_producto')
+                ->where('pro_codigo', $detalle->pro_codigo)
+                ->update([
+                    'pro_stockCalmed' => $nuevoStockCalmed,
+                    'pro_reservar' => intval($nuevoReserva),
+                    'updated_at' => now()
+                ]);
+
+            // Guardar valores DESPUÉS de la devolución
+            $newValues = [
+                'pro_codigo' => $producto->pro_codigo,
+                'pro_reservar' => intval($nuevoReserva),
+                'pro_stock' => intval($producto->pro_stock),
+                'pro_stockCalmed' => $nuevoStockCalmed,
+                'pro_deposito' => intval($producto->pro_deposito),
+                'pro_depositoCalmed' => intval($producto->pro_depositoCalmed),
+            ];
+
+            $oldGrouped[$detalle->pro_codigo] = $oldValues;
+            $newGrouped[$detalle->pro_codigo] = $newValues;
+        }
+
+        // Registrar en histórico
+        if (count($oldGrouped) > 0) {
+            DB::table('1_4_cal_producto_stock_historico')->insert([
+                'psh_old_values' => json_encode($oldGrouped),
+                'psh_new_values' => json_encode($newGrouped),
+                'psh_tipo' => $pshTipo,
+                'psh_id_ven_codigo' => $venCodigo,
+                'user_created' => $idUsuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+    }
+
+    /**
      * Anular venta - Cambiar estado a Anulado
      * POST /api/perseo/ventas/anular
      */
@@ -1511,6 +1599,7 @@ class VentaPerseoController extends Controller
             
             // Validar parámetros requeridos
             if (!$ven_codigo || !$empresa) {
+                DB::rollBack();
                 return response()->json([
                     'status' => 0,
                     'message' => 'Faltan parámetros requeridos: ven_codigo e id_empresa'
@@ -1518,16 +1607,19 @@ class VentaPerseoController extends Controller
             }
             
             if (!$observacionAnulacion || trim($observacionAnulacion) === '') {
+                DB::rollBack();
                 return response()->json([
                     'status' => 0,
                     'message' => 'Debe proporcionar una observación de anulación'
                 ], 400);
             }
             
-            // Obtener la venta
-            $venta = Ventas::where('ven_codigo', $ven_codigo)
-                          ->where('id_empresa', $empresa)
-                          ->first();
+            // Obtener la venta usando DB::table
+            $venta = DB::table('f_venta')
+                ->where('ven_codigo', $ven_codigo)
+                ->where('id_empresa', $empresa)
+                ->lockForUpdate()
+                ->first();
             
             // Validar que exista la venta
             if (!$venta) {
@@ -1547,17 +1639,20 @@ class VentaPerseoController extends Controller
                 ], 400);
             }
             
-            // Actualizar estado a Anulado
-            $dataUpdate = [
-                'est_ven_codigo' => 3, // Estado anulado
-                'observacionAnulacion' => $observacionAnulacion,
-                'user_anulado' => $id_usuario,
-                'fecha_anulacion' => now()
-            ];
+            // DEVOLVER STOCK A INVENTARIO y registrar en histórico (psh_tipo=15: Anulación venta normal)
+            $this->devolverStockYHistorico($ven_codigo, $empresa, $id_usuario, 15);
             
-            Ventas::where('ven_codigo', $ven_codigo)
-                  ->where('id_empresa', $empresa)
-                  ->update($dataUpdate);
+            // Actualizar estado a Anulado usando DB::table
+            DB::table('f_venta')
+                ->where('ven_codigo', $ven_codigo)
+                ->where('id_empresa', $empresa)
+                ->update([
+                    'est_ven_codigo' => 3,
+                    'observacionAnulacion' => $observacionAnulacion,
+                    'user_anulado' => $id_usuario,
+                    'fecha_anulacion' => now(),
+                    'updated_at' => now()
+                ]);
             
             DB::commit();
             
@@ -2099,6 +2194,9 @@ class VentaPerseoController extends Controller
                     ]);
             }
 
+            // DEVOLVER STOCK A INVENTARIO (psh_tipo=11: Anulación obsequios)
+            $this->devolverStockYHistorico($ven_codigo, $id_empresa, $id_usuario, 11);
+
             // Anular la venta
             DB::table('f_venta')
                 ->where('ven_codigo', $ven_codigo)
@@ -2538,7 +2636,18 @@ class VentaPerseoController extends Controller
                 LEFT JOIN pedidos peguia ON peguia.id_pedido = fv.id_pedido_guia
                 LEFT JOIN usuario uguia ON peguia.id_asesor = uguia.idusuario
                 WHERE fv.est_ven_codigo <> 3
-                AND fv.estadoPerseo = 1
+                AND (
+                    (fv.idtipodoc = 1 AND fv.estadoPerseo = 1)
+                    OR
+                    (
+                        fv.idtipodoc IN (2, 3, 4)
+                        AND (
+                            (fv.ven_totalizado IS NOT NULL AND TRIM(fv.ven_totalizado) <> '')
+                            OR (fv.contrato IS NOT NULL AND TRIM(fv.contrato) <> '')
+                        )
+                    )
+                    OR fv.idtipodoc = 12
+                )
                 $whereEstado
                 $whereFechas
                 ORDER BY fv.ven_fecha DESC
@@ -2585,7 +2694,7 @@ class VentaPerseoController extends Controller
         try {
             $ven_codigo = $request->ven_codigo;
             $empresa = $request->empresa;
-            $usuario_id = $request->usuario_id ?? null;
+            $usuario_id = $request->usuario_id ? $request->usuario_id : null;
             
             if (!$ven_codigo || !$empresa) {
                 return response()->json([
@@ -2607,12 +2716,14 @@ class VentaPerseoController extends Controller
                 ], 404);
             }
             
-            // Validar que tenga factura vinculada de Perseo
-            if (!$venta->factura_perseo || !$venta->id_factura_perseo) {
-                return response()->json([
-                    'status' => 0,
-                    'message' => 'Esta venta no tiene una factura vinculada de Perseo. Primero debe verificar y vincular la factura.'
-                ], 400);
+            // Si la venta fue enviada a Perseo, debe tener factura vinculada antes de despachar
+            if (intval($venta->estadoPerseo) == 1) {
+                if (!$venta->factura_perseo || !$venta->id_factura_perseo) {
+                    return response()->json([
+                        'status' => 0,
+                        'message' => 'Esta venta fue enviada a Perseo y no tiene factura vinculada. Primero debe verificar y vincular la factura.'
+                    ], 400);
+                }
             }
             
             // Validar que esté en estado pendiente (2)

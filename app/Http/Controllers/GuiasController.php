@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\_14Empresa;
 use App\Models\_14Producto;
 use App\Models\_14ProductoStockHistorico;
 use App\Models\CodigosLibros;
@@ -220,7 +221,7 @@ class GuiasController extends Controller
         CONCAT(user_anul.nombres,' ', user_anul.apellidos) AS anulador_nombre,
         CONCAT(user_despacho.nombres,' ', user_despacho.apellidos) AS despachador_nombre,
         CONCAT(user_anula_per.nombres,' ', user_anula_per.apellidos) AS usuario_anula_perseo,
-        
+
         COALESCE(d.total_items, 0) AS total_items,
         COALESCE(d.total_libros, 0) AS total_libros
 
@@ -303,6 +304,8 @@ class GuiasController extends Controller
         ");
         return $query;
     }
+
+    //api:get>>guias?validarGenerar=yes&asesor_id=68750
     public function validarGenerar($asesor_id){
         $query = DB::SELECT("SELECT * FROM pedidos_guias_devolucion p
         WHERE p.asesor_id = '$asesor_id'
@@ -312,6 +315,7 @@ class GuiasController extends Controller
             return ["status" => "0", "message" => "Existe una devolución abierta en algun periodo"];
         }
     }
+    //api:get/guias?devolucion=yes&asesor_id=68750&periodo_id=30
     public function getDevolucionesBodega($asesor_id,$periodo_id){
         $query = DB::SELECT("SELECT pd.*,
         CONCAT(u.nombres,' ',u.apellidos) as asesor,
@@ -361,20 +365,23 @@ class GuiasController extends Controller
                 return ["status" => "0", "message" => "No esta configurado las iniciales del asesor"];
             }
             $asesor_id                      = $query[0]->idusuario;
-            $letra                          = "";
             //get secuencia
             $getSecuencia                   = f_tipo_documento::obtenerSecuencia("DEVOLUCION-GUIA");
             if(!$getSecuencia)              { return ["status" => "0", "message" => "No se pudo obtener la secuencia de guias"]; }
-            //prolipa
-            if($empresa_id == 1)            { $secuencia = $getSecuencia->tdo_secuencial_Prolipa; $letra = "P"; }
-            //calmed
-            if($empresa_id == 3)            { $secuencia = $getSecuencia->tdo_secuencial_calmed; $letra = "C"; }
+
+            // Obtener secuencia y letra desde el modelo _14Empresa
+            $secuencia                      = _14Empresa::obtenerSecuenciaGuia($empresa_id, $getSecuencia);
+            $letra                          = _14Empresa::obtenerLetraEmpresa($empresa_id);
+
+            if(!$secuencia)                 { return ["status" => "0", "message" => "No se pudo obtener la secuencia para la empresa $empresa_id"]; }
+            if(!$letra)                     { return ["status" => "0", "message" => "No se pudo obtener la letra para la empresa $empresa_id"]; }
+
             //VARIABLES
             $secuencia                      = $secuencia + 1;
             //format secuencia
             $format_id_pedido               = f_tipo_documento::formatSecuencia($secuencia);
             //codigo de devolucion de guia
-            $codigo_ven = 'NCI-'.$letra.'-'.$iniciales . '-'. $format_id_pedido;
+            $codigo_ven                      = 'NCI-'.$letra.'-'.$iniciales . '-'. $format_id_pedido;
             //================SAVE PEDIDO======================
             //================SAVE DETALLE DE LAS GUIAS======================
             //obtener las guias por libros
@@ -382,7 +389,8 @@ class GuiasController extends Controller
             //Si no hay nada en detalle de venta
             if(empty($detalleGuias)){ return ["status" => "0", "message" => "No hay ningun libro para el detalle de las guias a devolver"];}
             //===ACTUALIZAR STOCK========
-            $this->actualizarStockFacturacionDevolucion($detalleGuias,$codigo_ven,$empresa_id,$asesor_id,$periodo_id,$user_created,$id_pedido);
+            // el stock por ahora no se va devolver porque asi dijo jorge el stock es en perseo
+            // $this->actualizarStockFacturacionDevolucion($detalleGuias,$codigo_ven,$empresa_id,$asesor_id,$periodo_id,$user_created,$id_pedido);
             //ACTUALIZAR VEN CODIGO - FECHA APROBACION-
             $query = "UPDATE `pedidos_guias_devolucion` SET `ven_codigo` = '$codigo_ven', `fecha_aprobacion` = '$fechaActual', `estado` = '1', `empresa_id` = '$empresa_id', `user_devuelve` = '$user_created' WHERE `id` = $id_pedido;";
             DB::UPDATE($query);
@@ -1310,13 +1318,13 @@ class GuiasController extends Controller
     public function regresar_no_enviado_perseo(Request $request){
         try {
             DB::beginTransaction();
-            
+
             // Validar que exista el documento
             $venta = DB::table('f_venta')
                 ->where('ven_codigo', $request->ven_codigo)
                 ->where('id_empresa', $request->id_empresa)
                 ->first();
-            
+
             if (!$venta) {
                 DB::rollBack();
                 return response()->json([
@@ -1324,7 +1332,7 @@ class GuiasController extends Controller
                     'message' => 'No se encontró el documento de venta'
                 ], 404);
             }
-            
+
             // Validar en PERSEO que el pedido ya no exista
             try {
                 $perseoResponse = $this->guiaRepository->getDocumentoPerseoXPedidoId($request->ven_codigo, $request->id_empresa);
@@ -1370,7 +1378,7 @@ class GuiasController extends Controller
                     'message' => 'Error al consultar PERSEO: ' . $e->getMessage()
                 ], 500);
             }
-            
+
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json([
@@ -1387,10 +1395,7 @@ class GuiasController extends Controller
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
 
-        DB::beginTransaction(); // 🚀 INICIO TRANSACCIÓN
-
         try {
-
             $detalles   = json_decode($request->data_detalle);
             $asesor_id  = $request->asesor_id;
             $periodo_id = $request->periodo_id;
@@ -1410,7 +1415,6 @@ class GuiasController extends Controller
 
                 // Validar estado
                 if ($devolucion->estado != 0) {
-                    DB::rollBack();
                     return [
                         "status"  => "0",
                         "message" => "La solicitud de la devolución no se encuentra activa"
@@ -1435,22 +1439,15 @@ class GuiasController extends Controller
                  $this->saveDevolucionDetalle($item, $devolucion, $asesor_id, $periodo_id);
             }
 
-            // Todo ok → guardar
-            DB::commit();
-
             return [
                 "status"  => "1",
                 "message" => "Se guardó correctamente"
             ];
 
         } catch (\Exception $e) {
-
-            DB::rollBack(); // ❌ ERROR → revertir todo
-
             return [
                 "status"  => "0",
-                "message" => "Error al guardar la devolución",
-                "error"   => $e->getMessage() // opcional, para debug
+                "message" => "Error al guardar la devolución: " . $e->getMessage()
             ];
         }
     }

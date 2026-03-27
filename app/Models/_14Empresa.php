@@ -46,7 +46,7 @@ class _14Empresa extends Model
     public static function obtenerSecuenciaGuia($empresa_id, $getSecuencia)
     {
         $empresa_id = (int) $empresa_id;
-        
+
         $mapSecuencias = [
             1 => 'tdo_secuencial_Prolipa',
             3 => 'tdo_secuencial_calmed',
